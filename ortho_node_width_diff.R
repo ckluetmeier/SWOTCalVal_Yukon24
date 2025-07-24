@@ -318,7 +318,7 @@ combined_ortho_SWORD_df <- combined_df %>%
 
 # optional filter to look at isolated groups (e.g. by river)
 combined_ortho_SWORD_df <- combined_ortho_SWORD_df %>%
-  filter(river == "upper_PR")
+  filter(river == "upper_YR")
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Stats & plots
@@ -330,6 +330,10 @@ percentile_50_error <- quantile(abs(combined_ortho_SWORD_df$residuals), 0.50, na
 # for % diff
 percentile_68_percent <- quantile(abs(combined_ortho_SWORD_df$percent_diff), 0.68, na.rm=TRUE)
 percentile_50_percent <- quantile(abs(combined_ortho_SWORD_df$percent_diff), 0.50, na.rm=TRUE)
+
+#print the result
+print(paste("68th Percentile Error:", percentile_68_percent))
+print(paste("50th Percentile Error:", percentile_50_percent))
 
 # correlation test
 cor_test <- cor.test(combined_ortho_SWORD_df$width, combined_ortho_SWORD_df$ortho_width_m)
