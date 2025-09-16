@@ -10,7 +10,7 @@ library(ncdf4)
 # -------------------------------------------------------------------------------------------
 
 # Set working directory
-wd = ("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos")
+wd = ("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVecRiver_v16")
 setwd(wd)
 
 # -------------------------------------------------------------------------------------------
@@ -18,7 +18,7 @@ setwd(wd)
 # -------------------------------------------------------------------------------------------
 
 # file path to one SWOT .nc
-file_path = ("/Users/camryn/Documents/UNC/Ice_caval/Tanana/SWOT/pixc/SWOT_L2_HR_PIXC_030_136_039L_20250322T031247_20250322T031258_PIC2_01.nc")
+file_path = ("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVecRiver_v17b/SWOT_L2_HR_PIXCVecRiver_018_024_034L_20240710T180855_20240710T180906_DevPID0_01.nc")
 
 # Open the NetCDF file
 nc_data <- nc_open(file_path)
@@ -118,7 +118,7 @@ for (j in file_list){
   # 2.2 Define variables (PIXCV) ----
   
   # Extract specific variables from the NetCDF file (PIXC_VECTOR)
-  else if (grepl("_PIXCVec_", j)) {
+  else if (grepl("_PIXCVec", j)) {
         latitude = ncvar_get(nc_data, "latitude_vectorproc")
         longitude = ncvar_get(nc_data, "longitude_vectorproc")
         height = ncvar_get(nc_data, "height_vectorproc")
@@ -155,13 +155,14 @@ for (j in file_list){
   #Checks to make sure dimensions look good
   print(dim(SWOT_Points))
   
-  # SAVE CSV
-  SWOT_sf <- st_as_sf(SWOT_Points, coords = c("longitude", "latitude"), crs = st_crs(4326))
-  #Writes CSV files with data
-  st_write(SWOT_sf, gsub(".nc$", ".shp", j), driver = "ESRI Shapefile")
-  # Writes shapefiles with data
-  #st_write(SWOT_sf, dsn = paste0(j, ".shp"), driver = "ESRI Shapefile")
+  # Save csv
+  write.csv(SWOT_Points, paste0(sub("\\.nc$", "", j), ".csv"), row.names = TRUE)
   
-  #write.csv(SWOT_Points, paste(j,".csv",sep=""), row.names=TRUE)
+  # Save shapefile
+  # SWOT_sf <- st_as_sf(SWOT_Points, coords = c("longitude", "latitude"), crs = st_crs(4326))
+  # 
+  # st_write(SWOT_sf, gsub(".nc$", ".shp", j), driver = "ESRI Shapefile")
+  # Writes shapefiles with data
+  # st_write(SWOT_sf, dsn = paste0(j, ".shp"), driver = "ESRI Shapefile")
   
 }
