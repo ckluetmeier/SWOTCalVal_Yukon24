@@ -43,10 +43,11 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # read in PT data
 
 # Set working directory to the hydrocron_timeseries folder where the time&space matched SWOT/PT clusters are
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/_reach/SWORD_v16"
+# SWORD v16
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16"
+# SWORD v17b
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
 setwd(wd)
-
-
 
 # Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
 csv_files <- list.files(wd, pattern = "^YR_812.*\\.csv$", full.names = TRUE)
@@ -83,7 +84,7 @@ time_matched_SWOT_PT <- combined_PT_df %>%
   dplyr::select(everything())
 
 # match PT and SWOT in space
-# node level
+# reach level
 time_space_matched_SWOT_PT <- time_matched_SWOT_PT %>%
   filter(PT_reach_id == reach_id)
 

@@ -8,10 +8,13 @@ library(dplyr)
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
-# RiverSP
-#SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
-# RiverTile
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_PT_node_timeseries_v17b.csv')
+# version C: RiverSP
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+# version D: RiverTile
+# SWORD v17b
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_PT_node_timeseries_v17b.csv')
+# SWORD v16
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_PT_node_timeseries_v16.csv')
 
 # get ride of possible duplicates from hydrocron pull
 # this also filters out bad nodes without data (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -37,7 +40,10 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # read in & prep PT data
 
 # Set working directory to the folder chucked by separate rivers and PT clusters
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/_node/SWORD_v17b/upper_PR"
+# SWORD v17b
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/SJ"
+# SWORD v16
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/lower_PR"
 setwd(wd)
 
 # Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
@@ -52,40 +58,12 @@ data_list <- lapply(seq_along(csv_files), function(i) {
 combined_PT_df <- bind_rows(data_list)
 
 # Convert time column to POSIXct
-combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, tz = "UTC")
+combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
 # watch out for funky datetimes in PT data -- some old toolbox runs vary in how datetime is output
 # for example, run this line with old upper_YR PTs
 # combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, format = "%m/%d/%y %H:%M", tz = "UTC")
-
-
-# this is an old section for joining different versions of SWORD to the PT data
-# new toolbox runs (July 2025 onwards) are processed with all relevant SWORD versions
-# # read SWORD v17 nodes
-# #SWORD_node_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/SWORD_v16_domain_nodes.csv')
-# 
-# # combine PT df with SWORD v17 nodes
-# # combined_PT_SWORD_df <- combined_PT_df %>%
-# #  left_join(SWORD_node_df %>% select(Node_ID, dist_out, node_len), by = "Node_ID")
-# 
-# # read SWORD v16 reaches from the old keyfile
-# SWORD_v16_node_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/SWOTCalVal_YR_node_id.csv')
-# 
-# # combine PT df with old SWORD v16 reaches
-# # unsure if this is working totally as expected
-# combined_PT_df <- combined_PT_df %>%
-#   left_join(
-#     SWORD_v16_node_df %>%
-#       dplyr::select(PT_Serial, Node_ID) %>%
-#       rename(Node_ID_v16 = Node_ID) %>%
-#       group_by(PT_Serial) %>%
-#       slice(1) %>%  # Keep only the first match
-#       ungroup(),
-#     by = c('pt_serial' = 'PT_Serial')
-#   )
-# 
-# #remove ".y" from end of column
-# combined_PT_df <- combined_PT_df %>%
-#   rename_with(~ sub(".y", "", .), ends_with(".y"))
+# combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, tz = "UTC")
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # match PT & SWOT observations in time and space
@@ -96,8 +74,7 @@ time_matched_SWOT_PT <- combined_PT_df %>%
   rowwise() %>%
   mutate(
     closest_match = list(SWOT_df_filtered %>%
-                           filter(abs(difftime(pt_time_UTC, time_utc, units = "mins")) <= 7.5))
-  ) %>%
+                           filter(abs(difftime(pt_time_UTC, time_utc, units = "mins")) <= 7.5))) %>%
   unnest(closest_match) %>%
   dplyr::select(everything())
 
@@ -237,16 +214,14 @@ dev.off()
 # ---------------------------------------------------------------------------------------------------------------------------
 # remove bias from PT data
 
+# old method taking median bias for entire PT cluster
 # bias <- median(time_space_matched_SWOT_PT$residuals, na.rm = TRUE)
 # time_space_matched_SWOT_PT$pt_wse_nobias_m = time_space_matched_SWOT_PT$pt_wse_m - bias
 
-
+# removed median bias for individual PT
 time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
   group_by(pt_serial) %>%
-  mutate(
-    bias = median(residuals, na.rm = TRUE),
-    pt_wse_nobias_m = pt_wse_m - bias
-  ) %>%
+  mutate(bias = median(residuals, na.rm = TRUE), pt_wse_nobias_m = pt_wse_m - bias) %>%
   ungroup()
 
 
@@ -271,7 +246,7 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_time_space_matched_SWOT_PT_upperPR.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/RiverSP_v16_time_space_matched_SWOT_PT_lowerPR.csv', row.names = FALSE)
 
 # correlation test
 cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
@@ -308,64 +283,22 @@ ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
   #xlim(0, .751)
 
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# SWOT node dark water %
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
-
-# get ride of possible duplicates from hydrocron pull
-# this also filters out bad nodes without data (e.g. time = -999999999999, wse = -1.000000e+12)
-SWOT_df_noduplicates <- SWOT_df %>%
-  distinct(node_id, time, wse, .keep_all = TRUE)
-
-# filter SWOT data by node_q (0=good, 1=suspect, 2=degraded, 3=bad)
-SWOT_df_filtered <- SWOT_df_noduplicates %>%
-  #filter(wse_u <= 0.5) %>% #this probably won't filter out many nodes beyond what node_q is doing
-  filter(node_q <= 2) %>%
-  filter(abs(xtrk_dist) >=10000) %>%
-  filter(abs(xtrk_dist) <=60000)
-  # filter(dark_frac <= 50)
-
-# Compute the average dark_frac for each unique node_id
-SWOT_node_dark_frac <- SWOT_df_filtered %>%
-  group_by(node_id) %>%
-  summarise(
-    count = n(),
-    dark_frac_sd = sd(dark_frac, na.rm = TRUE),
-    dark_frac_median = median(dark_frac, na.rm = TRUE),
-    dark_frac_IQR = IQR(dark_frac, na.rm = TRUE),
-    dark_frac_min =min(dark_frac, na.rm = TRUE),
-    dark_frac_max =max(dark_frac, na.rm = TRUE),
-    dark_frac = mean(dark_frac, na.rm = TRUE),
-    reach_id = first(reach_id),  
-    lat = first(lat),  
-    lon = first(lon),
-    p_dist_out = first(p_dist_out)
-  ) %>%
-  ungroup()
-
-# plot SWOT vs PT wse
-ggplot(SWOT_node_dark_frac, aes(x = p_dist_out*0.001, y = dark_frac_IQR)) +
-  geom_point(size = 4) +
-  xlab("distance to outlet (km)") +
-  ylab("dark frac IQR") +
-  theme_minimal(base_size = 30)
-
-write_csv(SWOT_node_dark_frac,'/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/SWOT_node_dark_frac.csv')
-
-
 
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # all clusters comparison
+# ---------------------------------------------------------------------------------------------------------------------------
 
-# Set working directory to the hydrocron_timeseries folder where the time&space matched SWOT/PT clusters are
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b"
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries"
+
+# Set working directory to the folder where the time&space matched SWOT/PT clusters are
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
 setwd(wd)
 
 # Get list of all CSV files in working directory that start with time_space_matched_SWOT_PT_
-csv_files <- list.files(wd, pattern = "^RiverTile_time_space_matched_SWOT_PT_.*\\.csv$", full.names = TRUE)
+csv_files <- list.files(wd, pattern = "^RiverTile_.*\\.csv$", full.names = TRUE)
 #csv_files <- list.files(wd, pattern = "^time_space_matched_SWOT_PT_.*\\.csv$", full.names = TRUE)
 
 # Merge all PT files into a combined dataframe with filename column
@@ -880,3 +813,54 @@ ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = width, y = abs(residuals_
   ylab("PT - SWOT wse (m)") +
   theme_minimal(base_size = 30) +
   labs(color = "River") 
+
+
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# SWOT node dark water %
+# ---------------------------------------------------------------------------------------------------------------------------
+
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+
+# get ride of possible duplicates from hydrocron pull
+# this also filters out bad nodes without data (e.g. time = -999999999999, wse = -1.000000e+12)
+SWOT_df_noduplicates <- SWOT_df %>%
+  distinct(node_id, time, wse, .keep_all = TRUE)
+
+# filter SWOT data by node_q (0=good, 1=suspect, 2=degraded, 3=bad)
+SWOT_df_filtered <- SWOT_df_noduplicates %>%
+  #filter(wse_u <= 0.5) %>% #this probably won't filter out many nodes beyond what node_q is doing
+  filter(node_q <= 2) %>%
+  filter(abs(xtrk_dist) >=10000) %>%
+  filter(abs(xtrk_dist) <=60000)
+# filter(dark_frac <= 50)
+
+# Compute the average dark_frac for each unique node_id
+SWOT_node_dark_frac <- SWOT_df_filtered %>%
+  group_by(node_id) %>%
+  summarise(
+    count = n(),
+    dark_frac_sd = sd(dark_frac, na.rm = TRUE),
+    dark_frac_median = median(dark_frac, na.rm = TRUE),
+    dark_frac_IQR = IQR(dark_frac, na.rm = TRUE),
+    dark_frac_min =min(dark_frac, na.rm = TRUE),
+    dark_frac_max =max(dark_frac, na.rm = TRUE),
+    dark_frac = mean(dark_frac, na.rm = TRUE),
+    reach_id = first(reach_id),  
+    lat = first(lat),  
+    lon = first(lon),
+    p_dist_out = first(p_dist_out)
+  ) %>%
+  ungroup()
+
+# plot SWOT vs PT wse
+ggplot(SWOT_node_dark_frac, aes(x = p_dist_out*0.001, y = dark_frac_IQR)) +
+  geom_point(size = 4) +
+  xlab("distance to outlet (km)") +
+  ylab("dark frac IQR") +
+  theme_minimal(base_size = 30)
+
+write_csv(SWOT_node_dark_frac,'/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/SWOT_node_dark_frac.csv')
+

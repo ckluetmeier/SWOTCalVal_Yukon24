@@ -20,7 +20,7 @@ SWORD_node_df <- SWORD_node_df %>%
 # Munge PT data & join to SWORD
 
 # Set working directory to a folder with PTs chucked by separate rivers and clusters
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/_node/SWORD_v17b/upper_YR"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/upper_YR"
 setwd(wd)
 
 # Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
