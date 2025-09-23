@@ -9,9 +9,13 @@ library(dplyr)
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in SWOT data
 # RiverSP
-# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
 # RiverTile
-SWOT_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_domain_node_timeseries_v16.csv")
+# SWORD v16
+# SWOT_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_domain_node_timeseries_v16.csv")
+# SWORD v17b
+# SWOT_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv")
+
 
 # get ride of possible duplicates from hydrocron pull
 # this also filters out bad nodes without data (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -35,7 +39,10 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep GNSS data
 
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/YR_drift_node_wses.csv')
+# SWORD v16
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_node_wses.csv')
+# SWORD v17b
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv')
 
 GNSS_df$time_UTC <- as.POSIXct(GNSS_df$time_UTC, tz = "UTC")
 
@@ -83,9 +90,9 @@ summary <- group_by(time_space_matched_SWOT_GNSS, drift_id) %>% summarise(
   max =max(abs(residuals), na.rm= TRUE)
 )
 
-# Filter values to sensical residuals (< 5 m diff)
+# Filter values to sensical residuals (< 3 m diff)
 time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
-  filter(abs(residuals) < 5) # %>%
+  filter(abs(residuals) < 3) # %>%
   # filter(node_total_error_m < 1)
 
 # Calculate the 68th percentile error
@@ -96,15 +103,13 @@ percentile_50_error <- quantile(abs(time_space_matched_SWOT_GNSS$residuals), 0.5
 print(paste("68th Percentile Error:", percentile_68_error))
 print(paste("50th Percentile Error:", percentile_50_error))
 
-# Calculating the linear regression model 
-model = lm(mean_node_drift_wse_m~wse, data = time_space_matched_SWOT_GNSS) 
-
-# Extracting R-squared parameter from summary 
-summary(model)
-
-#RMSE
-rmse <- sqrt(mean((time_space_matched_SWOT_GNSS$mean_node_drift_wse_m - time_space_matched_SWOT_GNSS$wse)^2))
-#RMSE >= MAE, MAE is similar to 50th quantile error
+# # Calculating the linear regression model 
+# model = lm(mean_node_drift_wse_m~wse, data = time_space_matched_SWOT_GNSS) 
+# # Extracting R-squared parameter from summary 
+# summary(model)
+# #RMSE
+# rmse <- sqrt(mean((time_space_matched_SWOT_GNSS$mean_node_drift_wse_m - time_space_matched_SWOT_GNSS$wse)^2))
+# #RMSE >= MAE, MAE is similar to 50th quantile error
 
 # correlation test
 cor_test <- cor.test(time_space_matched_SWOT_GNSS$wse, time_space_matched_SWOT_GNSS$mean_node_drift_wse_m)
@@ -187,21 +192,21 @@ print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
 
 # csv subset
 # SWOT version D
-save_to_csv <- time_space_matched_SWOT_GNSS %>%
-  dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, wse, wse_u, 
-                mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
-                width, width_u, node_id, reach_id, p_dist_out, 
-                node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
-
-# SWOT version C
 # save_to_csv <- time_space_matched_SWOT_GNSS %>%
 #   dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, wse, wse_u, 
 #                 mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
 #                 width, width_u, node_id, reach_id, p_dist_out, 
-#                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, lat, lon)
+#                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
+
+# SWOT version C
+save_to_csv <- time_space_matched_SWOT_GNSS %>%
+  dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, wse, wse_u,
+                mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
+                width, width_u, node_id, reach_id, p_dist_out,
+                node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, lat, lon)
 
 # save joined_wse_subset to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/time_space_matched_SWOT_GNSS_5mdiff.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/time_space_matched_SWOT_GNSS_3mdiff.csv', row.names = FALSE)
 
 
 # Calculating the linear regression model 

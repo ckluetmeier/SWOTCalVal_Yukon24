@@ -10,13 +10,13 @@ library(dplyr)
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
 # RiverSP (SWORD v16)
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates from hydrocron pull
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
@@ -41,9 +41,9 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep GNSS data
 # SWORD v16
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/SWORD_v16/YR_drift_reach_wse_slope.csv')
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # SWORD v17b
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
   
 GNSS_df$wse_drift_start_UTC <- as.POSIXct(GNSS_df$wse_drift_start_UTC, tz = "UTC")
 GNSS_df$wse_drift_end_UTC <- as.POSIXct(GNSS_df$wse_drift_end_UTC, tz = "UTC")
@@ -95,16 +95,6 @@ percentile_50_error <- quantile(abs(time_space_matched_SWOT_GNSS$residuals), 0.5
 #print the result
 print(paste("68th Percentile Error:", percentile_68_error))
 print(paste("50th Percentile Error:", percentile_50_error))
-
-# Calculating the linear regression model 
-model = lm(mean_reach_drift_wse_m~wse, data = time_space_matched_SWOT_GNSS) 
-
-# Extracting R-squared parameter from summary 
-summary(model)
-
-#RMSE
-rmse <- sqrt(mean((time_space_matched_SWOT_GNSS$mean_reach_drift_wse_m - time_space_matched_SWOT_GNSS$wse)^2))
-#RMSE >= MAE, MAE is similar to 50th quantile error
 
 # correlation test
 cor_test <- cor.test(time_space_matched_SWOT_GNSS$wse, time_space_matched_SWOT_GNSS$mean_reach_drift_wse_m)
@@ -181,30 +171,27 @@ time_space_matched_SWOT_GNSS$residuals_nobias = time_space_matched_SWOT_GNSS$mea
 percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$residuals_nobias), 0.68, na.rm=TRUE)
 percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$residuals_nobias), 0.50, na.rm=TRUE)
 
-#print the result
 print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
 print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
 
-#csv subset
+# csv subset
+# RiverSP
 save_to_csv <- time_space_matched_SWOT_GNSS %>%
-  dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m, 
-                mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u, 
+  dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+                mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u,
                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
-                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id) # SWOTFileName, p_n_nodes,
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id)
+
+# RiverTile
+# save_to_csv <- time_space_matched_SWOT_GNSS %>%
+#   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m, 
+#                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u, 
+#                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
+#                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, p_n_nodes, SWOTFileName) # SWOTFileName, p_n_nodes,
+# 
 
 # save joined_wse_subset to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_time_space_matched_SWOT_GNSS.csv', row.names = FALSE)
-
-
-# Calculating the linear regression model 
-model_nobias = lm(mean_reach_drift_wse_no_bias_m~wse, data = time_space_matched_SWOT_GNSS) 
-
-# Extracting R-squared parameter from summary 
-summary(model_nobias)
-
-#RMSE
-rmse_nobias <- sqrt(mean((time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m - time_space_matched_SWOT_GNSS$wse)^2))
-#RMSE >= MAE, MAE is similar to 50th quantile error
+# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_GNSS.csv', row.names = FALSE)
 
 # correlation test
 cor_test_nobias <- cor.test(time_space_matched_SWOT_GNSS$wse, time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m)
@@ -249,87 +236,6 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = time_utc, y = bias, color = factor(
   theme_minimal(base_size = 30)  +
   theme(legend.position = "none") 
   #labs(color = "Drift ID") 
-
-
-
-
-
-
-library(dplyr)
-
-time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
-  mutate(
-    reach_quality = factor(reach_q,
-                     levels = c(0, 1, 2, 3),
-                     labels = c("Good", "Suspect", "Degraded", "Bad"))
-  )
-
-
-# Step 1: Sort by absolute error and compute cumulative retention
-pareto_df <- time_space_matched_SWOT_GNSS %>%
-  arrange(abs(residuals_nobias)) %>%
-  mutate(
-    abs_error = abs(residuals_nobias),
-    retention = seq_along(abs_error) / n() * 100  # % remaining from current threshold onward
-  )
-
-pareto_df <- time_space_matched_SWOT_GNSS %>%
-  arrange(reach_q) %>%
-  mutate(
-    abs_error = abs(residuals_nobias),
-    retention = seq_along(reach_q) / n() * 100  # % remaining from current threshold onward
-  )
-
-# Step 2: Compute Pareto front (unique thresholds and best retention)
-pareto_front <- pareto_df %>%
-  group_by(abs_error = round(abs_error, 5)) %>%  # round to avoid noise in x-axis
-  summarize(retention = max(retention), .groups = "drop") %>%
-  arrange(abs_error)
-
-
-
-
-# Step 3: Plot
-ggplot(pareto_df, aes(x = abs_error, y = retention, color = reach_quality)) +
-  geom_point(alpha = 0.6, size = 2) +
-  geom_line(data = pareto_front, aes(x = abs_error, y = retention), 
-            inherit.aes = FALSE, color = "black", linewidth = 0.6) +
-  scale_color_manual(values = c(
-    "Good" = "#1f77b4", 
-    "Suspect" = "#17becf", 
-    "Degraded" = "#2ca02c", 
-    "Bad" = "#d62728"
-  )) +
-  labs(
-    x = "|68%ile| WSE difference (m)",
-    y = "Percent of observations remaining (%)",
-    title = "Pareto Front?? WSE Difference vs. Data Retention",
-    color = "Overall Quality Flag"
-  ) +
-  theme_minimal(base_size = 18)
-
-
-
-
-library(ggplot2)
-d <- data.frame(x = abs(pareto_df$residuals_nobias), y = pareto_df$retention)
-D <- d[order(d$x,d$y,decreasing=TRUE),]
-
-pareto_front <- which(!duplicated(cummax(D$y)))
-front <- D[pareto_front,]
-other <- D[-pareto_front,]
-
-ggplot(mapping = aes(x, y)) +
-  geom_point(data = other) +
-  geom_line(data = front, colour = 'red') +
-  geom_point(data = front, colour = 'red') +
-  lims(x = c(0, NA), y = c(0, NA))
-
-
-
-
-
-
 
 
 
@@ -523,6 +429,10 @@ ggplot(time_space_matched_riverTile_GNSS, aes(x = mean_node_drift_wse_no_bias_m,
 
 
 
+
+
+
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # Slope comparisons
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -700,13 +610,6 @@ ggplot(SWOT_versionCD_df, aes(x = abs(slope_residuals_nobias*100000), color = so
   theme_minimal(base_size = 18) +
   scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
   scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
-
-
-
-
-
-
-
 
 
 

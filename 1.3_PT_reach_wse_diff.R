@@ -238,7 +238,7 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, river, cycle_id, pass_id) #SWOTFileName, p_n_nodes
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverTile_time_space_matched_SWOT_PT.csv', row.names = FALSE)
+write.csv(save_to_csv, file = 'RiverTile_time_space_matched_SWOT_PT.csv', row.names = FALSE)
 
 
 # correlation test
