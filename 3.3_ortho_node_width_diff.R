@@ -41,11 +41,7 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # 7/16 Coleen
 ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/CL_upperPR_240716_summaryStats_node_polygon.csv')
 
-# orthos processed with SWORD polygons
-# 7/16 Coleen
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/CL_upperPR_240716_summaryStats_dissolved_node_polygon.csv')
-# # upper YR
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/upperYR_240710_summaryStats_dissolved_node_polygon.csv')
+
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # join ortho & SWOT data, calculate ortho width with SWORD prior node length

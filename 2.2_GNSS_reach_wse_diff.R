@@ -3,33 +3,45 @@ library(lubridate)
 library(dplyr)
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# Compare GNSS wse & SWOT RiverTile reach wse/slope
+# Compare GNSS & SWOT (RiverSP/RiverTile) reach wse & slope
 # ---------------------------------------------------------------------------------------------------------------------------
 
-# WSE
+# contents:
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
+# read in & prep GNSS data
+# match GNSS & SWOT observations in time and space
+# WSE
+# SLOPE
+# save dataframes
+# WSE and slope comparisons across SWOT/SWORD versions
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# read in & filter SWOT data
+
 # RiverSP (SWORD v16)
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
-# get ride of possible duplicates from hydrocron pull
+# get ride of possible duplicates / empty observations
+# (e.g. time = -999999999999, wse = -1.000000e+12)
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
   distinct(reach_id, time, wse, .keep_all = TRUE) %>%
   filter(time > 0) %>%
   filter(wse > 0)
 
-# filter SWOT data by reach_q (0=good, 1=suspect, 2=degraded, 3=bad) & cross track distance
+# filter SWOT data by reach_q (0=good, 1=suspect, 2=degraded, 3=bad), cross track distance, reach coverage
 SWOT_reach_df_filtered <- SWOT_reach_df_noduplicates %>%
   filter(reach_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) %>%
-  filter(partial_f == 0)
+  filter(partial_f == 0) # at least 50% node coverage if 0
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -40,13 +52,22 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep GNSS data
+
 # SWORD v16
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # SWORD v17b
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
-  
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+
+# Convert times to POSIXct
 GNSS_df$wse_drift_start_UTC <- as.POSIXct(GNSS_df$wse_drift_start_UTC, tz = "UTC")
 GNSS_df$wse_drift_end_UTC <- as.POSIXct(GNSS_df$wse_drift_end_UTC, tz = "UTC")
+
+# Compute midpoint time of the drift for matching to SWOT overpass
+GNSS_df$wse_drift_midpoint_UTC <- as.POSIXct(
+  (as.numeric(GNSS_df$wse_drift_start_UTC) + as.numeric(GNSS_df$wse_drift_end_UTC)) / 2, origin = "1970-01-01", tz = "UTC")
+
+# Compute total time of drift
+GNSS_df$wse_drift_total_time_UTC <- difftime(GNSS_df$wse_drift_end_UTC, GNSS_df$wse_drift_start_UTC, units = "mins")
 
 #change reach_id so there aren't duplicate columns when merging with SWOT data
 GNSS_df <- rename(GNSS_df, "GNSS_reach_id" = "reach_id")
@@ -58,10 +79,8 @@ GNSS_df <- rename(GNSS_df, "GNSS_reach_id" = "reach_id")
 # observation are matched by 5 hour buffer
 time_matched_SWOT_GNSS <- GNSS_df %>%
   rowwise() %>%
-  mutate(
-    closest_match = list(SWOT_reach_df_filtered %>%
-                           filter(abs(difftime(wse_drift_end_UTC, time_utc, units = "hours")) <= 5))
-  ) %>%
+  mutate(closest_match = list(SWOT_reach_df_filtered %>%
+                           filter(abs(difftime(wse_drift_midpoint_UTC, time_utc, units = "hours")) <= 5))) %>%
   unnest(closest_match) %>%
   dplyr::select(everything())
 
@@ -69,6 +88,11 @@ time_matched_SWOT_GNSS <- GNSS_df %>%
 # reach level
 time_space_matched_SWOT_GNSS <- time_matched_SWOT_GNSS %>%
   filter(GNSS_reach_id == reach_id)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# WSE
+# ---------------------------------------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Summary stats
@@ -128,7 +152,6 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = mean_reach_drift_wse_m, y = wse, co
   theme(legend.position = "none")
 #labs(color = "Drift ID") 
 
-
 # CDF plot
 ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(wse - mean_reach_drift_wse_m))) +
   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
@@ -157,12 +180,8 @@ time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
   group_by(drift_id) %>%
   mutate(
     bias = median(residuals, na.rm = TRUE),
-    mean_reach_drift_wse_no_bias_m = mean_reach_drift_wse_m - bias
-  ) %>%
+    mean_reach_drift_wse_no_bias_m = mean_reach_drift_wse_m - bias) %>%
   ungroup()
-
-
-# 68th & 50th percentile error: wse diff calculation
 
 # Calculate the wse diff SWOT - GNSS (residuals)
 time_space_matched_SWOT_GNSS$residuals_nobias = time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m - time_space_matched_SWOT_GNSS$wse
@@ -174,24 +193,6 @@ percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$residual
 print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
 print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
 
-# csv subset
-# RiverSP
-save_to_csv <- time_space_matched_SWOT_GNSS %>%
-  dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
-                mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u,
-                slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
-                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id)
-
-# RiverTile
-# save_to_csv <- time_space_matched_SWOT_GNSS %>%
-#   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m, 
-#                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u, 
-#                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
-#                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, p_n_nodes, SWOTFileName) # SWOTFileName, p_n_nodes,
-# 
-
-# save joined_wse_subset to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_GNSS.csv', row.names = FALSE)
 
 # correlation test
 cor_test_nobias <- cor.test(time_space_matched_SWOT_GNSS$wse, time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m)
@@ -215,15 +216,14 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = mean_reach_drift_wse_no_bias_m, y =
            hjust = 0, vjust = 1, size = 8) +
   theme(legend.position = "none")
 
-
 # CDF plot
 ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(wse - mean_reach_drift_wse_no_bias_m))) +
   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - GNSS WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - GNSS WSE") +
-  annotate("text", x = 1, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 1, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 0.5, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 0.5, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20) 
 
 
@@ -240,6 +240,167 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = time_utc, y = bias, color = factor(
 
 
 
+# ---------------------------------------------------------------------------------------------------------------------------
+# SLOPE
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# fix negative slopes in SWOT & GNSS data
+time_space_matched_SWOT_GNSS$slope_abs <- abs(time_space_matched_SWOT_GNSS$slope)
+time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs <- abs(time_space_matched_SWOT_GNSS$reach_drift_slope_m_m)
+
+# Summary stats
+
+# 68th & 50th percentile error: wse diff calculation
+
+# Calculate the wse diff SWOT -GNSS(slope_residuals)
+time_space_matched_SWOT_GNSS$slope_residuals = time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs - time_space_matched_SWOT_GNSS$slope_abs
+
+# Calculate the 68th percentile error
+percentile_68_error <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals), 0.50, na.rm=TRUE)
+
+#print the result
+# *100000 puts m/m into cm/km for slopes
+print(paste("68th Percentile Error:", percentile_68_error*100000))
+print(paste("50th Percentile Error:", percentile_50_error*100000))
+
+# correlation test
+cor_test <- cor.test(time_space_matched_SWOT_GNSS$slope_abs, time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs)
+
+# Extract r and p-value
+r_value <- cor_test$estimate # Pearson correlation coefficient
+p_value <- cor_test$p.value # highly statistically significant is P < 0.001
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# data viz
+
+# color_palette <- c("#4A4A4A", "#D86A1A", "#6D398B", "#9EBCD8",
+#                    "#E3A700", "#008F7A", "#C83232", "#2E7D32",
+#                    "#D81B60", "#00429D", "#A6761D", "#56B4E9")
+
+# plot uncorrected SWOT vs GNSS slope
+ggplot(time_space_matched_SWOT_GNSS, aes(x = reach_drift_slope_m_m*100000, y = slope*100000)) +
+  geom_point(size = 4) +
+  xlab("GNSS slope (cm/km)") +
+  ylab("SWOT slope (cm/km)") +
+  theme_minimal(base_size = 30) +
+  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+  scale_x_continuous(labels = scales::comma) +
+  scale_y_continuous(labels = scales::comma)
+
+# plot abs SWOT vs GNSS slope
+ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(reach_drift_slope_m_m_abs*100000), y = abs(slope_abs*100000))) +
+  geom_point(size = 4) +
+  xlab("GNSS slope (cm/km)") +
+  ylab("SWOT slope (cm/km)") +
+  theme_minimal(base_size = 30) +
+  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+  annotate("text", x = min(abs(time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs*100000), na.rm = TRUE), 
+           y = max(time_space_matched_SWOT_GNSS$slope_abs*100000, na.rm = TRUE), 
+           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),  "\nn = ", nrow(time_space_matched_SWOT_GNSS)),
+           hjust = 0, vjust = 1, size = 8) +
+  scale_x_continuous(labels = scales::comma) +
+  scale_y_continuous(labels = scales::comma)
+
+# CDF plot
+ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(slope_abs*100000 - reach_drift_slope_m_m_abs*100000))) +
+  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
+  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+  labs(x = "SWOT slope - GNSS slope (cm/km)", y = "Cumulative Probability", title = "CDF of SWOT slope - GNSS slope") +
+  annotate("text", x = 100, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error*100000, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 100, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error*100000, 4)), color = "#222222", size = 6) +
+  theme_minimal(base_size = 20)
+
+# plot residuals vs GNSS slope uncertainty
+ggplot(time_space_matched_SWOT_GNSS, aes(x = reach_drift_slope_precision_m*100000, y = abs(slope_residuals*100000), color = factor(reach_id))) +
+  geom_point(size = 4) +
+  #scale_color_manual(values = color_palette) +
+  xlab("GNSS slope uncertainty") +
+  ylab("abs slope difference") +
+  theme_minimal(base_size = 30) +
+  labs(color = "Reach ID")
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# remove bias from GNSS data
+
+time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
+  group_by(drift_id) %>%
+  mutate(
+    bias_slope = median(slope_residuals, na.rm = TRUE),
+    reach_drift_slope_m_m_abs_nobias = reach_drift_slope_m_m_abs - bias_slope) %>%
+  ungroup()
+
+# Calculate the wse diff SWOT - GNSS (residuals)
+time_space_matched_SWOT_GNSS$slope_residuals_nobias = time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs_nobias - time_space_matched_SWOT_GNSS$slope_abs
+
+# Calculate the 68th percentile error
+percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals_nobias), 0.50, na.rm=TRUE)
+
+print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias*100000))
+print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias*100000))
+
+
+# correlation test
+cor_test_nobias <- cor.test(time_space_matched_SWOT_GNSS$slope_abs, time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs_nobias)
+
+# Extract r and p-value
+r_value_nobias <- cor_test_nobias$estimate # Pearson correlation coefficient
+p_value_nobias <- cor_test_nobias$p.value # 
+
+# plot SWOT vs GNSS slope
+ggplot(time_space_matched_SWOT_GNSS, aes(x = reach_drift_slope_m_m_abs_nobias*100000, y = slope_abs*100000, color = factor(drift_id))) +
+  geom_point(size = 3) +
+  scale_color_manual(values = color_palette) +
+  xlab("GNSS slope (cm/km)") +
+  ylab("SWOT slope (cm/km)") +
+  theme_minimal(base_size = 30) +
+  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+  annotate("text", x = min(time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs_nobias*100000, na.rm = TRUE), 
+           y = max(time_space_matched_SWOT_GNSS$slope_abs*100000, na.rm = TRUE), 
+           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
+                          "\nn = ", nrow(time_space_matched_SWOT_GNSS)),
+           hjust = 0, vjust = 1, size = 8) +
+  theme(legend.position = "none")
+
+# CDF plot
+ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(slope_abs*100000 - reach_drift_slope_m_m_abs_nobias*100000))) +
+  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
+  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+  labs(x = "SWOT slope - GNSS slope (cm/km)", y = "Cumulative Probability", title = "CDF of SWOT slope - GNSS slope") +
+  annotate("text", x = 1, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias*100000, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 1, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias*100000, 4)), color = "#222222", size = 6) +
+  theme_minimal(base_size = 20) 
+
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# save dataframes
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# csv subset
+# RiverSP
+# save_to_csv <- time_space_matched_SWOT_GNSS %>%
+#   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+#                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_m_m_abs, reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias, bias_slope, reach_drift_slope_m_m_abs_nobias, drift_id, wse, wse_u,
+#                 slope, slope_abs, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
+#                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id) # cycle_id, pass_id
+
+# RiverTile
+save_to_csv <- time_space_matched_SWOT_GNSS %>%
+  dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+                mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_m_m_abs, reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias, bias_slope, reach_drift_slope_m_m_abs_nobias, drift_id, wse, wse_u,
+                slope, slope_abs, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, p_n_nodes, SWOTFileName) # SWOTFileName, p_n_nodes
+
+
+# save joined_wse_subset to csv
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv', row.names = FALSE)
+
+
 
 
 
@@ -247,7 +408,7 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = time_utc, y = bias, color = factor(
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# Compare GNSS wse & SWOT riverSP/RiverTile reach wse
+# WSE and slope comparisons across SWOT/SWORD versions
 # ---------------------------------------------------------------------------------------------------------------------------
 
 time_space_matched_riverSP_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_time_space_matched_SWOT_GNSS.csv")
@@ -427,49 +588,9 @@ ggplot(time_space_matched_riverTile_GNSS, aes(x = mean_node_drift_wse_no_bias_m,
 
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------------------------------------------------------
 # Slope comparisons
 # ---------------------------------------------------------------------------------------------------------------------------
-# Calculate the wse diff SWOT - PT (slope_residuals)
-RiverSP_df$slope_residuals = RiverSP_df$abs_reach_drift_slope_m_m - RiverSP_df$abs_slope
-
-
-RiverSP_df <- RiverSP_df %>%
-  group_by(drift_id) %>%
-  mutate(
-    bias = median(slope_residuals, na.rm = TRUE),
-    mean_abs_reach_drift_slope_no_bias_m = abs_reach_drift_slope_m_m - bias
-  ) %>%
-  ungroup()
-
-# 68th & 50th percentile error: wse diff calculation
-
-# Calculate the wse diff SWOT - GNSS (residuals)
-RiverSP_df$slope_residuals_nobias = RiverSP_df$mean_abs_reach_drift_slope_no_bias_m - RiverSP_df$abs_slope
-
-
-# Calculate the wse diff SWOT - PT (slope_residuals)
-RiverTile_df$slope_residuals = RiverTile_df$abs_reach_drift_slope_m_m - RiverTile_df$abs_slope
-
-
-RiverTile_df <- RiverTile_df %>%
-  group_by(drift_id) %>%
-  mutate(
-    bias = median(slope_residuals, na.rm = TRUE),
-    mean_abs_reach_drift_slope_no_bias_m = abs_reach_drift_slope_m_m - bias
-  ) %>%
-  ungroup()
-
-# 68th & 50th percentile error: wse diff calculation
-
-# Calculate the wse diff SWOT - GNSS (residuals)
-RiverTile_df$slope_residuals_nobias = RiverTile_df$mean_abs_reach_drift_slope_no_bias_m - RiverTile_df$abs_slope
 
 
 # Combine both dataframes
@@ -558,10 +679,10 @@ RiverTile_df <- RiverTile_df %>%
 # for rivers
 color_palette <- c("#D86A1A", "#F8A31B", "#00429D", "#2E7D32", "#6D398B",
                    "#00429D",  "#C83232", "#008F7A", "#E3A700", "#124000")
-# plot SWOT vs PT slope
+# plot SWOT vs GNSS slope
 ggplot(RiverTile_df, aes(x = reach_drift_slope_m_m*100000, y = slope*100000, color = factor(river))) +
   geom_point(size = 4) +
-  xlab("PT slope (cm/km)") +
+  xlab("GNSS slope (cm/km)") +
   ylab("SWOT slope (cm/km)") +
   scale_color_manual(values = color_palette) +
   theme_minimal(base_size = 30) +
@@ -577,8 +698,8 @@ ggplot(SWOT_versionCD_df, aes(x = abs(slope_residuals*100000), color = source, l
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT slope - PT slope (cm/km)", y = "Cumulative Probability", 
-       title = "CDF of SWOT slope - PT slope") +
+  labs(x = "SWOT slope - GNSS slope (cm/km)", y = "Cumulative Probability", 
+       title = "CDF of SWOT slope - GNSS slope") +
   annotate("text", x = 7, y = 0.71, 
            label = paste("|68%ile| Version C:", round(percentile_68_error*100000, 4), 
                          ", Version D:", round(percentile_68_error_RiverTile*100000, 4)), 
@@ -611,139 +732,3 @@ ggplot(SWOT_versionCD_df, aes(x = abs(slope_residuals_nobias*100000), color = so
   scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
   scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# SLOPE
-# ---------------------------------------------------------------------------------------------------------------------------
-# Summary stats
-
-# 68th & 50th percentile error: wse diff calculation
-
-# Calculate the wse diff SWOT - PT (slope_residuals)
-time_space_matched_SWOT_GNSS$slope_residuals = time_space_matched_SWOT_GNSS$reach_drift_slope_m_m - time_space_matched_SWOT_GNSS$slope
-
-# Calculate the 68th percentile error
-percentile_68_error <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals), 0.50, na.rm=TRUE)
-
-#print the result
-print(paste("68th Percentile Error:", percentile_68_error*100000))
-print(paste("50th Percentile Error:", percentile_50_error*100000))
-
-#csv subset
-save_to_csv <- time_space_matched_SWOT_GNSS %>%
-  select(time_utc, slope_residuals, slope, reach_drift_slope_m_m, reach_id)
-
-# save joined_wse_subset to csv
-#write.csv(time_space_matched_SWOT_GNSS, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/test.csv', row.names = FALSE)
-
-
-# Calculating the linear regression model 
-model = lm(reach_drift_slope_m_m~slope, data = time_space_matched_SWOT_GNSS) 
-
-# Extracting R-squared parameter from summary 
-summary(model)
-
-#RMSE
-rmse <- sqrt(mean((time_space_matched_SWOT_GNSS$reach_drift_slope_m_m - time_space_matched_SWOT_GNSS$slope)^2))
-#RMSE >= MAE, MAE is similar to 50th quantile error
-
-# correlation test
-cor_test <- cor.test(time_space_matched_SWOT_GNSS$slope, time_space_matched_SWOT_GNSS$reach_drift_slope_m_m)
-
-# Extract r and p-value
-r_value <- cor_test$estimate # Pearson correlation coefficient
-p_value <- cor_test$p.value # highly statistically significant is P < 0.001
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# data viz
-
-# color_palette <- c("#4A4A4A", "#D86A1A", "#6D398B", "#9EBCD8",  
-#                    "#E3A700", "#008F7A", "#C83232", "#2E7D32",  
-#                    "#D81B60", "#00429D", "#A6761D", "#56B4E9")
-
-# plot SWOT vs PT slope
-ggplot(time_space_matched_SWOT_GNSS, aes(x = reach_drift_slope_m_m*100000, y = slope*100000)) +
-  geom_point(size = 4) +
-  xlab("PT slope (cm/km)") +
-  ylab("SWOT slope (cm/km)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(abs(time_space_matched_SWOT_GNSS$reach_drift_slope_m_m*100000), na.rm = TRUE), 
-           y = max(time_space_matched_SWOT_GNSS$slope*100000, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),  "\nn = ", nrow(time_space_matched_SWOT_GNSS)),
-           hjust = 0, vjust = 1, size = 8) +
-  scale_x_continuous(labels = scales::comma) +
-  scale_y_continuous(labels = scales::comma)
-
-
-ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(reach_drift_slope_m_m*100000), y = abs(slope*100000))) +
-  geom_point(size = 4) +
-  xlab("PT slope (cm/km)") +
-  ylab("SWOT slope (cm/km)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(abs(time_space_matched_SWOT_GNSS$reach_drift_slope_m_m*100000), na.rm = TRUE), 
-           y = max(time_space_matched_SWOT_GNSS$slope*100000, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),  "\nn = ", nrow(time_space_matched_SWOT_GNSS)),
-           hjust = 0, vjust = 1, size = 8) +
-  scale_x_continuous(labels = scales::comma) +
-  scale_y_continuous(labels = scales::comma)
-
-# CDF plot
-ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(slope*100000 - reach_drift_slope_m_m*100000))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT slope - PT slope (cm/km)", y = "Cumulative Probability", title = "CDF of SWOT slope - PT slope") +
-  annotate("text", x = 100, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error*100000, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 100, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error*100000, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20)
-
-# plot SWOT vs PT slope
-ggplot(time_space_matched_SWOT_GNSS, aes(x = slope_uncertainty_m_m, y = abs(residuals), color = factor(SWOT_reach_id))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  xlab("pt slope uncertainty") +
-  ylab("abs slope difference") +
-  theme_minimal(base_size = 30) +
-  labs(color = "Reach ID")
