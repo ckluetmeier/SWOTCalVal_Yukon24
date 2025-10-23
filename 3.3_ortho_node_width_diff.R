@@ -8,8 +8,31 @@ library(dplyr)
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in SWOT data
-# RiverSP
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+# version C: RiverSP
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+
+# version D: RiverTile
+# SWORD v17b
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv')
+# SWORD_v17b <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GIS/SWORD_v17b_domain/SWORD_YR_domain_v17b.csv')
+# # join SWORD for node_len attribute
+# SWOT_df <- SWOT_df %>%
+#   left_join(SWORD_v17b, by = c("node_id", "reach_id"))
+# SWOT_df$p_length = SWOT_df$node_len
+
+
+# SWORD v16
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_domain_node_timeseries_v16.csv')
+SWOTv16_df_w_p_length <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+SWOTv16_df_w_p_length <- SWOTv16_df_w_p_length %>%
+  select(node_id, reach_id, p_length) %>%
+  distinct(node_id, .keep_all = TRUE)
+
+# join SWORD for node_len attribute
+SWOT_df <- SWOT_df %>%
+  left_join(SWOTv16_df_w_p_length, by = c("node_id", "reach_id"))
+SWOT_df$node_len = SWOT_df$p_length
+
 
 # get ride of possible duplicates from hydrocron pull
 # this also filters out bad nodes without data (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -33,15 +56,36 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep ortho data
 
-# orthos processed with PIXCVec polygons
-# upper YR
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/upperYR_240710_summaryStats_node_polygon.csv')
-# 7/10 Coleen
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/CL_upperPR_240710_summaryStats_node_polygon.csv')
-# 7/16 Coleen
-ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/CL_upperPR_240716_summaryStats_node_polygon.csv')
+# version C: RiverSP
+# lower YR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_lowerYR_071624.csv')
+# upper YR 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv')
+# coleen / upper PR 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperPR_CL_071024.csv')
+# coleen / upper PR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperPR_CL_071624.csv')
 
 
+# version D: RiverTile, SWORD v16
+# lower YR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_lowerYR_071624.csv')
+# upper YR 7/10
+ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_upperYR_071024.csv')
+# coleen / upper PR 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_upperPR_CL_071024.csv')
+# coleen / upper PR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_upperPR_CL_071624.csv')
+
+# version D: RiverTile, SWORD v17b
+# lower YR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_lowerYR_071624.csv')
+# upper YR 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperYR_071024.csv')
+# coleen / upper PR 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperPR_CL_071024.csv')
+# coleen / upper PR 7/16
+ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperPR_CL_071624.csv')
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # join ortho & SWOT data, calculate ortho width with SWORD prior node length
@@ -52,7 +96,12 @@ combined_ortho_SWORD_df <- ortho_df %>%
 
 # filter to same date at ortho collect
 combined_ortho_SWORD_df <- combined_ortho_SWORD_df %>%
-  filter(str_starts(time_str, "2024-07-16")) # CHANGE DATE DEPENDING ON ORTHO COLLECT HERE
+  filter(str_starts(time_str, "2024-07-10")) # CHANGE DATE DEPENDING ON ORTHO COLLECT HERE
+
+# lower YR: "2024-07-16"
+# upper YR: "2024-07-10"
+# coleen / upper PR: "2024-07-10"
+# coleen / upper PR: "2024-07-16"
 
 # Calculate width from area
 combined_ortho_SWORD_df <- combined_ortho_SWORD_df %>%
@@ -104,7 +153,8 @@ p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 # ---------------------------------------------------------------------------------------------------------------------------
 # data viz
 
-color_palette <- c("#48b32e","#6389ee","#d99427","#6D398B","#C83232")
+color_palette <- c("#48b32e","#6389ee","#d99427","#6D398B","#C83232", "gray",
+                   "lightyellow", "pink")
 
 # plot SWOT vs GNSS width
 ggplot(combined_ortho_SWORD_df, aes(x = ortho_width_m, y = width, color = factor(reach_id))) +
@@ -138,8 +188,8 @@ ggplot(combined_ortho_SWORD_df, aes(x = abs(percent_diff))) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "Width Percent Difference (%)", y = "Cumulative Probability", title = "CDF of SWOT-Ortho Width %diff") +
-  annotate("text", x = 205, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 205, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 20, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 20, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20)
 
 
@@ -152,14 +202,14 @@ width_dist_out_df <- combined_ortho_SWORD_df %>%
 # 81260401181, 81260401011
 
 # plot widths along dist_out
-ggplot(width_dist_out_df) +
+ggplot(combined_ortho_SWORD_df) +
   geom_point(aes(x = p_dist_out/1000, y = ortho_width_m), color = "lightblue", size = 2.5, shape = 17) +
   geom_point(aes(x = p_dist_out/1000, y = width),  color = "darkblue", size = 2.5, alpha = 0.7) +
   scale_color_manual(values = color_palette) +
   xlab("Distance to outlet (km)") +
   ylab("width (m)") +
   theme_minimal(base_size = 30) +
-  ggtitle('Coleen, 7/16/24')
+  ggtitle('Lower YR, 7/16')
 
 # large residual investigation
 # error_investigation_df <- combined_ortho_SWORD_df %>%
@@ -238,8 +288,8 @@ ggplot(combined_ortho_SWORD_df, aes(x = abs(percent_diff_nobias))) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "Width Percent Difference (%)", y = "Cumulative Probability", title = "CDF of SWOT-Ortho Width %diff") +
-  annotate("text", x = 205, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent_nobias, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 205, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent_nobias, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 25, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent_nobias, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 25, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent_nobias, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20)
 
 
@@ -265,15 +315,34 @@ ggplot(width_dist_out_df) +
 # ---------------------------------------------------------------------------------------------------------------------------
 
 #csv subset
+# save_to_csv <- combined_ortho_SWORD_df %>%
+#   dplyr::select(node_id,reach_id,time_utc,residuals,percent_diff,residuals_nobias,percent_diff_nobias,
+#                 number_water_pixels,water_area_m2,ortho_width_m,swot_width_nobias_m,
+#                 lat, lon, wse, wse_u, wse_r_u, width, width_u, area_total, area_tot_u, area_detct,
+#                 area_det_u, area_wse, layovr_val, node_dist, xtrk_dist, node_q, node_q_b, dark_frac,
+#                 n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, p_dist_out, p_length)
+
 save_to_csv <- combined_ortho_SWORD_df %>%
   dplyr::select(node_id,reach_id,time_utc,residuals,percent_diff,residuals_nobias,percent_diff_nobias,
                 number_water_pixels,water_area_m2,ortho_width_m,swot_width_nobias_m,
                 lat, lon, wse, wse_u, wse_r_u, width, width_u, area_total, area_tot_u, area_detct,
                 area_det_u, area_wse, layovr_val, node_dist, xtrk_dist, node_q, node_q_b, dark_frac,
-                n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, p_dist_out, p_length)
+                n_good_pix, rdr_sig0, xovr_cal_q, p_dist_out, p_length)
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics/combined_ortho_SWOT_CL_upperPR_071624.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/combined_ortho_SWOT_lowerYR_071624.csv', row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -282,7 +351,10 @@ write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # Set working directory to the orthomosaics directory with the combined_ortho_SWOT_ csvs
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/Orthomosaics"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b"
+
+
 setwd(wd)
 
 # Get list of all CSV files in working directory that start with combined_ortho_SWOT
@@ -313,8 +385,26 @@ combined_ortho_SWORD_df <- combined_df %>%
   )
 
 # optional filter to look at isolated groups (e.g. by river)
-combined_ortho_SWORD_df <- combined_ortho_SWORD_df %>%
-  filter(river == "upper_YR")
+# combined_ortho_SWORD_df <- combined_ortho_SWORD_df %>%
+#   filter(river == "upper_YR")
+
+# Create a source column to identify which dataset each row comes from
+RiverSP_df <- combined_ortho_SWORD_df %>%
+  mutate(source = "RiverSP")
+
+RiverTile_df <- combined_ortho_SWORD_df %>%
+  mutate(source = "RiverTile")
+
+# optional filter to look at isolated groups (e.g. by river)
+RiverTile_df_subset <- RiverTile_df %>%
+  filter(river == "lower_YR")
+
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df_subset$percent_diff), 0.68, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df_subset$residuals), 0.68, na.rm=TRUE)
+print(percentile_68_error_RiverTile)
+
+# Combine both dataframes
+combined_ortho_SWORD_df <- bind_rows(RiverSP_df, RiverTile_df)
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Stats & plots
@@ -338,13 +428,113 @@ cor_test <- cor.test(combined_ortho_SWORD_df$width, combined_ortho_SWORD_df$orth
 r_value <- cor_test$estimate # Pearson correlation coefficient
 p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# data viz
 
-color_palette <- c("#48b32e","#6389ee","#d99427","#6D398B","#C83232","#d4c841", "#e73582", "#95d47e")
+# Stats for RiverSP / RiverTile
+# Calculate the 68th & 50th percentile error
+percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
+
+# Calculate the 68th &50th percentile error, no bias
+percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
+
+# Calculate the 68th & 50th percentile error
+percentile_68_error <- quantile(abs(RiverSP_df$percent_diff), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$percent_diff), 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$percent_diff), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$percent_diff), 0.50, na.rm=TRUE)
+
+summary <- group_by(RiverTile_df, river) %>% summarise(
+  count = n(),
+  mean = mean(abs(residuals), na.rm = TRUE),
+  sd = sd(abs(residuals), na.rm = TRUE),
+  median = median(abs(residuals), na.rm = TRUE),
+  IQR = IQR(abs(residuals), na.rm= TRUE),
+  min =min(abs(residuals), na.rm = TRUE),
+  max =max(abs(residuals), na.rm= TRUE),
+  quant68 = quantile(abs(residuals), 0.68, na.rm=TRUE),
+  quant68_nobais = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE)
+)
+
+
+
+summary <- group_by(RiverTile_df, river) %>% summarise(
+  count = n(),
+  mean = mean(abs(ortho_width_m), na.rm = TRUE),
+  sd = sd(abs(ortho_width_m), na.rm = TRUE),
+  median = median(abs(ortho_width_m), na.rm = TRUE),
+  IQR = IQR(abs(ortho_width_m), na.rm= TRUE),
+  min =min(abs(ortho_width_m), na.rm = TRUE),
+  max =max(abs(ortho_width_m), na.rm= TRUE),
+  quant68 = quantile(abs(ortho_width_m), 0.68, na.rm=TRUE),
+  quant68_nobais = quantile(abs(ortho_width_m), 0.68, na.rm=TRUE)
+)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# data viz for RiverSP / RiverTile
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# "CD", "CL", "lowerPR", "lowerYR", "SJ", "upperPR", "upperYR"
+color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#F4845F", "#DA627D")
+
+
+# Combo CDF plot
+ggplot(combined_ortho_SWORD_df, aes(x = percent_diff, color = source, linetype = source)) +
+  stat_ecdf(geom = "step", size = 1.2) +
+  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+  labs(x = "Width Percent Difference (%)", y = "Cumulative Probability", 
+       title = "CDF of SWOT - Ortho Width %diff") +
+  annotate("text", x = 125, y = 0.71, 
+           label = paste("|68%ile| Version C:", round(percentile_68_error, 2), 
+                         ", Version D:", round(percentile_68_error_RiverTile, 2)), 
+           color = "#222222", size = 5) +
+  annotate("text", x = 125, y = 0.53, 
+           label = paste("|50%ile| Version C:", round(percentile_50_error, 2), 
+                         ", Version D:", round(percentile_50_error_RiverTile, 2)), 
+           color = "#222222", size = 5) +
+  theme_minimal(base_size = 18) +
+  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
+  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash")) +
+  xlim(0, 200)
+
+# Combo CDF plot
+ggplot(combined_ortho_SWORD_df, aes(x = abs(residuals), color = source, linetype = source)) +
+  stat_ecdf(geom = "step", size = 1.2) +
+  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+  labs(x = "SWOT - Ortho Width (m)", y = "Cumulative Probability", 
+       title = "CDF of SWOT - Ortho Width (m)") +
+  annotate("text", x = 525, y = 0.71, 
+           label = paste("|68%ile| Version C:", round(percentile_68_error, 2), 
+                         ", Version D:", round(percentile_68_error_RiverTile, 2)), 
+           color = "#222222", size = 5) +
+  annotate("text", x = 525, y = 0.53, 
+           label = paste("|50%ile| Version C:", round(percentile_50_error, 2), 
+                         ", Version D:", round(percentile_50_error_RiverTile, 2)), 
+           color = "#222222", size = 5) +
+  theme_minimal(base_size = 18) +
+  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
+  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash")) +
+  xlim(0, 1000)
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# data viz for one SWOT data type
+
+# c("CL" = "#F2C14E", "upper_PR" = "#F4845F", "upper_YR" ="#DA627D", lower_YR = "#9A348E"))
+color_palette <- c("#F2C14E", "#F4845F", "#DA627D", "#9A348E")
+
 
 # plot SWOT vs GNSS width
-ggplot(combined_ortho_SWORD_df, aes(x = ortho_width_m, y = width, color = factor(reach_id))) +
+ggplot(combined_ortho_SWORD_df, aes(x = ortho_width_m, y = width, color = factor(river))) +
   geom_point(size = 2.5) +
   scale_color_manual(values = color_palette) +
   xlab("Ortho width (m)") +
@@ -376,9 +566,10 @@ ggplot(combined_ortho_SWORD_df, aes(x = abs(percent_diff))) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "Width Percent Difference (%)", y = "Cumulative Probability", title = "CDF of SWOT-Ortho Width %diff") +
-  annotate("text", x = 200, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 200, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20)
+  annotate("text", x = 75, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 75, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent, 4)), color = "#222222", size = 6) +
+  theme_minimal(base_size = 20) +
+  xlim(0, 100)
 
 # no bias
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -391,7 +582,7 @@ percentile_68_percent_nobias <- quantile(abs(combined_ortho_SWORD_df$percent_dif
 percentile_50_percent_nobias <- quantile(abs(combined_ortho_SWORD_df$percent_diff_nobias), 0.50, na.rm=TRUE)
 
 # plot SWOT vs GNSS width
-ggplot(combined_ortho_SWORD_df, aes(x = ortho_width_m, y = swot_width_nobias_m, color = factor(reach_id))) +
+ggplot(combined_ortho_SWORD_df, aes(x = ortho_width_m, y = swot_width_nobias_m, color = factor(river))) +
   geom_point(size = 2.5) +
   scale_color_manual(values = color_palette) +
   xlab("Ortho width (m)") +
@@ -424,7 +615,8 @@ ggplot(combined_ortho_SWORD_df, aes(x = abs(percent_diff_nobias))) +
   labs(x = "Width Percent Difference (%)", y = "Cumulative Probability", title = "CDF of SWOT-Ortho Width %diff") +
   annotate("text", x = 140, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent_nobias, 4)), color = "#222222", size = 6) +
   annotate("text", x = 140, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent_nobias, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20)
+  theme_minimal(base_size = 20) +
+  xlim(0, 100)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -481,19 +673,33 @@ ggplot(combined_ortho_SWORD_df, aes(x = river, y = percent_diff, fill=river), dr
   ylim(0, 270)
 
 # Combo CDF plot by river
-ggplot(combined_ortho_SWORD_df, aes(x = percent_diff, color = river, linetype = river)) +
+ggplot(RiverTile_df, aes(x = percent_diff, color = river, linetype = river)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "Width Percent Difference (%)", y = "Cumulative Probability", 
-       title = "CDF of SWOT - Ortho width") +
+       title = "CDF of SWOT - Ortho width %diff") +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("CL" = "#6D398B", "upper_PR" = "#00429D", "upper_YR" ="#2E7D32")) +
-  theme(legend.position = "none")
+  scale_color_manual(values = c("CL" = "#F2C14E", "upper_PR" = "#F4845F", "upper_YR" ="#DA627D", lower_YR = "#9A348E")) +
+  theme(legend.position = "none") +
+  xlim(0, 100)
 
+# Combo CDF plot by river
+ggplot(RiverTile_df, aes(x = abs(residuals), color = river, linetype = river)) +
+  stat_ecdf(geom = "step", size = 1.2) +
+  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+  labs(x = "SWOT - Ortho Width (m)", y = "Cumulative Probability", 
+       title = "CDF of SWOT - Ortho width %diff") +
+  theme_minimal(base_size = 18) +
+  scale_color_manual(values = c("CL" = "#F2C14E", "upper_PR" = "#F4845F", "upper_YR" ="#DA627D", lower_YR = "#9A348E")) +
+  theme(legend.position = "none") 
+
+# "CD", "CL", "lowerPR", "lowerYR", "SJ", "upperPR", "upperYR"
+color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#F4845F", "#DA627D")
 
 # Expand to long df for width type comparisons
-long_df <- combined_ortho_SWORD_df %>%
+long_df <- RiverTile_df %>%
   select(river, ortho_width_m, width) %>%
   pivot_longer(cols = c(ortho_width_m, width),
                names_to = "width_type",
@@ -501,6 +707,11 @@ long_df <- combined_ortho_SWORD_df %>%
   mutate(width_type = recode(width_type,
                              ortho_width_m = "Ortho",
                              width = "SWOT"))
+
+# Set river order
+long_df$river <- factor(long_df$river, 
+                        levels = c("CL", "upper_PR", "upper_YR", "lower_YR"))
+
 # split violin comparisons
 devtools::install_github("psyteachr/introdataviz")
 ggplot(long_df, aes(x = river, y = width_value, fill = width_type)) +
@@ -508,14 +719,14 @@ ggplot(long_df, aes(x = river, y = width_value, fill = width_type)) +
   geom_boxplot(width = .2, alpha = .8, fatten = NULL, show.legend = FALSE) +
   stat_summary(fun.data = "mean_se", geom = "pointrange", show.legend = F, 
                position = position_dodge(.175)) +
-  scale_x_discrete(labels = c("Coleen", "Porcupine", "Yukon")) +
+  scale_x_discrete(labels = c("Coleen", 'Porcupine', "Single-channel Yukon", "Braided Yukon")) +
   scale_fill_manual(values=c("lightblue","darkblue")) +
   theme_minimal(base_size = 30) +
   ylab("width (m)") +
-  ylim(0, 1600) +
+  ylim(0, 3500) +
   theme(
     legend.position = "none",
-    axis.text.x = element_text(angle = 45, hjust = 0.9))
+    axis.text.x = element_text(angle = 25, hjust = 0.9))
 
 # Expand to long df for width type comparisons by day
 long_df <- combined_ortho_SWORD_df %>%

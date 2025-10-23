@@ -24,7 +24,7 @@ SWOT_df_noduplicates <- SWOT_df %>%
 
 # filter SWOT data by node_q (0=good, 1=suspect, 2=degraded, 3=bad)
 SWOT_df_filtered <- SWOT_df_noduplicates %>%
-  filter(node_q < 2) %>%
+  #filter(node_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) #%>%
 #filter(dark_frac <= 50)
@@ -35,6 +35,10 @@ tai_utc_offset <- 37  # TAI-UTC offset in seconds
 
 # Convert time_tai to UTC
 SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_offset
+
+# try
+SWOT_df_filtered <- SWOT_df_filtered[, c("time_utc", "node_id", "lat", "lon")]
+
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep GNSS data
@@ -50,8 +54,8 @@ GNSS_df$time_UTC <- as.POSIXct(GNSS_df$time_UTC, tz = "UTC")
 GNSS_df <- rename(GNSS_df, "Node_ID" = "node_id")
 
 # filter GNSS by node total error in m
-GNSS_df <- GNSS_df %>%
-  filter(node_total_error_m < 2.5)
+# GNSS_df <- GNSS_df %>%
+#   filter(node_total_error_m < 2.5)
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # match GNSS & SWOT observations in time and space
@@ -71,6 +75,28 @@ time_matched_SWOT_GNSS <- GNSS_df %>%
 # node level
 time_space_matched_SWOT_GNSS <- time_matched_SWOT_GNSS %>%
   filter(Node_ID == node_id)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# count by node
+matched_all <- group_by(time_space_matched_SWOT_GNSS, node_id) %>% summarise(
+  count = n(),
+  lat = median(lat),
+  lon = median(lon))
+
+# matched_filtered <- group_by(time_space_matched_SWOT_GNSS, node_id) %>% summarise(
+#   count_filtered = n())
+
+
+data_retention <- matched_all %>%
+  left_join(matched_filtered, by = "node_id") %>%
+  mutate(across(everything(), ~ coalesce(.x, 0)))
+
+data_retention$percent_kept = as.numeric(data_retention$count_filtered / data_retention$count)
+
+
+write.csv(data_retention, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/vC_data_retention.csv', row.names = FALSE)
+
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Summary stats

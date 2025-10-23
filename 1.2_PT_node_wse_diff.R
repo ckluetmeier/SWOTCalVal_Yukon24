@@ -465,14 +465,15 @@ ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = width, y = abs(residuals_
 # ---------------------------------------------------------------------------------------------------------------------------
 # all clusters comparison
 
-# Set working directory to the hydrocron_timeseries folder where the time&space matched SWOT/PT clusters are
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16"
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries"
+# Set working directory to CalVal_dataframes directory where the time&space matched SWOT/PT clusters are for each SWOT version
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
 setwd(wd)
 
-# Get list of all CSV files in working directory that start with time_space_matched_SWOT_PT_
-# csv_files <- list.files(wd, pattern = "^RiverTile_time_space_matched_SWOT_PT_.*\\.csv$", full.names = TRUE)
-csv_files <- list.files(wd, pattern = "^time_space_matched_SWOT_PT_.*\\.csv$", full.names = TRUE)
+# Get list of all CSV files in working directory that include time_space_matched_SWOT_PT_
+csv_files <- list.files(wd, pattern = "time_space_matched_SWOT_PT.*\\.csv$", full.names = TRUE)
+
 
 # Merge all PT files into a combined dataframe with filename column
 data_list <- lapply(csv_files, function(file) {
@@ -482,8 +483,10 @@ data_list <- lapply(csv_files, function(file) {
   filename <- basename(file)
   
   # Remove "time_space_matched_SWOT_PT_" prefix and ".csv" extension
-  filename_clean <- sub("^RiverTile_time_space_matched_SWOT_PT_", "", filename)
-  filename_clean <- sub("\\.csv$", "", filename_clean)
+  # filename_clean <- sub("^RiverTile_time_space_matched_SWOT_PT_", "", filename)
+  # filename_clean <- sub("\\.csv$", "", filename_clean)
+  
+  filename_clean <- sub(".*PT_(.*)\\.csv$", "\\1", filename)
   
   # Add filename as a new column
   df <- df %>%
@@ -495,8 +498,8 @@ data_list <- lapply(csv_files, function(file) {
 # Combine all dataframes into one
 combined_df <- bind_rows(data_list)
 
-combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
-# combined_time_space_matched_RiverTile_PT_df <- bind_rows(data_list)
+# combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
+combined_time_space_matched_RiverTile_PT_df <- bind_rows(data_list)
 
 # Summary stats
 
@@ -525,6 +528,7 @@ print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
 
 # correlation test
 cor_test <- cor.test(combined_time_space_matched_SWOT_PT_df$wse, combined_time_space_matched_SWOT_PT_df$pt_wse_m)
+# cor_test <- cor.test(combined_time_space_matched_RiverTile_PT_df$wse, combined_time_space_matched_RiverTile_PT_df$pt_wse_m)
 
 # Extract r and p-value
 r_value <- cor_test$estimate # Pearson correlation coefficient
@@ -533,8 +537,8 @@ p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 # ---------------------------------------------------------------------------------------------------------------------------
 # data viz
 
-color_palette <- c("#D86A1A", "#6D398B", "#00429D", "#F8A31B", "#2E7D32",
-                   "#00429D",  "#C83232", "#008F7A", "#E3A700", "#124000")
+color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#F4845F", "#DA627D")
+
 
 # plot SWOT vs PT wse
 ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
@@ -548,6 +552,21 @@ ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = pt_wse_m, y = wse, color 
            y = max(combined_time_space_matched_SWOT_PT_df$wse, na.rm = TRUE), 
            label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
                           "\nn = ", nrow(combined_time_space_matched_SWOT_PT_df)),
+           hjust = 0, vjust = 1, size = 8) +
+  labs(color = "River")
+
+# plot SWOT vs PT wse
+ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("PT wse (m)") +
+  ylab("SWOT wse (m)") +
+  theme_minimal(base_size = 30) +
+  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+  annotate("text", x = min(combined_time_space_matched_RiverTile_PT_df$pt_wse_m, na.rm = TRUE), 
+           y = max(combined_time_space_matched_RiverTile_PT_df$wse, na.rm = TRUE), 
+           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
+                          "\nn = ", nrow(combined_time_space_matched_RiverTile_PT_df)),
            hjust = 0, vjust = 1, size = 8) +
   labs(color = "River") 
 
@@ -573,13 +592,23 @@ ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = abs(wse - pt_wse_m))
 
 
 
+summary <- group_by(combined_time_space_matched_RiverTile_PT_df, river) %>% summarise(
+  count = n(),
+  mean = mean(abs(residuals), na.rm = TRUE),
+  sd = sd(abs(residuals), na.rm = TRUE),
+  median = median(abs(residuals), na.rm = TRUE),
+  IQR = IQR(abs(residuals), na.rm= TRUE),
+  min =min(abs(residuals), na.rm = TRUE),
+  max =max(abs(residuals), na.rm= TRUE),
+  quant68 = quantile(abs(residuals), 0.68, na.rm=TRUE),
+  quant68_nobais = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE)
+)
 
 
 
 
 
-
-# First, create a 'source' column to identify which dataset each row comes from
+# Create a source column to identify which dataset each row comes from
 RiverSP_df <- combined_time_space_matched_SWOT_PT_df %>%
   mutate(source = "RiverSP", abs_diff = abs(wse - pt_wse_m))
 
@@ -591,35 +620,35 @@ combined_df <- bind_rows(RiverSP_df, RiverTile_df)
 
 
 # # Compare the same data subset from Version C & D
-RiverTile_filtered <- RiverTile_df %>%
-  semi_join(
-    RiverSP_df %>% select(pt_time_UTC, pt_serial),
-    by = c("pt_time_UTC", "pt_serial")
-  )
-
-RiverSP_filtered <- RiverSP_df %>%
-  semi_join(
-    RiverTile_df %>% select(pt_time_UTC, pt_serial),
-    by = c("pt_time_UTC", "pt_serial")
-  )
+# RiverTile_filtered <- RiverTile_df %>%
+#   semi_join(
+#     RiverSP_df %>% select(pt_time_UTC, pt_serial),
+#     by = c("pt_time_UTC", "pt_serial")
+#   )
+# 
+# RiverSP_filtered <- RiverSP_df %>%
+#   semi_join(
+#     RiverTile_df %>% select(pt_time_UTC, pt_serial),
+#     by = c("pt_time_UTC", "pt_serial")
+#   )
 
 # Combine both filtered dataframes
-combined_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
+# combined_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
 
 
 # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_filtered$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_filtered$residuals), 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
 
 # Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
 
 
 
@@ -631,11 +660,11 @@ ggplot(combined_df, aes(x = abs(residuals), color = source, linetype = source)) 
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", 
        title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 0.5, y = 0.71, 
+  annotate("text", x = 1.45, y = 0.71, 
            label = paste("|68%ile| Version C:", round(percentile_68_error, 4), 
                          ", Version D:", round(percentile_68_error_RiverTile, 4)), 
            color = "#222222", size = 5) +
-  annotate("text", x = 0.5, y = 0.53, 
+  annotate("text", x = 1.45, y = 0.53, 
            label = paste("|50%ile| Version C:", round(percentile_50_error, 4), 
                          ", Version D:", round(percentile_50_error_RiverTile, 4)), 
            color = "#222222", size = 5) +
@@ -651,21 +680,17 @@ ggplot(combined_df, aes(x = abs(residuals_nobias), color = source, linetype = so
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", 
        title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 0.5, y = 0.71, 
+  annotate("text", x = 0.9, y = 0.71, 
            label = paste("|68%ile| Version C:", round(percentile_68_error_nobias, 4), 
                          ", Version D:", round(percentile_68_error_RiverTile_nobias, 4)), 
            color = "#222222", size = 5) +
-  annotate("text", x = 0.5, y = 0.53, 
+  annotate("text", x = 0.9, y = 0.53, 
            label = paste("|50%ile| Version C:", round(percentile_50_error_nobias, 4), 
                          ", Version D:", round(percentile_50_error_RiverTile_nobias, 4)), 
            color = "#222222", size = 5) +
   theme_minimal(base_size = 18) +
   scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
   scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
-
-
-
-
 
 
 
@@ -682,15 +707,25 @@ cor_test_nobias <- cor.test(combined_time_space_matched_RiverTile_PT_df$wse, com
 r_value_nobias <- cor_test_nobias$estimate # Pearson correlation coefficient
 p_value_nobias <- cor_test_nobias$p.value # 
 
+
+combined_time_space_matched_RiverTile_PT_df <- combined_time_space_matched_RiverTile_PT_df %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",   # merge into one
+    TRUE ~ river                              # keep all others unchanged
+  ))
+
+
+# "CD", "CL", "lowerPR", "lowerYR", "SJ", "upperPR", "upperYR"
+color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#DA627D")
+
 # plot SWOT vs PT wse
 ggplot(combined_time_space_matched_RiverTile_PT_df, 
        aes(x = pt_wse_nobias_m, y = wse, color = factor(river))) +
   geom_point(size = 4) +
   scale_color_manual(
     values = color_palette,
-    breaks = c("CD", "CL", "upper_PR", "lower_YR", "upper_YR"),
-    labels = c("Chandalar", "Coleen", "Upper Porcupine", "Lower Yukon", "Upper Yukon")
-  ) +
+    breaks = c("CD", "CL", "lowerPR", "lowerYR", "SJ", "upperYR"),
+    labels = c("Chandalar", "Coleen", "Porcupine", "Braided Yukon", "Sheenjek", "Single-channel Yukon")) +
   xlab("PT WSE (m)") +
   ylab("SWOT WSE (m)") +
   theme_minimal(base_size = 30) +
@@ -705,39 +740,142 @@ ggplot(combined_time_space_matched_RiverTile_PT_df,
   labs(color = "River")
 
 
-summary <- group_by(RiverSP_filtered, river) %>% summarise(
+summary <- group_by(combined_time_space_matched_RiverTile_PT_df, river) %>% summarise(
   count = n(),
-  mean = mean(abs(residuals), na.rm = TRUE),
-  sd = sd(abs(residuals), na.rm = TRUE),
-  median = median(abs(residuals), na.rm = TRUE),
-  IQR = IQR(abs(residuals), na.rm= TRUE),
-  min =min(abs(residuals), na.rm = TRUE),
-  max =max(abs(residuals), na.rm= TRUE),
-  quant68 = quantile(abs(residuals), 0.68, na.rm=TRUE),
-  quant68_nobais = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE)
+  mean = mean(abs(residuals_nobias), na.rm = TRUE),
+  sd = sd(abs(residuals_nobias), na.rm = TRUE),
+  median = median(abs(residuals_nobias), na.rm = TRUE),
+  IQR = IQR(abs(residuals_nobias), na.rm= TRUE),
+  min =min(abs(residuals_nobias), na.rm = TRUE),
+  max =max(abs(residuals_nobias), na.rm= TRUE),
+  quant68 = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE),
+  quant68_nobais = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE),
+  mean_dark = mean(dark_frac, na.rm = TRUE),
+  sd_dark = sd(dark_frac, na.rm = TRUE),
+  median_dark = median(dark_frac, na.rm = TRUE),
+  IQR_dark = IQR(dark_frac, na.rm= TRUE),
+  min_dark =min(dark_frac, na.rm = TRUE),
+  max_dark =max(dark_frac, na.rm= TRUE),
+  quant68_dark = quantile(dark_frac, 0.68, na.rm=TRUE),
+  quant68_nobais_dark = quantile(dark_frac, 0.68, na.rm=TRUE)
 )
 
 
+# **********************************
+# Reorder the factor levels for river
+combined_time_space_matched_RiverTile_PT_df$river <- factor(
+  combined_time_space_matched_RiverTile_PT_df$river,
+  levels = c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
+)
 
-ggplot(RiverTile_filtered, aes(x = river, y = abs(residuals_nobias), fill = river)) + 
+# "CD", "CL", "lowerPR", "lowerYR", "SJ", "upperPR", "upperYR"
+color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#DA627D")
+
+color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E")
+
+# Replot
+ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = river, y = abs(residuals_nobias), fill = river)) + 
   geom_violin(alpha = 0.8, color = NA) +
-  xlab('River') +
+  xlab("River") +
   ylab("|SWOT - PT WSE| (m)") +
   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
-  theme_minimal(base_size = 30) +
+  theme_minimal(base_size = 25) +
   scale_fill_manual(
     values = color_palette,
-    breaks = c("CD", "CL", "upper_PR", "lower_YR", "upper_YR"),
-    labels = c("Chandalar", "Coleen", "Upper Porcupine", "Lower Yukon", "Upper Yukon")
-  ) +
+    breaks = c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR"),
+    labels = c("Coleen", "Sheenjek", "Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
   scale_x_discrete(
-    breaks = c("CD", "CL", "upper_PR", "lower_YR", "upper_YR"),
-    labels = c("Chandalar", "Coleen", "Upper Porcupine", "Lower Yukon", "Upper Yukon")
-  ) +
+    breaks = c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR"),
+    labels = c("Coleen", "Sheenjek", "Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
   theme(
     legend.position = "none",
-    axis.text.x = element_text(angle = 45, hjust = 0.9)) +
+    axis.text.x = element_text(angle = 20, hjust = 0.9)
+  ) +
   ylim(0, 0.8)
+
+# **********************************
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # add river names to df
+# SWOT_df_filtered <- SWOT_df_filtered %>%
+#   mutate(
+#     river_code = substr(reach_id, 1, 6),
+#     river = case_when(
+#       river_code == "812701" ~ "lower_YR",
+#       river_code == "812705" ~ "upper_YR",
+#       river_code == "812508" ~ "CD",
+#       river_code == "812603" ~ "upper_PR",
+#       river_code == "812605" ~ "upper_PR",
+#       river_code == "812604" ~ "CL",
+#       river_code == "812603" ~ "SJ",
+#       TRUE ~ NA_character_
+#     )
+#   )
+
+# Trim to 25th-75th percentile per river
+trimmed_df <- combined_time_space_matched_RiverTile_PT_df %>%
+  group_by(river) %>%
+  mutate(
+    q25 = quantile(width, 0.25, na.rm = TRUE),
+    q75 = quantile(width, 0.75, na.rm = TRUE)
+  ) %>%
+  filter(width >= q25, width <= q75) %>%
+  ungroup() %>%
+  mutate(
+    width = if_else(river == "upperYR", width + 150, width),
+    width = if_else(river == "lowerYR", width + 700, width),
+    width = if_else(river == "CL", width - 10, width),
+    width = if_else(river == "PR", width + 50, width),
+    width = if_else(river == "SJ", width - 10, width)
+  )
+
+
+# Compute medians per river (median = 50th percentile)
+median_df <- trimmed_df %>%
+  group_by(river) %>%
+  summarize(median_width = median(width, na.rm = TRUE)) %>%
+  ungroup()
+
+# Density plot with medians as vertical lines; colors/fills match your palette
+ggplot(trimmed_df, aes(x = width, fill = river, color = river)) +
+  geom_density(alpha = 0.5, size = 0.9, adjust = 1) + 
+  # Add median lines (dashed) colored by river
+  geom_vline(
+    data = median_df,
+    aes(xintercept = median_width, color = river),
+    linetype = "dashed",
+    size = 1 ) +
+  labs(x = "Width",y = "Density", fill = "River", color = "River") +
+  theme_minimal(base_size = 20) +
+  scale_fill_manual(
+    values = color_palette,
+    breaks = c("CD", "CL", "PR", "lowerYR", "SJ", "upperYR"),
+    labels = c("Chandalar", "Coleen", "Porcupine", "Braided Yukon", "Sheenjek", "Single-channel Yukon")) +
+  scale_color_manual(
+    values = color_palette,
+    breaks = c("CD", "CL", "PR", "lowerYR", "SJ", "upperYR")) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid = element_blank())
+
+
+
+
+
+
+
 
 
 ggplot(RiverSP_filtered, aes(x = river, y = abs(residuals_nobias), fill = river)) + 
@@ -806,7 +944,7 @@ ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = abs(wse - pt_wse_nobias_m
 # data viz
 
 # plot wse diff vs width
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = width, y = abs(residuals_nobias), color = factor(river))) +
+ggplot(RiverTile_df, aes(x = width, y = abs(residuals_nobias), color = factor(river))) +
   geom_point(size = 4) +
   scale_color_manual(values = color_palette) +
   #xlab("SWOT width (m)") +
