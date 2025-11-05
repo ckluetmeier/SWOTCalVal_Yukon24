@@ -456,10 +456,12 @@ ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = width, y = abs(residuals_
 
 
 
+
+
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # Compare PT wse & SWOT riverSP (version C) vs RiverTile (version D) node wse
 # ---------------------------------------------------------------------------------------------------------------------------
-
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -467,8 +469,8 @@ ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = width, y = abs(residuals_
 
 # Set working directory to CalVal_dataframes directory where the time&space matched SWOT/PT clusters are for each SWOT version
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
 setwd(wd)
 
 # Get list of all CSV files in working directory that include time_space_matched_SWOT_PT_
@@ -482,10 +484,7 @@ data_list <- lapply(csv_files, function(file) {
   # Extract filename without path
   filename <- basename(file)
   
-  # Remove "time_space_matched_SWOT_PT_" prefix and ".csv" extension
-  # filename_clean <- sub("^RiverTile_time_space_matched_SWOT_PT_", "", filename)
-  # filename_clean <- sub("\\.csv$", "", filename_clean)
-  
+  # Select river cluster from filename
   filename_clean <- sub(".*PT_(.*)\\.csv$", "\\1", filename)
   
   # Add filename as a new column
@@ -498,41 +497,83 @@ data_list <- lapply(csv_files, function(file) {
 # Combine all dataframes into one
 combined_df <- bind_rows(data_list)
 
+# TURN ON the correct df for vC vs vD load in
 # combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
 combined_time_space_matched_RiverTile_PT_df <- bind_rows(data_list)
 
+# Create a source column to identify which dataset each row comes from
+RiverSP_df <- combined_time_space_matched_SWOT_PT_df %>%
+  mutate(source = "RiverSP", abs_diff = abs(wse - pt_wse_m))
+
+RiverTile_df <- combined_time_space_matched_RiverTile_PT_df %>%
+  mutate(source = "RiverTile", abs_diff = abs(wse - pt_wse_m))
+
+# Combine both dataframes
+combined_df <- bind_rows(RiverSP_df, RiverTile_df)
+
+
+# # Compare the same data subset from Version C & D
+# RiverTile_filtered <- RiverTile_df %>%
+#   semi_join(
+#     RiverSP_df %>% select(pt_time_UTC, pt_serial),
+#     by = c("pt_time_UTC", "pt_serial")
+#   )
+# 
+# RiverSP_filtered <- RiverSP_df %>%
+#   semi_join(
+#     RiverTile_df %>% select(pt_time_UTC, pt_serial),
+#     by = c("pt_time_UTC", "pt_serial")
+#   )
+
+# Combine both filtered dataframes
+# combined_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
+
+
+
+
+
+
 # Summary stats
+# ---------------------------------------------------------------------------------------------------------------------------
 
 # 68th & 50th percentile error: wse diff calculation
 
 # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals), 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile <- quantile(abs(combined_time_space_matched_RiverTile_PT_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(combined_time_space_matched_RiverTile_PT_df$residuals), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
 
 # Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile_nobias <- quantile(abs(combined_time_space_matched_RiverTile_PT_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(combined_time_space_matched_RiverTile_PT_df$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_nobias_RiverTile <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias_RiverTile <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
 
 
 #print the result
-print(paste("68th Percentile Error:", percentile_68_error))
-print(paste("50th Percentile Error:", percentile_50_error))
-print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
-print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
+print(paste("68th Percentile Error:", percentile_68_error_RiverTile))
+print(paste("50th Percentile Error:", percentile_50_error_RiverTile))
+print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias_RiverTile))
+print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias_RiverTile))
 
 # correlation test
-cor_test <- cor.test(combined_time_space_matched_SWOT_PT_df$wse, combined_time_space_matched_SWOT_PT_df$pt_wse_m)
-# cor_test <- cor.test(combined_time_space_matched_RiverTile_PT_df$wse, combined_time_space_matched_RiverTile_PT_df$pt_wse_m)
+# cor_test <- cor.test(RiverSP_df$wse, RiverSP_df$pt_wse_m) # pt_wse_nobias_m
+cor_test <- cor.test(RiverTile_df$wse, RiverTile_df$pt_wse_m)
 
 # Extract r and p-value
 r_value <- cor_test$estimate # Pearson correlation coefficient
 p_value <- cor_test$p.value # highly statistically significant is P < 0.001
+
+# Mean Absolute Error (which is just the mean residual)
+MAE <- mean(abs(RiverTile_df$residuals))
+MAE <- mean(abs(RiverTile_df$residuals_nobias))
+
+
+t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
+t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # data viz
@@ -608,47 +649,8 @@ summary <- group_by(combined_time_space_matched_RiverTile_PT_df, river) %>% summ
 
 
 
-# Create a source column to identify which dataset each row comes from
-RiverSP_df <- combined_time_space_matched_SWOT_PT_df %>%
-  mutate(source = "RiverSP", abs_diff = abs(wse - pt_wse_m))
-
-RiverTile_df <- combined_time_space_matched_RiverTile_PT_df %>%
-  mutate(source = "RiverTile", abs_diff = abs(wse - pt_wse_m))
-
-# Combine both dataframes
-combined_df <- bind_rows(RiverSP_df, RiverTile_df)
 
 
-# # Compare the same data subset from Version C & D
-# RiverTile_filtered <- RiverTile_df %>%
-#   semi_join(
-#     RiverSP_df %>% select(pt_time_UTC, pt_serial),
-#     by = c("pt_time_UTC", "pt_serial")
-#   )
-# 
-# RiverSP_filtered <- RiverSP_df %>%
-#   semi_join(
-#     RiverTile_df %>% select(pt_time_UTC, pt_serial),
-#     by = c("pt_time_UTC", "pt_serial")
-#   )
-
-# Combine both filtered dataframes
-# combined_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
-
-
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
 
 
 

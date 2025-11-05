@@ -21,13 +21,13 @@ library(dplyr)
 # read in & filter SWOT data
 
 # RiverSP (SWORD v16)
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates / empty observations
 # (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -54,9 +54,12 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # read in & prep GNSS data
 
 # SWORD v16
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_04_29/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # SWORD v17b
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_04_29/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+
 
 # Convert times to POSIXct
 GNSS_df$wse_drift_start_UTC <- as.POSIXct(GNSS_df$wse_drift_start_UTC, tz = "UTC")
@@ -407,12 +410,20 @@ write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded
 
 
 
+
+
+
+
+
+
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # WSE and slope comparisons across SWOT/SWORD versions
 # ---------------------------------------------------------------------------------------------------------------------------
 
 time_space_matched_riverSP_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_GNSS.csv")
-time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv")
+# time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv")
+time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v16/reach_SWOT_GNSS.csv")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -447,61 +458,6 @@ RiverTile_df <- RiverTile_df %>%
       TRUE ~ NA_character_))
 
 
-# **********************************
-# Reorder the factor levels for river
-RiverTile_df$river <- factor(
-  RiverTile_df$river,
-  levels = c("CD", "upper_PR", "upper_YR", "lower_YR"))
-
-# "CD", "CL", "lowerPR", "lowerYR", "SJ", "upperPR", "upperYR"
-
-color_palette <- c("#3B6064", "#F4845F", "#DA627D", "#9A348E")
-
-percentile_68_error_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias), 0.68, na.rm=TRUE)
-
-
-# Replot
-ggplot(RiverTile_trimmed, aes(x = river, y = abs(slope_residuals_nobias*100000), fill = river)) + 
-  geom_violin(alpha = 0.8, color = NA) +
-  xlab("River") +
-  ylab("|SWOT - GNSS slope| (cm/km)") +
-  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
-  theme_minimal(base_size = 30) +
-  scale_fill_manual(values = color_palette,
-    breaks = c("CD", "upper_PR", "upper_YR", "lower_YR"),
-    labels = c("Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
-  scale_x_discrete(breaks = c("CD", "upper_PR", "upper_YR", "lower_YR"),
-    labels = c("Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
-  theme(legend.position = "none",
-    axis.text.x = element_text(angle = 10, hjust = 0.9))
-
-slope_problem <- RiverTile_df %>%
-  filter(river == 'CD')
-
-RiverTile_trimmed <- RiverTile_df %>%
-  filter(abs_reach_drift_slope_m_m > 0.000001)
-
-
-summary <- group_by(RiverTile_trimmed, river) %>% summarise(
-  count = n(),
-  mean_slope = mean(reach_drift_slope_m_m_abs*100000),
-  mean_slope_SWOT = mean(slope_abs*100000),
-  mean = mean(abs(slope_residuals_nobias*100000), na.rm = TRUE),
-  sd = sd(abs(slope_residuals_nobias*100000), na.rm = TRUE),
-  median = median(abs(slope_residuals_nobias*100000), na.rm = TRUE),
-  IQR = IQR(abs(slope_residuals_nobias*100000), na.rm= TRUE),
-  min =min(abs(slope_residuals_nobias*100000), na.rm = TRUE),
-  max =max(abs(slope_residuals_nobias*100000), na.rm= TRUE),
-  quant68 = quantile(abs(slope_residuals_nobias*100000), 0.68, na.rm=TRUE),
-  quant68_nobais = quantile(abs(slope_residuals_nobias*100000), 0.68, na.rm=TRUE),
-  mean_dark = mean(dark_frac, na.rm = TRUE),
-  sd_dark = sd(dark_frac, na.rm = TRUE),
-  median_dark = median(dark_frac, na.rm = TRUE),
-  IQR_dark = IQR(dark_frac, na.rm= TRUE),
-  min_dark =min(dark_frac, na.rm = TRUE),
-  max_dark =max(dark_frac, na.rm= TRUE),
-  quant68_dark = quantile(dark_frac, 0.68, na.rm=TRUE),
-  quant68_nobais_dark = quantile(dark_frac, 0.68, na.rm=TRUE))
 
 
 
@@ -542,41 +498,65 @@ summary <- group_by(RiverTile_filtered, reach_id) %>% summarise(
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(time_space_matched_riverSP_GNSS$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(time_space_matched_riverSP_GNSS$residuals), 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile <- quantile(abs(time_space_matched_riverTile_GNSS$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(time_space_matched_riverTile_GNSS$residuals), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
 
 # Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(time_space_matched_riverSP_GNSS$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(time_space_matched_riverSP_GNSS$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile_nobias <- quantile(abs(time_space_matched_riverTile_GNSS$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(time_space_matched_riverTile_GNSS$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
 
 
+# correlation test
+cor_test <- cor.test(RiverTile_df$wse, RiverTile_df$mean_reach_drift_wse_m) # mean_reach_drift_wse_m
+# cor_test <- cor.test(RiverSP_df$wse, RiverSP_df$mean_reach_drift_wse_no_bias_m)
+
+# Extract r and p-value
+r_value <- cor_test$estimate # Pearson correlation coefficient
+p_value <- cor_test$p.value # highly statistically significant is P < 0.001
+
+# Mean Absolute Error (which is just the mean residual)
+MAE <- mean(abs(RiverTile_df$residuals))
+MAE <- mean(abs(RiverTile_df$residuals_nobias))
+
+
+t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
+t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
 
 
 # # SUBSET TO SAME VERSION C/D data points
-# # Calculate the 68th & 50th percentile error
-# percentile_68_error <- quantile(abs(RiverSP_filtered$residuals), 0.68, na.rm=TRUE)
-# percentile_50_error <- quantile(abs(RiverSP_filtered$residuals), 0.50, na.rm=TRUE)
-# 
-# percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.68, na.rm=TRUE)
-# percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.50, na.rm=TRUE)
-# 
-# # Calculate the 68th &50th percentile error, no bias
-# percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-# percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.50, na.rm=TRUE)
-# 
-# percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-# percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.50, na.rm=TRUE)
-# 
+# Calculate the 68th & 50th percentile error
+percentile_68_error <- quantile(abs(RiverSP_filtered$residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_filtered$residuals), 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.50, na.rm=TRUE)
+
+# Calculate the 68th &50th percentile error, no bias
+percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.50, na.rm=TRUE)
+
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Plots
+
+# Compute counts
+counts_df <- SWOT_versionCD_df %>%
+  group_by(source) %>%
+  summarise(n_reach = n_distinct(reach_id), n_total = n(), .groups = "drop")
+
+# Extract counts
+c_RiverSP   <- counts_df[counts_df$source == "RiverSP", ]
+c_RiverTile <- counts_df[counts_df$source == "RiverTile", ]
 
 # Combo CDF plot
 ggplot(SWOT_versionCD_df, aes(x = abs(residuals), color = source, linetype = source)) +
@@ -584,18 +564,25 @@ ggplot(SWOT_versionCD_df, aes(x = abs(residuals), color = source, linetype = sou
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - GNSS WSE (m)", y = "Cumulative Probability", 
-       title = "CDF of SWOT WSE - GNSS WSE") +
-  annotate("text", x = 0.75, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile, 4)), 
+       title = "Absolute SWOT - GNSS Reach WSE") +
+  annotate("text", x = 1.45, y = 0.71, 
+           label = paste("|68%ile| Version C:", round(percentile_68_error, 3), 
+                         ", Version D:", round(percentile_68_error_RiverTile, 3)), 
            color = "#222222", size = 5) +
-  annotate("text", x = 0.75, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile, 4)), 
+  annotate("text", x = 1.45, y = 0.53, 
+           label = paste("|50%ile| Version C:", round(percentile_50_error, 3), 
+                         ", Version D:", round(percentile_50_error_RiverTile, 3)), 
            color = "#222222", size = 5) +
+  # Add counts in lower right
+  annotate("text", x = Inf, y = 0.08,
+           hjust = 1.1, vjust = 0,
+           label = paste0("Version C: ", c_RiverSP$n_reach, " unique reaches, ", c_RiverSP$n_total, " total"),
+           color = "#E97132", size = 5) +
+  annotate("text", x = Inf, y = 0.02,hjust = 1.1, vjust = 0, 
+           label = paste0("Version D: ", c_RiverTile$n_reach, " unique reaches, ", c_RiverTile$n_total, " total"), color = "darkblue", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "dashed"))
+  scale_color_manual(values = c("RiverSP" = "#E97132", "RiverTile" = "darkblue")) +
+  scale_linetype_manual(values = c("RiverSP" = "dashed", "RiverTile" = "solid"))
 
 
 # Combo CDF plot no bias
@@ -604,31 +591,31 @@ ggplot(SWOT_versionCD_df, aes(x = abs(residuals_nobias), color = source, linetyp
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - GNSS WSE (m)", y = "Cumulative Probability", 
-       title = "CDF of SWOT WSE - GNSS WSE") +
+       title = "Relative SWOT - GNSS Reach WSE") +
   annotate("text", x = 0.8, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error_nobias, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile_nobias, 4)), 
+           label = paste("|68%ile| Version C:", round(percentile_68_error_nobias, 3), 
+                         ", Version D:", round(percentile_68_error_RiverTile_nobias, 3)), 
            color = "#222222", size = 5) +
   annotate("text", x = 0.8, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error_nobias, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile_nobias, 4)), 
+           label = paste("|50%ile| Version C:", round(percentile_50_error_nobias, 3), 
+                         ", Version D:", round(percentile_50_error_RiverTile_nobias, 3)), 
            color = "#222222", size = 5) +
+  # Add counts in lower right
+  annotate("text", x = Inf, y = 0.08,
+           hjust = 1.1, vjust = 0,
+           label = paste0("Version C: ", c_RiverSP$n_reach, " unique reaches, ", c_RiverSP$n_total, " total"),
+           color = "#E97132", size = 5) +
+  annotate("text", x = Inf, y = 0.02,hjust = 1.1, vjust = 0, 
+           label = paste0("Version D: ", c_RiverTile$n_reach, " unique reaches, ", c_RiverTile$n_total, " total"), color = "darkblue", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
+  scale_color_manual(values = c("RiverSP" = "#E97132", "RiverTile" = "darkblue")) +
+  scale_linetype_manual(values = c("RiverSP" = "dashed", "RiverTile" = "solid"))
 
 
 
 
 
 
-
-# correlation test
-cor_test <- cor.test(time_space_matched_riverTile_GNSS$wse, time_space_matched_riverTile_GNSS$mean_node_drift_wse_m)
-
-# Extract r and p-value
-r_value <- cor_test$estimate # Pearson correlation coefficient
-p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # data viz
@@ -640,14 +627,14 @@ color_palette <- c("#e73582","#78e964","#5329a8","#e1df28","#8c66f0","#a8dc3e","
                    "darkblue", "darkred")
 
 # plot SWOT vs GNSS wse
-ggplot(time_space_matched_riverTile_GNSS, aes(x = mean_node_drift_wse_no_bias_m, y = wse, color = factor(drift_id))) +
-  geom_point(size = 1.5) +
+ggplot(time_space_matched_riverTile_GNSS, aes(x = mean_reach_drift_wse_no_bias_m, y = wse, color = factor(drift_id))) +
+  geom_point(size = 2.5) +
   scale_color_manual(values = color_palette) +
   xlab("GNSS wse (m)") +
   ylab("SWOT wse (m)") +
   theme_minimal(base_size = 30) +
   geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(time_space_matched_riverTile_GNSS$mean_node_drift_wse_m, na.rm = TRUE), 
+  annotate("text", x = min(time_space_matched_riverTile_GNSS$mean_reach_drift_wse_no_bias_m, na.rm = TRUE), 
            y = max(time_space_matched_riverTile_GNSS$wse, na.rm = TRUE), 
            label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
                           "\nn = ", nrow(time_space_matched_riverTile_GNSS)),
@@ -674,37 +661,42 @@ summary <- group_by(RiverSP_df, reach_id) %>% summarise(
 )
 
 
+RiverTile_trimmed <- RiverTile_df %>%
+  filter(abs_reach_drift_slope_m_m > 0.000001)
+RiverSP_trimmed <- RiverSP_df %>%
+  filter(abs_reach_drift_slope_m_m > 0.000001)
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_df$slope_residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_df$slope_residuals), 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_df$slope_residuals)*100000, 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$slope_residuals)*100000, 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$slope_residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$slope_residuals), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$slope_residuals)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$slope_residuals)*100000, 0.50, na.rm=TRUE)
 
 # Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
 
 
 
 
 # # Calculate the 68th & 50th percentile error
-# percentile_68_error <- quantile(abs(RiverSP_filtered$slope_residuals), 0.68, na.rm=TRUE)
-# percentile_50_error <- quantile(abs(RiverSP_filtered$slope_residuals), 0.50, na.rm=TRUE)
-# 
-# percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals), 0.68, na.rm=TRUE)
-# percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals), 0.50, na.rm=TRUE)
-# 
-# # Calculate the 68th &50th percentile error, no bias
-# percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias), 0.68, na.rm=TRUE)
-# percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias), 0.50, na.rm=TRUE)
-# 
-# percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias), 0.68, na.rm=TRUE)
-# percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_filtered$slope_residuals)*100000, 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_filtered$slope_residuals)*100000, 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals)*100000, 0.50, na.rm=TRUE)
+
+# Calculate the 68th &50th percentile error, no bias
+percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
+
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
 
 
 
@@ -775,12 +767,12 @@ ggplot(SWOT_versionCD_df, aes(x = abs(slope_residuals*100000), color = source, l
   labs(x = "SWOT slope - GNSS slope (cm/km)", y = "Cumulative Probability", 
        title = "CDF of SWOT slope - GNSS slope") +
   annotate("text", x = 7, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error*100000, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile*100000, 4)), 
+           label = paste("|68%ile| Version C:", round(percentile_68_error, 4), 
+                         ", Version D:", round(percentile_68_error_RiverTile, 4)), 
            color = "#222222", size = 5) +
   annotate("text", x = 7, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error*100000, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile*100000, 4)), 
+           label = paste("|50%ile| Version C:", round(percentile_50_error, 4), 
+                         ", Version D:", round(percentile_50_error_RiverTile, 4)), 
            color = "#222222", size = 5) +
   theme_minimal(base_size = 18) +
   scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
@@ -795,14 +787,56 @@ ggplot(SWOT_versionCD_df, aes(x = abs(slope_residuals_nobias*100000), color = so
   labs(x = "SWOT slope - GNSS slope (m)", y = "Cumulative Probability", 
        title = "CDF of SWOT slope - GNSS slope") +
   annotate("text", x = 7, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error_nobias*100000, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile_nobias*100000, 4)), 
+           label = paste("|68%ile| Version C:", round(percentile_68_error_nobias, 4), 
+                         ", Version D:", round(percentile_68_error_RiverTile_nobias, 4)), 
            color = "#222222", size = 5) +
   annotate("text", x = 7, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error_nobias*100000, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile_nobias*100000, 4)), 
+           label = paste("|50%ile| Version C:", round(percentile_50_error_nobias, 4), 
+                         ", Version D:", round(percentile_50_error_RiverTile_nobias, 4)), 
            color = "#222222", size = 5) +
   theme_minimal(base_size = 18) +
   scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
   scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
+
+
+
+
+# **********************************
+# Violin plot of slopes
+
+# Reorder the factor levels for river
+RiverTile_df$river <- factor(
+  RiverTile_df$river,
+  levels = c("CD", "upper_PR", "upper_YR", "lower_YR"))
+
+# "CD", "CL", "lowerPR", "lowerYR", "SJ", "upperPR", "upperYR"
+
+color_palette <- c("#3B6064", "#F4845F", "#DA627D", "#9A348E")
+
+percentile_68_error_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias), 0.68, na.rm=TRUE)
+
+
+# Replot
+ggplot(RiverTile_trimmed, aes(x = river, y = abs(slope_residuals_nobias*100000), fill = river)) + 
+  geom_violin(alpha = 0.8, color = NA) +
+  xlab("River") +
+  ylab("|SWOT - GNSS slope| (cm/km)") +
+  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+  theme_minimal(base_size = 30) +
+  scale_fill_manual(values = color_palette,
+                    breaks = c("CD", "upper_PR", "upper_YR", "lower_YR"),
+                    labels = c("Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
+  scale_x_discrete(breaks = c("CD", "upper_PR", "upper_YR", "lower_YR"),
+                   labels = c("Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 10, hjust = 0.9))
+
+slope_problem <- RiverTile_df %>%
+  filter(river == 'CD')
+
+RiverTile_trimmed <- RiverTile_df %>%
+  filter(abs_reach_drift_slope_m_m > 0.000001)
+
+
+
 

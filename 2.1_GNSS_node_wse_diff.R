@@ -287,8 +287,13 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(wse - mean_node_drift_wse_no_bi
 # Compare GNSS & SWOT riverSP/RiverTile node wse (SWOT Version C vs D)
 # ---------------------------------------------------------------------------------------------------------------------------
 
-time_space_matched_riverSP_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/time_space_matched_SWOT_GNSS_5mdiff.csv")
-time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/time_space_matched_SWOT_GNSS_5mdiff.csv")
+# OLD
+# time_space_matched_riverSP_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/time_space_matched_SWOT_GNSS_5mdiff.csv")
+# time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/time_space_matched_SWOT_GNSS_5mdiff.csv")
+
+time_space_matched_riverSP_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/matched_SWOT_GNSS_3mdiff.csv")
+# time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16/matched_SWOT_GNSS_3mdiff.csv")
+time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/matched_SWOT_GNSS_3mdiff.csv")
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Combine SWOT Version C & D results to plot
@@ -337,21 +342,39 @@ summary <- group_by(RiverTile_filtered, node_id) %>% summarise(
 #write.csv(summary, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/node_summary_time_space_matched_SWOT_GNSS_5mdiff_nobias.csv', row.names = FALSE)
 
 
-
 # ---------------------------------------------------------------------------------------------------------------------------
 # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(time_space_matched_riverSP_GNSS$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(time_space_matched_riverSP_GNSS$residuals), 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile <- quantile(abs(time_space_matched_riverTile_GNSS$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(time_space_matched_riverTile_GNSS$residuals), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
 
 # Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(time_space_matched_riverSP_GNSS$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(time_space_matched_riverSP_GNSS$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile_nobias <- quantile(abs(time_space_matched_riverTile_GNSS$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(time_space_matched_riverTile_GNSS$residuals_nobias), 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
+
+
+
+# correlation test
+cor_test <- cor.test(RiverTile_df$wse, RiverTile_df$mean_node_drift_wse_m) # mean_node_drift_wse_m
+# cor_test <- cor.test(RiverSP_df$wse, RiverSP_df$mean_node_drift_wse_no_bias_m)
+
+# Extract r and p-value
+r_value <- cor_test$estimate # Pearson correlation coefficient
+p_value <- cor_test$p.value # highly statistically significant is P < 0.001
+
+# Mean Absolute Error (which is just the mean residual)
+MAE <- mean(abs(RiverTile_df$residuals))
+MAE <- mean(abs(RiverTile_df$residuals_nobias))
+
+
+t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
+t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
+
 
 
 # # SUBSET TO SAME VERSION C/D data points
