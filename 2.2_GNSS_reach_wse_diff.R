@@ -21,13 +21,13 @@ library(dplyr)
 # read in & filter SWOT data
 
 # RiverSP (SWORD v16)
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates / empty observations
 # (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -54,12 +54,9 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # read in & prep GNSS data
 
 # SWORD v16
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_04_29/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # SWORD v17b
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_04_29/SWORD_v17b/YR_drift_reach_wse_slope.csv')
-
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
 
 # Convert times to POSIXct
 GNSS_df$wse_drift_start_UTC <- as.POSIXct(GNSS_df$wse_drift_start_UTC, tz = "UTC")
@@ -179,12 +176,18 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(residuals), y = mean_reach_drif
 # ---------------------------------------------------------------------------------------------------------------------------
 # remove bias from GNSS data
 
+# need to set a min threshold of obs for us to calc a bias (using 3 currently)
 time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
   group_by(drift_id) %>%
   mutate(
-    bias = median(residuals, na.rm = TRUE),
-    mean_reach_drift_wse_no_bias_m = mean_reach_drift_wse_m - bias) %>%
+    bias = if (n() >= 3) median(residuals, na.rm = TRUE) else NA_real_,
+    mean_reach_drift_wse_no_bias_m = if (n() >= 3)
+      mean_reach_drift_wse_m - bias
+    else
+      NA_real_) %>%
   ungroup()
+
+
 
 # Calculate the wse diff SWOT - GNSS (residuals)
 time_space_matched_SWOT_GNSS$residuals_nobias = time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m - time_space_matched_SWOT_GNSS$wse
@@ -325,13 +328,17 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = reach_drift_slope_precision_m*10000
   labs(color = "Reach ID")
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# remove bias from GNSS data
+# remove bias from GNSS slope data
 
+# need to set a min threshold of obs for us to calc a bias (using 3 currently)
 time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
   group_by(drift_id) %>%
   mutate(
-    bias_slope = median(slope_residuals, na.rm = TRUE),
-    reach_drift_slope_m_m_abs_nobias = reach_drift_slope_m_m_abs - bias_slope) %>%
+    bias_slope = if (n() >= 3) median(slope_residuals, na.rm = TRUE) else NA_real_,
+    reach_drift_slope_m_m_abs_nobias = if (n() >= 3)
+      reach_drift_slope_m_m_abs - bias_slope
+    else
+      NA_real_) %>%
   ungroup()
 
 # Calculate the wse diff SWOT - GNSS (residuals)
@@ -422,8 +429,8 @@ write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded
 # ---------------------------------------------------------------------------------------------------------------------------
 
 time_space_matched_riverSP_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_GNSS.csv")
-# time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv")
-time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v16/reach_SWOT_GNSS.csv")
+time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv")
+# time_space_matched_riverTile_GNSS <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v16/reach_SWOT_GNSS.csv")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -461,18 +468,18 @@ RiverTile_df <- RiverTile_df %>%
 
 
 
-# # Compare the same data subset from Version C & D
-# RiverTile_filtered <- RiverTile_df %>%
-#   semi_join(
-#     RiverSP_df %>% select(reach_id, wse_drift_start_UTC, mean_reach_drift_wse_m),
-#     by = c("reach_id", "wse_drift_start_UTC", "mean_reach_drift_wse_m")
-#   )
-# 
-# RiverSP_filtered <- RiverSP_df %>%
-#   semi_join(
-#     RiverTile_df %>% select(reach_id, wse_drift_start_UTC, mean_reach_drift_wse_m),
-#     by = c("reach_id", "wse_drift_start_UTC", "mean_reach_drift_wse_m")
-#   )
+# Compare the same data subset from Version C & D
+RiverTile_filtered <- RiverTile_df %>%
+  semi_join(
+    RiverSP_df %>% select(reach_id, wse_drift_start_UTC, mean_reach_drift_wse_m),
+    by = c("reach_id", "wse_drift_start_UTC", "mean_reach_drift_wse_m")
+  )
+
+RiverSP_filtered <- RiverSP_df %>%
+  semi_join(
+    RiverTile_df %>% select(reach_id, wse_drift_start_UTC, mean_reach_drift_wse_m),
+    by = c("reach_id", "wse_drift_start_UTC", "mean_reach_drift_wse_m")
+  )
 # 
 # # Combine both filtered dataframes
 # SWOT_versionCD_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
@@ -522,8 +529,9 @@ p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 
 # Mean Absolute Error (which is just the mean residual)
 MAE <- mean(abs(RiverTile_df$residuals))
-MAE <- mean(abs(RiverTile_df$residuals_nobias))
+MAE <- mean(abs(RiverTile_df$residuals_nobias), na.rm=TRUE)
 
+num_non_na_rows <- sum(complete.cases(RiverSP_df$residuals_nobias))
 
 t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
 t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
@@ -661,43 +669,53 @@ summary <- group_by(RiverSP_df, reach_id) %>% summarise(
 )
 
 
+# get ride of non sensically low GNSS slopes
 RiverTile_trimmed <- RiverTile_df %>%
   filter(abs_reach_drift_slope_m_m > 0.000001)
 RiverSP_trimmed <- RiverSP_df %>%
   filter(abs_reach_drift_slope_m_m > 0.000001)
 
+
+RiverTile_trimmed <- RiverTile_df %>%
+  filter(abs(slope_residuals_nobias) < 15/100000)
+RiverSP_trimmed <- RiverSP_df %>%
+  filter(abs(slope_residuals_nobias) < 15/100000)
+
+SWOT_versionCD_df_trimmed <- SWOT_versionCD_df %>%
+  filter(abs(slope_residuals_nobias) < 15/100000)
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_df$slope_residuals)*100000, 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_df$slope_residuals)*100000, 0.50, na.rm=TRUE)
+percentile_68_error <- quantile(abs(RiverSP_trimmed$slope_residuals)*100000, 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(RiverSP_trimmed$slope_residuals)*100000, 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$slope_residuals)*100000, 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$slope_residuals)*100000, 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
-
-
-
-
-# # Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_filtered$slope_residuals)*100000, 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_filtered$slope_residuals)*100000, 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals)*100000, 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals)*100000, 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile <- quantile(abs(RiverTile_trimmed$slope_residuals)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile <- quantile(abs(RiverTile_trimmed$slope_residuals)*100000, 0.50, na.rm=TRUE)
 
 # Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(RiverSP_trimmed$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_nobias <- quantile(abs(RiverSP_trimmed$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
 
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
+percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_trimmed$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_trimmed$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
 
+
+
+
+# # Calculate the 68th & 50th percentile error for SAME SUBSET
+# percentile_68_error <- quantile(abs(RiverSP_filtered$slope_residuals)*100000, 0.68, na.rm=TRUE)
+# percentile_50_error <- quantile(abs(RiverSP_filtered$slope_residuals)*100000, 0.50, na.rm=TRUE)
+# 
+# percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals)*100000, 0.68, na.rm=TRUE)
+# percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$slope_residuals)*100000, 0.50, na.rm=TRUE)
+# 
+# # Calculate the 68th &50th percentile error, no bias
+# percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+# percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
+# 
+# percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias)*100000, 0.68, na.rm=TRUE)
+# percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias)*100000, 0.50, na.rm=TRUE)
+# 
 
 
 
