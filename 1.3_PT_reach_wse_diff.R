@@ -3,7 +3,7 @@ library(lubridate)
 library(dplyr)
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# Compare PT wse & SWOT riverSP reach wse/slope
+# Compare PT wse/slope & SWOT riverSP reach wse/slope
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # WSE
@@ -22,12 +22,13 @@ SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yuk
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
   distinct(reach_id, time, wse, .keep_all = TRUE)
 
-# filter SWOT data by reach_q (0=good, 1=suspect, 2=degraded, 3=bad) & cross track distance
+# filter SWOT data by reach_q (0=good, 1=suspect, 2=degraded, 3=bad) & cross track distance, >50% reach obs, dark water
 SWOT_reach_df_filtered <- SWOT_reach_df_noduplicates %>%
   filter(reach_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) %>%
-  filter(partial_f == 0)
+  filter(partial_f == 0)  %>%
+  filter(dark_frac <= .5)
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -38,18 +39,17 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 
 
 
-
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in PT data
 
-# Set working directory to the hydrocron_timeseries folder where the time&space matched SWOT/PT clusters are
+# Set working directory to the reach df folder from the toolboxes
 # SWORD v16
 wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16"
 # SWORD v17b
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
 setwd(wd)
 
-# Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
+# Get list of all PT reach csv files (these are munged PT dataframes created by the toolboxes)
 csv_files <- list.files(wd, pattern = "^YR_812.*\\.csv$", full.names = TRUE)
 
 # Merge all PT files into a combined dataframe
@@ -96,11 +96,11 @@ time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
   mutate(
     river_code = substr(reach_id, 1, 6),
     river = case_when(
-      river_code == "812701" ~ "lower_YR",
-      river_code == "812705" ~ "upper_YR",
+      river_code == "812701" ~ "lowerYR",
+      river_code == "812705" ~ "upperYR",
       river_code == "812508" ~ "CD",
-      river_code == "812603" ~ "upper_PR",
-      river_code == "812605" ~ "upper_PR",
+      river_code == "812603" ~ "upperPR",
+      river_code == "812605" ~ "upperPR",
       river_code == "812604" ~ "CL",
       TRUE ~ NA_character_
     )
@@ -128,15 +128,13 @@ percentile_50_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.50,
 print(paste("68th Percentile Error:", percentile_68_error))
 print(paste("50th Percentile Error:", percentile_50_error))
 
-# Calculating the linear regression model 
-model = lm(mean_reach_pt_wse_m~wse, data = time_space_matched_SWOT_PT) 
-
-# Extracting R-squared parameter from summary 
-summary(model)
-
-#RMSE
-rmse <- sqrt(mean((time_space_matched_SWOT_PT$mean_reach_pt_wse_m - time_space_matched_SWOT_PT$wse)^2))
-#RMSE >= MAE, MAE is similar to 50th quantile error
+# # Calculating the linear regression model 
+# model = lm(mean_reach_pt_wse_m~wse, data = time_space_matched_SWOT_PT) 
+# # Extracting R-squared parameter from summary 
+# summary(model)
+# #RMSE
+# rmse <- sqrt(mean((time_space_matched_SWOT_PT$mean_reach_pt_wse_m - time_space_matched_SWOT_PT$wse)^2))
+# #RMSE >= MAE, MAE is similar to 50th quantile error
 
 # correlation test
 cor_test <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$mean_reach_pt_wse_m)
@@ -190,32 +188,31 @@ ggplot(time_space_matched_SWOT_PT, aes(x = mean_reach_pt_wse_m, y = wse)) +
   labs(color = "Basin code")
 
 
-
 # CDF plot
 ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - mean_reach_pt_wse_m))) +
   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 3, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 3, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 2, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 2, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20) 
 # xlim(0, 1)
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # remove bias from PT data
 
+# removed median bias for individual reaches
+# need to set a min threshold of obs for us to calc a bias (using 3 currently)
 time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
-  group_by(river) %>%
+  group_by(reach_id) %>%
   mutate(
-    bias = median(residuals, na.rm = TRUE),
-    pt_wse_nobias_m = mean_reach_pt_wse_m - bias
-  ) %>%
+    bias = if (n() >= 3) median(residuals, na.rm = TRUE) else NA_real_,
+    pt_wse_nobias_m = if (n() >= 3)
+      mean_reach_pt_wse_m - bias
+    else NA_real_) %>%
   ungroup()
 
-# bias <- median(time_space_matched_SWOT_PT$residuals, na.rm = TRUE)
-# time_space_matched_SWOT_PT$pt_wse_nobias_m = time_space_matched_SWOT_PT$mean_reach_pt_wse_m - bias
-# 
 # 68th & 50th percentile error: wse diff calculation
 
 # Calculate the wse diff SWOT - PT (residuals)
@@ -235,10 +232,14 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 mean_reach_pt_wse_m, pt_wse_nobias_m, flaglist, sorted_nodelist, Number_of_nodes,
                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, 
                 area_det_u, area_wse, layovr_val, node_dist,
-                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, river, cycle_id, pass_id) #SWOTFileName, p_n_nodes
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, river, cycle_id, pass_id) #SWOTFileName, p_n_nodes OR #cycle_id, pass_id
+
+save_to_csv <- save_to_csv %>%
+  mutate(insitu_type = "PT") %>%
+  mutate(source = "RiverTile")
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = 'RiverTile_time_space_matched_SWOT_PT.csv', row.names = FALSE)
+# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_PT.csv', row.names = FALSE)
 
 
 # correlation test
@@ -446,8 +447,14 @@ ggplot(SWOT_versionCD_df, aes(x = abs(residuals_nobias), color = source, linetyp
 # SLOPE
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/YR_reaches_merged_RiverSP.csv')
+# RiverSP
+# SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+
+# RiverTile
+# SWORD v16
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
+# SWORD v17b
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates from hydrocron pull
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
@@ -459,7 +466,7 @@ SWOT_reach_df_filtered <- SWOT_reach_df_noduplicates %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) %>%
   filter(partial_f == 0) %>%
-  filter(slope > 0)
+  filter(dark_frac <= 0.8)
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -471,14 +478,16 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep PT reach data
 
-PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/_reach/SWORD_v16/YR_PT_reach_slope.csv')
+# SWORD v16
+# PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16/YR_PT_reach_slope.csv')
+# SWORD v17b
+PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b/YR_PT_reach_slope.csv')
+
 
 # Convert time column to POSIXct
 PT_reach_df$pt_time_UTC <- as.POSIXct(PT_reach_df$pt_time_UTC, format = "%m/%d/%y %H:%M", tz = "UTC")
-
-# toolboxes were run with v17 SWORD, but SWOT is still linked to v16 SWORD reaches/nodes
-# need to match field data with v16 SWORD again
-
+#change reach_id so there aren't duplicate columns when merging with SWOT data
+PT_reach_df <- rename(PT_reach_df, "PT_reach_id" = "reach_id")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -491,17 +500,13 @@ time_matched_SWOT_PT_reach <- PT_reach_df %>%
   mutate(
     closest_match = list(SWOT_reach_df_filtered %>%
                            filter(abs(difftime(pt_time_UTC, time_utc, units = "mins")) <= 7.5))) %>%
-  unnest(closest_match, names_sep = "_SWOT_") %>%  # Add suffix to avoid duplicate column names
+  unnest(closest_match) %>% 
   dplyr::select(everything())
 
 # match PT and SWOT in space
 # node level
 time_space_matched_SWOT_PT_reach <- time_matched_SWOT_PT_reach %>%
-  filter(reach_id == closest_match_SWOT_reach_id)
-
-#remove "closest_match_" text from start of columns
-time_space_matched_SWOT_PT_reach <- time_space_matched_SWOT_PT_reach %>%
-  rename_with(~ sub("^closest_match_", "", .), starts_with("closest_match_"))
+  filter(PT_reach_id == reach_id)
 
 # get rid of any duplicate PT values
 time_space_matched_SWOT_PT_reach <- time_space_matched_SWOT_PT_reach[!duplicated(time_space_matched_SWOT_PT_reach[c("mean_pt_wse_us_boundary_m","pt_time_UTC","pt_serials_us")]),]
@@ -509,31 +514,40 @@ time_space_matched_SWOT_PT_reach <- time_space_matched_SWOT_PT_reach[!duplicated
 # ---------------------------------------------------------------------------------------------------------------------------
 # Summary stats
 
+# fix negative slopes in SWOT & GNSS data
+time_space_matched_SWOT_PT_reach$slope_abs <- abs(time_space_matched_SWOT_PT_reach$slope)
+time_space_matched_SWOT_PT_reach$slope_m_m_abs <- abs(time_space_matched_SWOT_PT_reach$slope_m_m)
+
+
 # 68th & 50th percentile error: wse diff calculation
 
 # Calculate the wse diff SWOT - PT (residuals)
-time_space_matched_SWOT_PT_reach$residuals = time_space_matched_SWOT_PT_reach$slope_m_m - time_space_matched_SWOT_PT_reach$SWOT_slope
+time_space_matched_SWOT_PT_reach$residuals = time_space_matched_SWOT_PT_reach$slope_m_m_abs - time_space_matched_SWOT_PT_reach$slope_abs
 
 # Calculate the 68th percentile error
 percentile_68_error <- quantile(abs(time_space_matched_SWOT_PT_reach$residuals), 0.68, na.rm=TRUE)
 percentile_50_error <- quantile(abs(time_space_matched_SWOT_PT_reach$residuals), 0.50, na.rm=TRUE)
 
 #print the result
-print(paste("68th Percentile Error:", percentile_68_error))
-print(paste("50th Percentile Error:", percentile_50_error))
+print(paste("68th Percentile Error:", percentile_68_error*100000))
+print(paste("50th Percentile Error:", percentile_50_error*100000))
 
+
+# removed median bias for individual PT
+# need to set a min threshold of obs for us to calc a bias (using 3 currently)
 time_space_matched_SWOT_PT_reach <- time_space_matched_SWOT_PT_reach %>%
-  group_by(pt_serials_us) %>%
+  group_by(reach_id) %>%
   mutate(
-    bias = median(residuals, na.rm = TRUE),
-    mean_reach_PT_slope_no_bias_m = slope_m_m - bias
-  ) %>%
+    bias = if (n() >= 3) median(residuals, na.rm = TRUE) else NA_real_,
+    mean_reach_PT_slope_no_bias_m_m = if (n() >= 3)
+      slope_m_m_abs - bias
+    else NA_real_) %>%
   ungroup()
 
 # 68th & 50th percentile error: wse diff calculation
 
 # Calculate the wse diff SWOT - GNSS (residuals)
-time_space_matched_SWOT_PT_reach$slope_residuals_nobias = time_space_matched_SWOT_PT_reach$mean_reach_PT_slope_no_bias_m - time_space_matched_SWOT_PT_reach$SWOT_slope
+time_space_matched_SWOT_PT_reach$slope_residuals_nobias = time_space_matched_SWOT_PT_reach$mean_reach_PT_slope_no_bias_m_m - time_space_matched_SWOT_PT_reach$slope_abs
 
 # Calculate the 68th percentile error
 percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_PT_reach$slope_residuals_nobias), 0.68, na.rm=TRUE)
@@ -541,28 +555,53 @@ percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT_reach$slop
 
 
 
-
 #csv subset
 save_to_csv <- time_space_matched_SWOT_PT_reach %>%
-  select(pt_time_UTC, SWOT_time_utc, reach_id, slope_m_m, slope_uncertainty_m_m, slope_residuals_nobias, SWOT_p_lat, SWOT_p_lon,
-         SWOT_slope, SWOT_slope_u, bias, slope_residuals_nobias, mean_reach_PT_slope_no_bias_m, residuals)
+  select(pt_time_UTC, time_utc, reach_id, slope_m_m, slope_m_m_abs, slope_uncertainty_m_m, slope_residuals_nobias, p_lat, p_lon,
+         slope, slope_abs, slope_u, bias, slope_residuals_nobias, mean_reach_PT_slope_no_bias_m_m, residuals, width, width_u, area_total, 
+         area_tot_u, layovr_val, node_dist, xtrk_dist, reach_q, reach_q_b, dark_frac, xovr_cal_q, p_dist_out, n_good_nod
+         ) #cycle_id, pass_id, OR p_dist_out, n_good_nod
+
+save_to_csv <- save_to_csv %>%
+  mutate(insitu_type = "PT") %>%
+  mutate(source = "RiverTile") %>%
+  rename(slope_residuals = residuals)
+
+# add river names to df
+save_to_csv <- save_to_csv %>%
+  mutate(river_code = substr(reach_id, 1, 6),
+         river = case_when(
+           # putting the reach id first ensures case_when won't overwrite SJ/BL labels
+           # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
+           # SWORD v17b: "81260300181", "81260300191", "81260300201", "81260300211"
+           # only SJ reaches need to be adjusted here
+           reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ", 
+           reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+           river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
+           river_code == "812509" ~ "lowerYR", # past the PR confluence
+           river_code == "812705" ~ "upperYR", # Circle up
+           river_code == "812508" ~ "CD",
+           river_code == "812603" ~ "PR",
+           river_code == "812605" ~ "PR",
+           river_code == "812604" ~ "CL",
+           TRUE ~ NA_character_))
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/reach_slope_RiverTile_time_space_matched_SWOT_PT.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_slope_SWOT_PT.csv', row.names = FALSE)
 
 
 # Calculating the linear regression model 
-model = lm(slope_m_m~SWOT_slope, data = time_space_matched_SWOT_PT_reach) 
+model = lm(slope_m_m~slope, data = time_space_matched_SWOT_PT_reach) 
 
 # Extracting R-squared parameter from summary 
 summary(model)
 
 #RMSE
-rmse <- sqrt(mean((time_space_matched_SWOT_PT_reach$slope_m_m - time_space_matched_SWOT_PT_reach$SWOT_slope)^2))
+rmse <- sqrt(mean((time_space_matched_SWOT_PT_reach$slope_m_m - time_space_matched_SWOT_PT_reach$slope)^2))
 #RMSE >= MAE, MAE is similar to 50th quantile error
 
 # correlation test
-cor_test <- cor.test(time_space_matched_SWOT_PT_reach$SWOT_slope, time_space_matched_SWOT_PT_reach$slope_m_m)
+cor_test <- cor.test(time_space_matched_SWOT_PT_reach$slope, time_space_matched_SWOT_PT_reach$slope_m_m)
 
 # Extract r and p-value
 r_value <- cor_test$estimate # Pearson correlation coefficient
@@ -573,10 +612,12 @@ p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 
 color_palette <- c("#4A4A4A", "#D86A1A", "#6D398B", "#9EBCD8",  
                    "#E3A700", "#008F7A", "#C83232", "#2E7D32",  
-                   "#D81B60", "#00429D", "#A6761D", "#56B4E9", "#4c64c1","#7ca92f","#9a3c9a")
+                   "#D81B60", "#00429D", "#A6761D", "#56B4E9", 
+                   "#4c64c1","#7ca92f","#9a3c9a", 'orange',
+                   'lightyellow', 'yellow', 'pink', 'black')
 
 # plot SWOT vs PT slope
-ggplot(time_space_matched_SWOT_PT_reach, aes(x = mean_reach_PT_slope_no_bias_m*100000, y = SWOT_slope*100000, color = factor(SWOT_reach_id))) +
+ggplot(time_space_matched_SWOT_PT_reach, aes(x = mean_reach_PT_slope_no_bias_m*100000, y = slope_abs*100000, color = factor(reach_id))) +
   geom_point(size = 4) +
   scale_color_manual(values = color_palette) +
   xlab("PT slope (cm/km)") +
@@ -584,7 +625,7 @@ ggplot(time_space_matched_SWOT_PT_reach, aes(x = mean_reach_PT_slope_no_bias_m*1
   theme_minimal(base_size = 30) +
   geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
   annotate("text", x = min(time_space_matched_SWOT_PT_reach$slope_m_m*100000, na.rm = TRUE), 
-           y = max(time_space_matched_SWOT_PT_reach$SWOT_slope*100000, na.rm = TRUE), 
+           y = max(time_space_matched_SWOT_PT_reach$slope*100000, na.rm = TRUE), 
            label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
                           "\nn = ", nrow(time_space_matched_SWOT_PT_reach)),
            hjust = 0, vjust = 1, size = 8) +
@@ -593,7 +634,7 @@ ggplot(time_space_matched_SWOT_PT_reach, aes(x = mean_reach_PT_slope_no_bias_m*1
   scale_y_continuous(labels = scales::comma)
 
 # CDF plot
-ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(SWOT_slope - slope_m_m))) +
+ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(slope_abs - slope_m_m_abs))) +
   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
@@ -604,17 +645,17 @@ ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(SWOT_slope - slope_m_m))) +
   xlim(0, .00025)
 
 # CDF plot no bias
-ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(SWOT_slope - mean_reach_PT_slope_no_bias_m)*100000)) +
+ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(slope_abs - mean_reach_PT_slope_no_bias_m)*100000)) +
   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT slope - PT slope (m/m)", y = "Cumulative Probability", title = "CDF of SWOT slope - PT slope") +
+  labs(x = "SWOT slope - PT slope (cm/km)", y = "Cumulative Probability", title = "CDF of SWOT slope - PT slope") +
   annotate("text", x = 7.4, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias*100000, 8)), color = "#222222", size = 6) +
   annotate("text", x = 7.4, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias*100000, 8)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20)
 
 # plot SWOT vs PT slope
-ggplot(time_space_matched_SWOT_PT_reach, aes(x = slope_uncertainty_m_m, y = abs(residuals), color = factor(SWOT_reach_id))) +
+ggplot(time_space_matched_SWOT_PT_reach, aes(x = slope_uncertainty_m_m, y = abs(residuals), color = factor(reach_id))) +
   geom_point(size = 4) +
   scale_color_manual(values = color_palette) +
   xlab("pt slope uncertainty") +

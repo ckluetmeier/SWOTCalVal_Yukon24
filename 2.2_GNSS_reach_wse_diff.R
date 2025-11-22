@@ -552,7 +552,19 @@ percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0
 percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.68, na.rm=TRUE)
 percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.50, na.rm=TRUE)
 
+# correlation test
+# cor_test <- cor.test(RiverTile_filtered$wse, RiverTile_filtered$mean_reach_drift_wse_no_bias_m) # mean_reach_drift_wse_m
+cor_test <- cor.test(RiverSP_filtered$wse, RiverSP_filtered$mean_reach_drift_wse_m)
 
+# Extract r and p-value
+r_value <- cor_test$estimate # Pearson correlation coefficient
+p_value <- cor_test$p.value # highly statistically significant is P < 0.001
+
+# Mean Absolute Error (which is just the mean residual)
+MAE <- mean(abs(RiverSP_filtered$residuals))
+MAE <- mean(abs(RiverSP_filtered$residuals_nobias), na.rm=TRUE)
+
+num_non_na_rows <- sum(complete.cases(RiverSP_filtered$residuals_nobias))
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Plots

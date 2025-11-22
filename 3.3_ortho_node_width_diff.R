@@ -13,25 +13,23 @@ library(dplyr)
 
 # version D: RiverTile
 # SWORD v17b
-# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv')
-# SWORD_v17b <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GIS/SWORD_v17b_domain/SWORD_YR_domain_v17b.csv')
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv')
+SWORD_v17b <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GIS/SWORD_v17b_domain/SWORD_YR_domain_v17b.csv')
 # # join SWORD for node_len attribute
-# SWOT_df <- SWOT_df %>%
-#   left_join(SWORD_v17b, by = c("node_id", "reach_id"))
-# SWOT_df$p_length = SWOT_df$node_len
-
+SWOT_df <- SWOT_df %>%
+  left_join(SWORD_v17b, by = c("node_id", "reach_id"))
+SWOT_df$p_length = SWOT_df$node_len
 
 # SWORD v16
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_domain_node_timeseries_v16.csv')
-SWOTv16_df_w_p_length <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
-SWOTv16_df_w_p_length <- SWOTv16_df_w_p_length %>%
-  select(node_id, reach_id, p_length) %>%
-  distinct(node_id, .keep_all = TRUE)
-
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_domain_node_timeseries_v16.csv')
+# SWOTv16_df_w_p_length <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+# SWOTv16_df_w_p_length <- SWOTv16_df_w_p_length %>%
+#   select(node_id, reach_id, p_length) %>%
+#   distinct(node_id, .keep_all = TRUE)
 # join SWORD for node_len attribute
-SWOT_df <- SWOT_df %>%
-  left_join(SWOTv16_df_w_p_length, by = c("node_id", "reach_id"))
-SWOT_df$node_len = SWOT_df$p_length
+# SWOT_df <- SWOT_df %>%
+#   left_join(SWOTv16_df_w_p_length, by = c("node_id", "reach_id"))
+# SWOT_df$node_len = SWOT_df$p_length
 
 
 # get ride of possible duplicates from hydrocron pull
@@ -43,8 +41,8 @@ SWOT_df_noduplicates <- SWOT_df %>%
 SWOT_df_filtered <- SWOT_df_noduplicates %>%
   filter(node_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
-  filter(abs(xtrk_dist) <=60000) #%>%
-  #filter(dark_frac <= 0.5)
+  filter(abs(xtrk_dist) <=60000) %>%
+  filter(dark_frac <= 0.8)
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -57,35 +55,33 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # read in & prep ortho data
 
 # version C: RiverSP
-# lower YR 7/16
+# chandalar 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_CD_071024.csv')
+# sheenjek 7/26
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_lowerPR_SJ_072624.csv')
+# lowerYR 7/16
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_lowerYR_071624.csv')
-# upper YR 7/10
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv')
 # coleen / upper PR 7/10
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperPR_CL_071024.csv')
 # coleen / upper PR 7/16
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperPR_CL_071624.csv')
-
-
-# version D: RiverTile, SWORD v16
-# lower YR 7/16
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_lowerYR_071624.csv')
 # upper YR 7/10
-ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_upperYR_071024.csv')
-# coleen / upper PR 7/10
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_upperPR_CL_071024.csv')
-# coleen / upper PR 7/16
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/ortho_upperPR_CL_071624.csv')
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv')
+
 
 # version D: RiverTile, SWORD v17b
-# lower YR 7/16
+# # chandalar 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_CD_071024.csv')
+# # sheenjek 7/26
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_lowerPR_SJ_072624.csv')
+# # lowerYR 7/16
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_lowerYR_071624.csv')
-# upper YR 7/10
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperYR_071024.csv')
-# coleen / upper PR 7/10
+# # coleen / upper PR 7/10
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperPR_CL_071024.csv')
-# coleen / upper PR 7/16
-ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperPR_CL_071624.csv')
+# # coleen / upper PR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperPR_CL_071624.csv')
+# # upper YR 7/10
+ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/ortho_upperYR_071024.csv')
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # join ortho & SWOT data, calculate ortho width with SWORD prior node length
@@ -98,6 +94,8 @@ combined_ortho_SWORD_df <- ortho_df %>%
 combined_ortho_SWORD_df <- combined_ortho_SWORD_df %>%
   filter(str_starts(time_str, "2024-07-10")) # CHANGE DATE DEPENDING ON ORTHO COLLECT HERE
 
+# chandalar: "2024-07-11"
+# sheenjek: "2024-07-26"
 # lower YR: "2024-07-16"
 # upper YR: "2024-07-10"
 # coleen / upper PR: "2024-07-10"
@@ -302,7 +300,7 @@ width_dist_out_df <- combined_ortho_SWORD_df %>%
 # 81260401181, 81260401011
 
 # plot widths along dist_out
-ggplot(width_dist_out_df) +
+ggplot(combined_ortho_SWORD_df) +
   geom_point(aes(x = p_dist_out/1000, y = ortho_width_m), color = "lightblue", size = 2.5, shape = 17) +
   geom_point(aes(x = p_dist_out/1000, y = swot_width_nobias_m),  color = "darkblue", size = 2.5, alpha = 0.7) +
   scale_color_manual(values = color_palette) +
@@ -330,7 +328,7 @@ save_to_csv <- combined_ortho_SWORD_df %>%
                 n_good_pix, rdr_sig0, xovr_cal_q, p_dist_out, p_length)
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v16/combined_ortho_SWOT_lowerYR_071624.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/combined_ortho_SWOT_upperYR_071024.csv', row.names = FALSE)
 
 
 

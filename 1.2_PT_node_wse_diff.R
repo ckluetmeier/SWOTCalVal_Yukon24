@@ -6,13 +6,21 @@ library(dplyr)
 # Compare PT wse & SWOT riverSP/rivertile node wse
 # ---------------------------------------------------------------------------------------------------------------------------
 
+# contents:
+# ---------------------------------------------------------------------------------------------------------------------------
+# read in & filter SWOT data
+# read in & prep PT data
+# match PT & SWOT observations in time and space
+# all clusters comparison
+# Compare PT wse & SWOT riverSP (version C) vs RiverTile (version D) node wse
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
 # version C: RiverSP
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
 # version D: RiverTile
 # SWORD v17b
-# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_PT_node_timeseries_v17b.csv')
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_PT_node_timeseries_v17b.csv')
 # SWORD v16
 # SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_PT_node_timeseries_v16.csv')
 
@@ -26,8 +34,8 @@ SWOT_df_filtered <- SWOT_df_noduplicates %>%
   #filter(wse_u <= 0.5) %>% #this probably won't filter out many nodes beyond what node_q is doing
   filter(node_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
-  filter(abs(xtrk_dist) <=60000) #%>%
-  #filter(dark_frac <= 50) # JPL filter, but doesn't seem to change results much?
+  filter(abs(xtrk_dist) <=60000) %>%
+  filter(dark_frac <= 50) # JPL filter, but doesn't seem to change results much?
 
 # time_tai is seconds since 2001-01-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -41,9 +49,9 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 
 # Set working directory to the folder chucked by separate rivers and PT clusters
 # SWORD v17b
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/SJ"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/upper_YR"
 # SWORD v16
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/lower_PR"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/upper_YR"
 setwd(wd)
 
 # Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
@@ -98,9 +106,9 @@ time_space_matched_SWOT_PT$residuals = time_space_matched_SWOT_PT$pt_wse_m - tim
 percentile_68_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.68, na.rm=TRUE)
 percentile_50_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.50, na.rm=TRUE)
 
-#print the result
-print(paste("68th Percentile Error:", percentile_68_error))
-print(paste("50th Percentile Error:", percentile_50_error))
+# print the result
+# print(paste("68th Percentile Error:", percentile_68_error))
+# print(paste("50th Percentile Error:", percentile_50_error))
 
 # additional stats
 # # Calculating the linear regression model 
@@ -150,36 +158,36 @@ ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_m))) +
   annotate("text", x = 0.5, y = 0.53, label = paste("|50%ile| diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20)
 
-# Individual PT vs SWOT hydrograph
-pt_serial_list <- unique(time_space_matched_SWOT_PT$pt_serial)
-
-pdf("PT_SWOT_hydrographs.pdf",width=7,height=5)
-for (PT_id in pt_serial_list) {
-  
-  individual_PT_SWOT_df <- time_space_matched_SWOT_PT %>%
-    filter(pt_serial == PT_id)
-  
-  individual_PT_df <- combined_PT_df %>%
-    filter(pt_serial == PT_id)
-  
-  # plot SWOT vs PT timeseries
-  plot <- ggplot() +
-    geom_errorbar(data = individual_PT_df, mapping = aes(x = pt_time_UTC, 
-                                                         ymin = pt_wse_m - pt_correction_mean_total_error_m, 
-                                                         ymax = pt_wse_m + pt_correction_mean_total_error_m,),
-    color = "#edc7a2", linewidth=5,) +
-    geom_point(individual_PT_df, mapping=aes(y=pt_wse_m, x=pt_time_UTC), color="#ED973D", size=2) +
-    geom_errorbar(data = individual_PT_SWOT_df, mapping = aes(x = time_utc, 
-                                                              ymin = wse - wse_u, 
-                                                              ymax = wse + wse_u), 
-                  linewidth = 1) +
-    geom_point(individual_PT_SWOT_df, mapping=aes(y=wse, x=time_utc), color="#01665E", size=7) +
-    ggtitle(PT_id) + xlab("time") + ylab("wse (m)") +
-    theme_minimal(base_size = 30) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 0.9)) 
-  print(plot)
-}
-dev.off()
+# # Individual PT vs SWOT hydrograph
+# pt_serial_list <- unique(time_space_matched_SWOT_PT$pt_serial)
+# 
+# pdf("PT_SWOT_hydrographs.pdf",width=7,height=5)
+# for (PT_id in pt_serial_list) {
+#   
+#   individual_PT_SWOT_df <- time_space_matched_SWOT_PT %>%
+#     filter(pt_serial == PT_id)
+#   
+#   individual_PT_df <- combined_PT_df %>%
+#     filter(pt_serial == PT_id)
+#   
+#   # plot SWOT vs PT timeseries
+#   plot <- ggplot() +
+#     geom_errorbar(data = individual_PT_df, mapping = aes(x = pt_time_UTC, 
+#                                                          ymin = pt_wse_m - pt_correction_mean_total_error_m, 
+#                                                          ymax = pt_wse_m + pt_correction_mean_total_error_m,),
+#     color = "#edc7a2", linewidth=5,) +
+#     geom_point(individual_PT_df, mapping=aes(y=pt_wse_m, x=pt_time_UTC), color="#ED973D", size=2) +
+#     geom_errorbar(data = individual_PT_SWOT_df, mapping = aes(x = time_utc, 
+#                                                               ymin = wse - wse_u, 
+#                                                               ymax = wse + wse_u), 
+#                   linewidth = 1) +
+#     geom_point(individual_PT_SWOT_df, mapping=aes(y=wse, x=time_utc), color="#01665E", size=7) +
+#     ggtitle(PT_id) + xlab("time") + ylab("wse (m)") +
+#     theme_minimal(base_size = 30) +
+#     theme(axis.text.x = element_text(angle = 45, hjust = 0.9)) 
+#   print(plot)
+# }
+# dev.off()
 
 # # singular hydrograph plot
 # PT_id = 2156918
@@ -214,16 +222,16 @@ dev.off()
 # ---------------------------------------------------------------------------------------------------------------------------
 # remove bias from PT data
 
-# old method taking median bias for entire PT cluster
-# bias <- median(time_space_matched_SWOT_PT$residuals, na.rm = TRUE)
-# time_space_matched_SWOT_PT$pt_wse_nobias_m = time_space_matched_SWOT_PT$pt_wse_m - bias
-
 # removed median bias for individual PT
+# need to set a min threshold of obs for us to calc a bias (using 3 currently)
 time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
   group_by(pt_serial) %>%
-  mutate(bias = median(residuals, na.rm = TRUE), pt_wse_nobias_m = pt_wse_m - bias) %>%
+  mutate(
+    bias = if (n() >= 3) median(residuals, na.rm = TRUE) else NA_real_,
+    pt_wse_nobias_m = if (n() >= 3)
+      pt_wse_m - bias
+    else NA_real_) %>%
   ungroup()
-
 
 # 68th & 50th percentile error: wse diff calculation
 
@@ -235,8 +243,8 @@ percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_
 percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_nobias), 0.50, na.rm=TRUE)
 
 #print the result
-print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
-print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
+# print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
+# print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
 
 #csv subset
 save_to_csv <- time_space_matched_SWOT_PT %>%
@@ -246,14 +254,14 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/RiverSP_v16_time_space_matched_SWOT_PT_lowerPR.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/RiverTile_v17b_time_space_matched_SWOT_PT_upperYR.csv', row.names = FALSE)
 
 # correlation test
 cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
 
 # Extract r and p-value
 r_value_nobias <- cor_test_nobias$estimate # Pearson correlation coefficient
-p_value_nobias <- cor_test_nobias$p.value # 
+p_value_nobias <- cor_test_nobias$p.value 
 
 # plot SWOT vs PT wse
 ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_nobias_m, y = wse, color = factor(pt_serial))) +
@@ -277,8 +285,8 @@ ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 0.35, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 0.35, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 0.25, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
+  annotate("text", x = 0.25, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20) 
   #xlim(0, .751)
 
@@ -507,6 +515,10 @@ RiverSP_df <- combined_time_space_matched_SWOT_PT_df %>%
 
 RiverTile_df <- combined_time_space_matched_RiverTile_PT_df %>%
   mutate(source = "RiverTile", abs_diff = abs(wse - pt_wse_m))
+
+# save dfs to csv
+# write.csv(RiverTile_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_PT.csv', row.names = FALSE)
+
 
 # Combine both dataframes
 combined_df <- bind_rows(RiverSP_df, RiverTile_df)
