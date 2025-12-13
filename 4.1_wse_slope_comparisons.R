@@ -4,7 +4,7 @@ library(dplyr)
 library(ggtext)
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# SWOT WSE validation
+# SWOT WSE & slope validation
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -17,20 +17,63 @@ library(ggtext)
 
 # PT
 node_SWOT_PT_vC <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_PT.csv") %>%
-  mutate(insitu_type = "PT")
+  mutate(insitu_type = "PT")  %>%
+  rename(old_node_id = node_id) %>%
+  filter(dark_frac < 0.5)
 node_SWOT_PT_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_PT.csv") %>%
-  mutate(insitu_type = "PT")
+  mutate(insitu_type = "PT") %>%
+  filter(dark_frac < 0.5)
 
 # GNSS
 node_SWOT_GNSS_vC <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv") %>%
-  mutate(insitu_type = "GNSS")
+  mutate(insitu_type = "GNSS") %>%
+  rename(old_node_id = node_id) %>%
+  filter(dark_frac < 0.5)
 node_SWOT_GNSS_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_GNSS_3mdiff.csv") %>%
-  mutate(insitu_type = "GNSS")
+  mutate(insitu_type = "GNSS") %>%
+  filter(dark_frac < 0.5)
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# Get all data to the same SWORD version (v17b)
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# SWORD translator to change Version C data to SWORD v17b naming convention
+SWORD_translator <- read_csv("/Users/camryn/Desktop/SWORD_translation/NA_NodeIDs_v17b_vs_v16.csv")
+
+# translate the vC SWORD v16 data to SWORD v17b
+node_SWOT_PT_vC <- node_SWOT_PT_vC %>%
+  left_join(SWORD_translator %>% 
+      select(v16_node_id, v17_node_id),
+    by = c("old_node_id" = "v16_node_id")) %>%
+  rename(node_id = v17_node_id)
+
+node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
+  left_join(SWORD_translator %>% 
+      select(v16_node_id, v17_node_id),
+    by = c("old_node_id" = "v16_node_id")) %>%
+  rename(node_id = v17_node_id)
 
 # merge all dataframes together
 node_SWOT_full_insitu <- bind_rows(node_SWOT_PT_vC, node_SWOT_PT_vD, node_SWOT_GNSS_vC, node_SWOT_GNSS_vD) %>%
   mutate(insitu_wse_m = coalesce(pt_wse_m, mean_node_drift_wse_m)) %>%
-  mutate(insitu_wse_nobias_m = coalesce(pt_wse_nobias_m, mean_node_drift_wse_no_bias_m))
+  mutate(insitu_wse_nobias_m = coalesce(pt_wse_nobias_m, mean_node_drift_wse_no_bias_m)) %>%
+  mutate(insitu_time_utc = coalesce(pt_time_UTC, time_UTC))
+
+# compute version inclusion
+# -1 = only in vC, 0 = both, 1 = only in vD
+all_nodes <- node_SWOT_full_insitu %>%
+  distinct(node_id, source) %>%         
+  group_by(node_id) %>%
+  summarise(
+    has_RiverSP   = any(source == "RiverSP"),
+    has_RiverTile = any(source == "RiverTile"),
+    .groups = "drop") %>%
+  mutate(
+    version_inclusion = case_when(has_RiverSP & has_RiverTile ~ 0L, has_RiverSP & !has_RiverTile ~ -1L, !has_RiverSP & has_RiverTile ~ 1L, TRUE ~ NA_integer_)) %>%
+  select(node_id, version_inclusion)
+
+node_SWOT_full_insitu <- node_SWOT_full_insitu %>%
+  left_join(all_nodes, by = "node_id")
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # TABLES -- SUMMARY STATS
@@ -38,13 +81,15 @@ node_SWOT_full_insitu <- bind_rows(node_SWOT_PT_vC, node_SWOT_PT_vD, node_SWOT_G
 
 # RELATIVE NODE WSE TABLE BY VERSION
 # -----------------------------------------------------
+
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals_nobias), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals_nobias), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals_nobias), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 2),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
@@ -54,7 +99,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
 cor_table <- node_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -62,28 +107,107 @@ cor_table <- node_SWOT_full_insitu %>%
 table_relative_node_WSE <- table_relative_node_WSE %>%
   left_join(cor_table, by = "source")
 
-# RELATIVE NODE WSE TABLE BY GNSS/PT
-# -----------------------------------------------------
-table_relative_node_WSE <- node_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
-  summarise(
-    # error metrics (use all data)
-    error_68ile = quantile(abs(residuals_nobias), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals_nobias), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals_nobias), na.rm = TRUE),
+# library(flextable)
+# ft <- flextable(table_relative_node_WSE)
+# save_as_docx(ft, path = "my_table.docx")
 
+# relabel and reorder
+table_relative_node_WSE <- table_relative_node_WSE %>%
+  mutate(source = factor(source,
+                         levels = c("RiverTile", "RiverSP"),   # swapped order
+                         labels = c("vD0", "vC0")))            # relabels
+
+# bar chart of count of residuals_nobias by version
+ggplot(table_relative_node_WSE, aes(x = source, y = n, fill = source)) +
+  geom_col(width = 0.9) +
+  geom_text(aes(label = n),
+            vjust = -0.5,
+            size = 8) +
+  ylab("Count") +
+  coord_cartesian(ylim = c(9, 7150)) +
+  scale_fill_manual(values = c("vC0" = "#E97132",
+                               "vD0" = "darkblue")) +
+  theme_classic(base_size = 28) +
+  theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none")
+# 3.57, 6.45
+
+# RELATIVE NODE WSE TABLE BY VERSION INCLUSION
+# -----------------------------------------------------
+
+# NODES UNIQUE TO vC & vD
+table_relative_node_WSE <- node_SWOT_full_insitu %>%
+  group_by(version_inclusion) %>%
+  summarise(
+    # error metrics
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 2),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
-    
-    # !!!!!!!!!!!!!! how to quantify count when this will vary from vC to vD
-    # right now I'm taking RiverTile which has more unique obs
     # count of unique nodes
-    n_unique_nodes = n_distinct(node_id[source == "RiverTile"])
-  )
+    n_unique_nodes = n_distinct(node_id))
 
 # Add correlations
 cor_table <- node_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(version_inclusion) %>%
+  summarise(
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),4),
+    p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
+    .groups = "drop")
+
+# Join everything to one table
+table_relative_node_WSE <- table_relative_node_WSE %>%
+  left_join(cor_table, by = "version_inclusion")
+
+
+# SAME SUBSET
+same_version_subset_node_SWOT_insitu <- node_SWOT_full_insitu %>%
+  filter(version_inclusion == 0) %>%              # keep both-source nodes
+  group_by(node_id, insitu_time_utc) %>%
+  filter(all(c("RiverSP", "RiverTile") %in% source)) %>% 
+  ungroup()
+
+table_relative_node_WSE <- same_version_subset_node_SWOT_insitu %>%
+  group_by(source) %>%
+  summarise(
+    # error metrics
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 2),
+    # count of non-NA residuals
+    n = sum(!is.na(residuals_nobias)),
+    # count of unique nodes
+    n_unique_nodes = n_distinct(node_id))
+
+
+
+
+
+
+
+
+
+# RELATIVE NODE WSE TABLE BY GNSS/PT
+# -----------------------------------------------------
+table_relative_node_WSE <- node_SWOT_full_insitu %>%
+  group_by(insitu_type, source) %>% 
+  summarise(
+    # error metrics
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 2),
+    
+    # count of non-NA residuals
+    n = sum(!is.na(residuals_nobias)),
+    # count of unique nodes
+    n_unique_nodes = n_distinct(node_id))
+
+# Add correlations
+cor_table <- node_SWOT_full_insitu %>%
+  group_by(insitu_type, source) %>%
   summarise(
     r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
@@ -91,7 +215,7 @@ cor_table <- node_SWOT_full_insitu %>%
 
 # Join everything to one table
 table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = "insitu_type")
+  left_join(cor_table, by = c("insitu_type", "source"))
 
 # RELATIVE NODE WSE TABLE BY RIVER
 # -----------------------------------------------------
@@ -189,13 +313,13 @@ n_relative_df <- node_SWOT_full_insitu %>%
   summarise(n_unique_nodes = n_distinct(node_id), # count of non-NA residuals
             n = sum(!is.na(residuals_nobias)), .groups = "drop") # count of unique nodes
 
-# CDF plot
+# CDF plot: Node Relative WSE differences
 ggplot(node_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = source, linetype = source)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT - in situ WSE (cm)", y = "Cumulative Probability", 
-       title = "Node Relative WSE Differences") +
+       title = "By version") +
   annotate("text", x = 95, y = 0.71,
            label = paste("|68%ile| vC:", 
                          round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "RiverSP", ]$residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
@@ -243,13 +367,13 @@ n_relative_df <- node_SWOT_full_insitu %>%
   summarise(n_unique_nodes = n_distinct(node_id[source == "RiverTile"]), # count of non-NA residuals
             n = sum(!is.na(residuals_nobias)), .groups = "drop") # count of unique nodes
 
-# CDF plot (fixed cm placement)
+# CDF plot
 ggplot(node_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = insitu_type, linetype = insitu_type)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT - in situ WSE (cm)", y = "Cumulative Probability", 
-       title = "Node Relative WSE Differences") +
+       title = "By measurement type") +
   annotate("text", x = 95, y = 0.71,
            label = paste("|68%ile| PT:", 
                          round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$insitu_type == "PT", ]$residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
@@ -290,9 +414,17 @@ ggplot(node_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = insitu_
 
 
 
+
+
+
+
+
 # ---------------------------------------------------------------------------------------------------------------------------
+# ***************************************************************************************************************************
 # Reach level
+# ***************************************************************************************************************************
 # ---------------------------------------------------------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in data
@@ -301,10 +433,12 @@ ggplot(node_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = insitu_
 # PT
 reach_SWOT_PT_vC <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverSP")
+  mutate(source = "RiverSP") %>%
+  filter(dark_frac < 0.5)
 reach_SWOT_PT_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverTile")
+  mutate(source = "RiverTile") %>%
+  filter(dark_frac < 0.5)
 
 # GNSS
 reach_SWOT_GNSS_vC <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_GNSS.csv") 
@@ -345,6 +479,27 @@ cor_table <- reach_SWOT_full_insitu %>%
 # Join everything to one table
 table_relative_reach_WSE <- table_relative_reach_WSE %>%
   left_join(cor_table, by = "source")
+
+# relabel and reorder
+table_relative_reach_WSE <- table_relative_reach_WSE %>%
+  mutate(source = factor(source,
+                         levels = c("RiverTile", "RiverSP"),   # swapped order
+                         labels = c("vD0", "vC0")))            # relabels
+
+# bar chart of count of residuals_nobias by version
+ggplot(table_relative_reach_WSE, aes(x = source, y = n, fill = source)) +
+  geom_col(width = 0.9) +
+  geom_text(aes(label = n),
+            vjust = -0.5,
+            size = 8) +
+  ylab("Count") +
+  coord_cartesian(ylim = c(9, 232)) +
+  scale_fill_manual(values = c("vC0" = "#E97132",
+                               "vD0" = "darkblue")) +
+  theme_classic(base_size = 28) +
+  theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none")
+# 3.57, 6.45
+
 
 # RELATIVE REACH WSE TABLE BY GNSS/PT
 # -----------------------------------------------------
@@ -472,13 +627,13 @@ n_relative_df <- reach_SWOT_full_insitu %>%
   summarise(n_unique_reaches = n_distinct(reach_id), # count of non-NA residuals
             n = sum(!is.na(residuals_nobias)), .groups = "drop") # count of unique nodes
 
-# CDF plot (fixed cm placement)
+# Reach Relative WSE Differences
 ggplot(reach_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = source, linetype = source)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT - in situ WSE (cm)", y = "Cumulative Probability", 
-       title = "Reach Relative WSE Differences") +
+       title = "By version") +
   annotate("text", x = 95, y = 0.71,
            label = paste("|68%ile| vC:", 
                          round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "RiverSP", ]$residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
@@ -512,7 +667,7 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = source
   scale_color_manual(values = c("RiverSP" = "#E97132", "RiverTile" = "darkblue")) +
   scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "solid")) +
   theme(legend.position = "none") +
-  xlim(0, 150)
+  coord_cartesian(xlim = c(0, 150))
 # width 610 height 550
 
 
@@ -532,7 +687,7 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = insitu
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT - in situ WSE (cm)", y = "Cumulative Probability", 
-       title = "Reach Relative WSE Differences") +
+       title = "By measurement type") +
   annotate("text", x = 95, y = 0.71,
            label = paste("|68%ile| PT:", 
                          round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$insitu_type == "PT", ]$residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
@@ -565,8 +720,8 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = insitu
   theme_minimal(base_size = 18) +
   scale_color_manual(values = c("PT" = "#C03F61", "GNSS" = "#404A22")) +
   scale_linetype_manual(values = c("PT" = "solid", "GNSS" = "solid")) +
-  theme(legend.position = "none") +
-  xlim(0, 150)
+  theme(legend.position = "none")  +
+  coord_cartesian(xlim = c(0, 150))
 # width 610 height 550
 
 

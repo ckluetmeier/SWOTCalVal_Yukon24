@@ -41,6 +41,7 @@ SWOT_reach_df_filtered <- SWOT_reach_df_noduplicates %>%
   filter(reach_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) %>%
+  filter(dark_frac < 0.8) %>%
   filter(partial_f == 0) # at least 50% node coverage if 0
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
@@ -344,8 +345,13 @@ time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
 # Calculate the wse diff SWOT - GNSS (residuals)
 time_space_matched_SWOT_GNSS$slope_residuals_nobias = time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs_nobias - time_space_matched_SWOT_GNSS$slope_abs
 
+# time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
+#   filter(abs(reach_drift_slope_m_m) > 0.000001)
+
+
+
 # Calculate the 68th percentile error
-percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals_nobias), 0.68, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(test$slope_residuals_nobias), 0.68, na.rm=TRUE)
 percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals_nobias), 0.50, na.rm=TRUE)
 
 print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias*100000))

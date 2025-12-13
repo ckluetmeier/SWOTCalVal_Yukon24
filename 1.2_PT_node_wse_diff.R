@@ -17,10 +17,11 @@ library(dplyr)
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
 # version C: RiverSP
-# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+
 # version D: RiverTile
 # SWORD v17b
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_PT_node_timeseries_v17b.csv')
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_PT_node_timeseries_v17b.csv')
 # SWORD v16
 # SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_PT_node_timeseries_v16.csv')
 
@@ -35,7 +36,7 @@ SWOT_df_filtered <- SWOT_df_noduplicates %>%
   filter(node_q < 2) %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) %>%
-  filter(dark_frac <= 50) # JPL filter, but doesn't seem to change results much?
+  filter(dark_frac <= 0.8)
 
 # time_tai is seconds since 2001-01-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -49,9 +50,9 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 
 # Set working directory to the folder chucked by separate rivers and PT clusters
 # SWORD v17b
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/upper_YR"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/SJ"
 # SWORD v16
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/upper_YR"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/SJ"
 setwd(wd)
 
 # Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
@@ -67,11 +68,6 @@ combined_PT_df <- bind_rows(data_list)
 
 # Convert time column to POSIXct
 combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-
-# watch out for funky datetimes in PT data -- some old toolbox runs vary in how datetime is output
-# for example, run this line with old upper_YR PTs
-# combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, format = "%m/%d/%y %H:%M", tz = "UTC")
-# combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, tz = "UTC")
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # match PT & SWOT observations in time and space
@@ -103,8 +99,8 @@ time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT[!duplicated(time_space_
 time_space_matched_SWOT_PT$residuals = time_space_matched_SWOT_PT$pt_wse_m - time_space_matched_SWOT_PT$wse
 
 # Calculate the 68th percentile error
-percentile_68_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.50, na.rm=TRUE)
+# percentile_68_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.68, na.rm=TRUE)
+# percentile_50_error <- quantile(abs(time_space_matched_SWOT_PT$residuals), 0.50, na.rm=TRUE)
 
 # print the result
 # print(paste("68th Percentile Error:", percentile_68_error))
@@ -148,15 +144,15 @@ ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_m, y = wse, color = factor(pt_
 
 
 # CDF plot
-ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", linewidth = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  # adjust x val of annotate to change writing locations
-  annotate("text", x = 0.5, y = 0.71, label = paste("|68%ile| diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 0.5, y = 0.53, label = paste("|50%ile| diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20)
+# ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_m))) +
+#   stat_ecdf(geom = "step", color = "darkblue", linewidth = 1) +
+#   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+#   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+#   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
+#   # adjust x val of annotate to change writing locations
+#   annotate("text", x = 0.5, y = 0.71, label = paste("|68%ile| diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
+#   annotate("text", x = 0.5, y = 0.53, label = paste("|50%ile| diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
+#   theme_minimal(base_size = 20)
 
 # # Individual PT vs SWOT hydrograph
 # pt_serial_list <- unique(time_space_matched_SWOT_PT$pt_serial)
@@ -248,242 +244,63 @@ percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_
 
 #csv subset
 save_to_csv <- time_space_matched_SWOT_PT %>%
-  dplyr::select(time_utc,pt_time_UTC, residuals, residuals_nobias, wse, wse_u, 
-                pt_wse_m, pt_wse_nobias_m, pt_correction_mean_total_error_m, 
+  dplyr::select(time_utc, pt_time_UTC, residuals, residuals_nobias, wse, wse_u, 
+                pt_wse_m, pt_wse_nobias_m, bias, pt_correction_mean_total_error_m, 
                 pt_correction_mean_offset_sd_m, pt_serial, width, width_u, node_id, reach_id, p_dist_out, 
                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/RiverTile_v17b_time_space_matched_SWOT_PT_upperYR.csv', row.names = FALSE)
+# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/RiverSP_v16_time_space_matched_SWOT_PT_SJ.csv', row.names = FALSE)
 
-# correlation test
-cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
-
-# Extract r and p-value
-r_value_nobias <- cor_test_nobias$estimate # Pearson correlation coefficient
-p_value_nobias <- cor_test_nobias$p.value 
-
-# plot SWOT vs PT wse
-ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_nobias_m, y = wse, color = factor(pt_serial))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  xlab("PT wse (m)") +
-  ylab("SWOT wse (m)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(time_space_matched_SWOT_PT$pt_wse_m, na.rm = TRUE), 
-           y = max(time_space_matched_SWOT_PT$wse, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
-                          "\nn = ", nrow(time_space_matched_SWOT_PT)),
-           hjust = 0, vjust = 1, size = 8) +
-  labs(color = "PT Serial") 
-
-
-# CDF plot
-ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 0.25, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 0.25, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20) 
-  #xlim(0, .751)
-
-
-
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# all clusters comparison
-# ---------------------------------------------------------------------------------------------------------------------------
-
-
-# Set working directory to the folder where the time&space matched SWOT/PT clusters are
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
-setwd(wd)
-
-# Get list of all CSV files in working directory that start with time_space_matched_SWOT_PT_
-csv_files <- list.files(wd, pattern = "^RiverTile_.*\\.csv$", full.names = TRUE)
-#csv_files <- list.files(wd, pattern = "^time_space_matched_SWOT_PT_.*\\.csv$", full.names = TRUE)
-
-# Merge all PT files into a combined dataframe with filename column
-data_list <- lapply(csv_files, function(file) {
-  df <- read.csv(file)
-  
-  # Extract filename without path
-  filename <- basename(file)
-  
-  # Remove "time_space_matched_SWOT_PT_" prefix and ".csv" extension
-  filename_clean <- sub("^RiverTile_time_space_matched_SWOT_PT_", "", filename)
-  filename_clean <- sub("\\.csv$", "", filename_clean)
-  
-  # Add filename as a new column
-  df <- df %>%
-    mutate(river = filename_clean)
-  
-  return(df)
-})
-
-# Combine all dataframes into one
-combined_df <- bind_rows(data_list)
-
-combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
-
-# Summary stats
-
-# 68th & 50th percentile error: wse diff calculation
-
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(combined_time_space_matched_SWOT_PT_df$residuals_nobias), 0.50, na.rm=TRUE)
-
-#print the result
-print(paste("68th Percentile Error:", percentile_68_error))
-print(paste("50th Percentile Error:", percentile_50_error))
-print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
-print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
-
-# correlation test
-cor_test <- cor.test(combined_time_space_matched_SWOT_PT_df$wse, combined_time_space_matched_SWOT_PT_df$pt_wse_m)
-
-# Extract r and p-value
-r_value <- cor_test$estimate # Pearson correlation coefficient
-p_value <- cor_test$p.value # highly statistically significant is P < 0.001
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# data viz
-
-color_palette <- c("#D86A1A", "#6D398B", "#00429D", "#F8A31B", "#2E7D32",
-                   "#C83232", "#008F7A", "#E3A700", "#124000")
-
-# plot SWOT vs PT wse
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  xlab("PT wse (m)") +
-  ylab("SWOT wse (m)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(combined_time_space_matched_SWOT_PT_df$pt_wse_m, na.rm = TRUE), 
-           y = max(combined_time_space_matched_SWOT_PT_df$wse, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
-                          "\nn = ", nrow(combined_time_space_matched_SWOT_PT_df)),
-           hjust = 0, vjust = 1, size = 8) +
-  labs(color = "River") 
-
-
-# CDF plot
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = abs(wse - pt_wse_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 1.03, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 1.03, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20) 
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# data viz without bias
-
-# Calculating the linear regression model 
-model_nobias = lm(pt_wse_nobias_m~wse, data = combined_time_space_matched_SWOT_PT_df) 
-
-# Extracting R-squared parameter from summary 
-summary(model_nobias)
-
-#RMSE
-rmse_nobias <- sqrt(mean((combined_time_space_matched_SWOT_PT_df$pt_wse_nobias_m - combined_time_space_matched_SWOT_PT_df$wse)^2))
-#RMSE >= MAE, MAE is similar to 50th quantile error
-
-# correlation test
-cor_test_nobias <- cor.test(combined_time_space_matched_SWOT_PT_df$wse, combined_time_space_matched_SWOT_PT_df$pt_wse_nobias_m)
-
-# Extract r and p-value
-r_value_nobias <- cor_test_nobias$estimate # Pearson correlation coefficient
-p_value_nobias <- cor_test_nobias$p.value # 
-
-# plot SWOT vs PT wse
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = pt_wse_nobias_m, y = wse, color = factor(river))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  xlab("PT wse (m)") +
-  ylab("SWOT wse (m)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(combined_time_space_matched_SWOT_PT_df$pt_wse_m, na.rm = TRUE), 
-           y = max(combined_time_space_matched_SWOT_PT_df$wse, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value_nobias, 4), "\np value = ", signif(p_value_nobias, 3),
-                          "\nn = ", nrow(combined_time_space_matched_SWOT_PT_df)),
-           hjust = 0, vjust = 1, size = 8) +
-  labs(color = "River") 
-
-
-# CDF plot
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = abs(wse - pt_wse_nobias_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 1.03, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 1.03, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20) 
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# data viz
-
-# plot wse diff vs width
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = width, y = abs(residuals_nobias), color = factor(river))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  #xlab("SWOT width (m)") +
-  ylab("PT - SWOT wse (m)") +
-  theme_minimal(base_size = 30) +
-  labs(color = "River") 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# # correlation test
+# cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
+# 
+# # Extract r and p-value
+# r_value_nobias <- cor_test_nobias$estimate # Pearson correlation coefficient
+# p_value_nobias <- cor_test_nobias$p.value 
+# 
+# # plot SWOT vs PT wse
+# ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_nobias_m, y = wse, color = factor(pt_serial))) +
+#   geom_point(size = 4) +
+#   scale_color_manual(values = color_palette) +
+#   xlab("PT wse (m)") +
+#   ylab("SWOT wse (m)") +
+#   theme_minimal(base_size = 30) +
+#   geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+#   annotate("text", x = min(time_space_matched_SWOT_PT$pt_wse_m, na.rm = TRUE), 
+#            y = max(time_space_matched_SWOT_PT$wse, na.rm = TRUE), 
+#            label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
+#                           "\nn = ", nrow(time_space_matched_SWOT_PT)),
+#            hjust = 0, vjust = 1, size = 8) +
+#   labs(color = "PT Serial") 
+# 
+# 
+# # CDF plot
+# ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
+#   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
+#   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+#   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+#   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
+#   annotate("text", x = 0.25, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_nobias, 4)), color = "#222222", size = 6) +
+#   annotate("text", x = 0.25, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_nobias, 4)), color = "#222222", size = 6) +
+#   theme_minimal(base_size = 20) 
+#   #xlim(0, .751)
 
 
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# Compare PT wse & SWOT riverSP (version C) vs RiverTile (version D) node wse
+# merge all clusters
 # ---------------------------------------------------------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# all clusters comparison
 
 # Set working directory to CalVal_dataframes directory where the time&space matched SWOT/PT clusters are for each SWOT version
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
 setwd(wd)
 
 # Get list of all CSV files in working directory that include time_space_matched_SWOT_PT_
 csv_files <- list.files(wd, pattern = "time_space_matched_SWOT_PT.*\\.csv$", full.names = TRUE)
-
 
 # Merge all PT files into a combined dataframe with filename column
 data_list <- lapply(csv_files, function(file) {
@@ -502,160 +319,153 @@ data_list <- lapply(csv_files, function(file) {
   return(df)
 })
 
-# Combine all dataframes into one
-combined_df <- bind_rows(data_list)
 
 # TURN ON the correct df for vC vs vD load in
-# combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
-combined_time_space_matched_RiverTile_PT_df <- bind_rows(data_list)
+combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
+# combined_time_space_matched_RiverTile_PT_df <- bind_rows(data_list)
 
 # Create a source column to identify which dataset each row comes from
 RiverSP_df <- combined_time_space_matched_SWOT_PT_df %>%
-  mutate(source = "RiverSP", abs_diff = abs(wse - pt_wse_m))
+  mutate(source = "RiverSP")
 
-RiverTile_df <- combined_time_space_matched_RiverTile_PT_df %>%
-  mutate(source = "RiverTile", abs_diff = abs(wse - pt_wse_m))
+# RiverTile_df <- combined_time_space_matched_RiverTile_PT_df %>%
+#   mutate(source = "RiverTile")
 
 # save dfs to csv
-# write.csv(RiverTile_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_PT.csv', row.names = FALSE)
+write.csv(RiverSP_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_PT.csv', row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Combine both dataframes
-combined_df <- bind_rows(RiverSP_df, RiverTile_df)
+# combined_df <- bind_rows(RiverSP_df, RiverTile_df)
 
-
-# # Compare the same data subset from Version C & D
-# RiverTile_filtered <- RiverTile_df %>%
-#   semi_join(
-#     RiverSP_df %>% select(pt_time_UTC, pt_serial),
-#     by = c("pt_time_UTC", "pt_serial")
-#   )
 # 
-# RiverSP_filtered <- RiverSP_df %>%
-#   semi_join(
-#     RiverTile_df %>% select(pt_time_UTC, pt_serial),
-#     by = c("pt_time_UTC", "pt_serial")
-#   )
-
-# Combine both filtered dataframes
-# combined_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
-
-
-
-
-
-
-# Summary stats
-# ---------------------------------------------------------------------------------------------------------------------------
-
-# 68th & 50th percentile error: wse diff calculation
-
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
-
-percentile_68_error_nobias_RiverTile <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias_RiverTile <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
-
-
-#print the result
-print(paste("68th Percentile Error:", percentile_68_error_RiverTile))
-print(paste("50th Percentile Error:", percentile_50_error_RiverTile))
-print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias_RiverTile))
-print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias_RiverTile))
-
-# correlation test
-# cor_test <- cor.test(RiverSP_df$wse, RiverSP_df$pt_wse_m) # pt_wse_nobias_m
-cor_test <- cor.test(RiverTile_df$wse, RiverTile_df$pt_wse_m)
-
-# Extract r and p-value
-r_value <- cor_test$estimate # Pearson correlation coefficient
-p_value <- cor_test$p.value # highly statistically significant is P < 0.001
-
-# Mean Absolute Error (which is just the mean residual)
-MAE <- mean(abs(RiverTile_df$residuals))
-MAE <- mean(abs(RiverTile_df$residuals_nobias))
-
-
-t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
-t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# data viz
-
-color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#F4845F", "#DA627D")
-
-
-# plot SWOT vs PT wse
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  xlab("PT wse (m)") +
-  ylab("SWOT wse (m)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(combined_time_space_matched_SWOT_PT_df$pt_wse_m, na.rm = TRUE), 
-           y = max(combined_time_space_matched_SWOT_PT_df$wse, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
-                          "\nn = ", nrow(combined_time_space_matched_SWOT_PT_df)),
-           hjust = 0, vjust = 1, size = 8) +
-  labs(color = "River")
-
-# plot SWOT vs PT wse
-ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
-  geom_point(size = 4) +
-  scale_color_manual(values = color_palette) +
-  xlab("PT wse (m)") +
-  ylab("SWOT wse (m)") +
-  theme_minimal(base_size = 30) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  annotate("text", x = min(combined_time_space_matched_RiverTile_PT_df$pt_wse_m, na.rm = TRUE), 
-           y = max(combined_time_space_matched_RiverTile_PT_df$wse, na.rm = TRUE), 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
-                          "\nn = ", nrow(combined_time_space_matched_RiverTile_PT_df)),
-           hjust = 0, vjust = 1, size = 8) +
-  labs(color = "River") 
-
-
-# CDF plot
-ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = abs(wse - pt_wse_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 1.03, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 1.03, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20) 
-
-ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = abs(wse - pt_wse_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 2.03, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_RiverTile, 4)), color = "#222222", size = 6) +
-  annotate("text", x = 2.03, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_RiverTile, 4)), color = "#222222", size = 6) +
-  theme_minimal(base_size = 20) 
-
-
-
-summary <- group_by(combined_time_space_matched_RiverTile_PT_df, river) %>% summarise(
-  count = n(),
-  mean = mean(abs(residuals), na.rm = TRUE),
-  sd = sd(abs(residuals), na.rm = TRUE),
-  median = median(abs(residuals), na.rm = TRUE),
-  IQR = IQR(abs(residuals), na.rm= TRUE),
-  min =min(abs(residuals), na.rm = TRUE),
-  max =max(abs(residuals), na.rm= TRUE),
-  quant68 = quantile(abs(residuals), 0.68, na.rm=TRUE),
-  quant68_nobais = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE)
-)
+# # Summary stats
+# # ---------------------------------------------------------------------------------------------------------------------------
+# 
+# # 68th & 50th percentile error: wse diff calculation
+# 
+# # Calculate the 68th & 50th percentile error
+# percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
+# percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
+# 
+# percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
+# percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
+# 
+# # Calculate the 68th &50th percentile error, no bias
+# percentile_68_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.68, na.rm=TRUE)
+# percentile_50_error_nobias <- quantile(abs(RiverSP_df$residuals_nobias), 0.50, na.rm=TRUE)
+# 
+# percentile_68_error_nobias_RiverTile <- quantile(abs(RiverTile_df$residuals_nobias), 0.68, na.rm=TRUE)
+# percentile_50_error_nobias_RiverTile <- quantile(abs(RiverTile_df$residuals_nobias), 0.50, na.rm=TRUE)
+# 
+# 
+# #print the result
+# print(paste("68th Percentile Error:", percentile_68_error_RiverTile))
+# print(paste("50th Percentile Error:", percentile_50_error_RiverTile))
+# print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias_RiverTile))
+# print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias_RiverTile))
+# 
+# # correlation test
+# # cor_test <- cor.test(RiverSP_df$wse, RiverSP_df$pt_wse_m) # pt_wse_nobias_m
+# cor_test <- cor.test(RiverTile_df$wse, RiverTile_df$pt_wse_m)
+# 
+# # Extract r and p-value
+# r_value <- cor_test$estimate # Pearson correlation coefficient
+# p_value <- cor_test$p.value # highly statistically significant is P < 0.001
+# 
+# # Mean Absolute Error (which is just the mean residual)
+# MAE <- mean(abs(RiverTile_df$residuals))
+# MAE <- mean(abs(RiverTile_df$residuals_nobias))
+# 
+# 
+# t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
+# t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
+# 
+# # ---------------------------------------------------------------------------------------------------------------------------
+# # data viz
+# 
+# color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#F4845F", "#DA627D")
+# 
+# 
+# # plot SWOT vs PT wse
+# ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
+#   geom_point(size = 4) +
+#   scale_color_manual(values = color_palette) +
+#   xlab("PT wse (m)") +
+#   ylab("SWOT wse (m)") +
+#   theme_minimal(base_size = 30) +
+#   geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+#   annotate("text", x = min(combined_time_space_matched_SWOT_PT_df$pt_wse_m, na.rm = TRUE), 
+#            y = max(combined_time_space_matched_SWOT_PT_df$wse, na.rm = TRUE), 
+#            label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
+#                           "\nn = ", nrow(combined_time_space_matched_SWOT_PT_df)),
+#            hjust = 0, vjust = 1, size = 8) +
+#   labs(color = "River")
+# 
+# # plot SWOT vs PT wse
+# ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = pt_wse_m, y = wse, color = factor(river))) +
+#   geom_point(size = 4) +
+#   scale_color_manual(values = color_palette) +
+#   xlab("PT wse (m)") +
+#   ylab("SWOT wse (m)") +
+#   theme_minimal(base_size = 30) +
+#   geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+#   annotate("text", x = min(combined_time_space_matched_RiverTile_PT_df$pt_wse_m, na.rm = TRUE), 
+#            y = max(combined_time_space_matched_RiverTile_PT_df$wse, na.rm = TRUE), 
+#            label = paste0("r = ", round(r_value, 4), "\np value = ", signif(p_value, 3),
+#                           "\nn = ", nrow(combined_time_space_matched_RiverTile_PT_df)),
+#            hjust = 0, vjust = 1, size = 8) +
+#   labs(color = "River") 
+# 
+# 
+# # CDF plot
+# ggplot(combined_time_space_matched_SWOT_PT_df, aes(x = abs(wse - pt_wse_m))) +
+#   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
+#   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+#   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+#   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
+#   annotate("text", x = 1.03, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error, 4)), color = "#222222", size = 6) +
+#   annotate("text", x = 1.03, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error, 4)), color = "#222222", size = 6) +
+#   theme_minimal(base_size = 20) 
+# 
+# ggplot(combined_time_space_matched_RiverTile_PT_df, aes(x = abs(wse - pt_wse_m))) +
+#   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
+#   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
+#   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
+#   labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - PT WSE") +
+#   annotate("text", x = 2.03, y = 0.71, label = paste("68% abs diff:", round(percentile_68_error_RiverTile, 4)), color = "#222222", size = 6) +
+#   annotate("text", x = 2.03, y = 0.53, label = paste("50% abs diff:", round(percentile_50_error_RiverTile, 4)), color = "#222222", size = 6) +
+#   theme_minimal(base_size = 20) 
+# 
+# 
+# 
+# summary <- group_by(combined_time_space_matched_RiverTile_PT_df, river) %>% summarise(
+#   count = n(),
+#   mean = mean(abs(residuals), na.rm = TRUE),
+#   sd = sd(abs(residuals), na.rm = TRUE),
+#   median = median(abs(residuals), na.rm = TRUE),
+#   IQR = IQR(abs(residuals), na.rm= TRUE),
+#   min =min(abs(residuals), na.rm = TRUE),
+#   max =max(abs(residuals), na.rm= TRUE),
+#   quant68 = quantile(abs(residuals), 0.68, na.rm=TRUE),
+#   quant68_nobais = quantile(abs(residuals_nobias), 0.68, na.rm=TRUE)
+# )
 
 
 

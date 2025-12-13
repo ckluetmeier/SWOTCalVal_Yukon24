@@ -10,13 +10,13 @@ library(dplyr)
 # read in SWOT data
 
 # RiverSP
-# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v16/RiverTile_domain_node_timeseries_v16.csv")
 # SWORD v17b
-SWOT_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv")
+# SWOT_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv")
 
 # get ride of possible duplicates from hydrocron pull
 # this also filters out bad nodes without data (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -28,7 +28,7 @@ SWOT_df_filtered <- SWOT_df_noduplicates %>%
   filter(node_q < 2) %>% # (0=good, 1=suspect, 2=degraded, 3=bad)
   filter(abs(xtrk_dist) >= 10000) %>% # xtrk dist should be 10-60km
   filter(abs(xtrk_dist) <= 60000) %>%
-  filter(dark_frac <= 0.50) # dark water less than 50%
+  filter(dark_frac <= 0.80) # dark water less than 80%
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -37,15 +37,13 @@ tai_utc_offset <- 37  # TAI-UTC offset in seconds
 # Convert time_tai to UTC
 SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_offset
 
-
-
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & prep GNSS data
 
 # SWORD v16
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_node_wses.csv')
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_node_wses.csv')
 # SWORD v17b
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv')
 
 GNSS_df$time_UTC <- as.POSIXct(GNSS_df$time_UTC, tz = "UTC")
 
@@ -130,8 +128,8 @@ percentile_68_error <- quantile(abs(time_space_matched_SWOT_GNSS$residuals), 0.6
 percentile_50_error <- quantile(abs(time_space_matched_SWOT_GNSS$residuals), 0.50, na.rm=TRUE)
 
 #print the result
-print(paste("68th Percentile Error:", percentile_68_error))
-print(paste("50th Percentile Error:", percentile_50_error))
+# print(paste("68th Percentile Error:", percentile_68_error))
+# print(paste("50th Percentile Error:", percentile_50_error))
 
 # # Calculating the linear regression model 
 # model = lm(mean_node_drift_wse_m~wse, data = time_space_matched_SWOT_GNSS) 
@@ -186,14 +184,14 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(wse - mean_node_drift_wse_m))) 
   #xlim(0, 3)
 
 # plot residuals vs GNSS node total error
-ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(residuals), y = node_total_error_m, color = factor(substr(drift_id,70,93)))) + #color = factor(substr(reach_id, 1, 6)
-  geom_point(size = 1.5) +
-  scale_color_manual(values = color_palette) +
-  xlab("GNSS - SWOT wse (m)") +
-  ylab("wse uncertainty (m)") +
-  theme_minimal(base_size = 30)  +
-  theme(legend.position = "none")
-  #labs(color = "Drift ID") 
+# ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(residuals), y = node_total_error_m, color = factor(substr(drift_id,70,93)))) + #color = factor(substr(reach_id, 1, 6)
+#   geom_point(size = 1.5) +
+#   scale_color_manual(values = color_palette) +
+#   xlab("GNSS - SWOT wse (m)") +
+#   ylab("wse uncertainty (m)") +
+#   theme_minimal(base_size = 30)  +
+#   theme(legend.position = "none")
+#   #labs(color = "Drift ID") 
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # remove bias from GNSS data
@@ -226,10 +224,10 @@ print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
 # need to label each version & add river id
 
 # label each verion
-node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
+node_SWOT_GNSS_vC <- time_space_matched_SWOT_GNSS %>%
   mutate(source = "RiverSP")
 
-node_SWOT_GNSS_vD <- node_SWOT_GNSS_vD %>%
+node_SWOT_GNSS_vD <- time_space_matched_SWOT_GNSS %>%
   mutate(source = "RiverTile")
 
 # add river names to df
@@ -237,10 +235,10 @@ node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
   mutate(river_code = substr(reach_id, 1, 6),
          river = case_when(
            # putting the reach id first ensures case_when won't overwrite SJ/BL labels
-           # SWORD v16: 81260300061, 81260300231, 81260300241, 81260300251
+           # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
            # SWORD v17b: 81260300181", "81260300191", "81260300201", "81260300211
            # only SJ reaches need to be adjusted here
-           reach_id %in% c("81260300061, 81260300231, 81260300241, 81260300251") ~ "SJ", 
+           reach_id %in% c("81260300061", "81260300231", "81260300241", "81260300251") ~ "SJ", 
            reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
            river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
            river_code == "812509" ~ "lowerYR", # past the PR confluence
@@ -258,21 +256,21 @@ node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
 
 # csv subset
 # SWOT version D
-save_to_csv <- time_space_matched_SWOT_GNSS %>%
-  dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, wse, wse_u,
-                mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
-                width, width_u, node_id, reach_id, p_dist_out,
-                node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
-
-# SWOT version C
-# save_to_csv <- time_space_matched_SWOT_GNSS %>%
-#   dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, wse, wse_u,
+# save_to_csv <- node_SWOT_GNSS_vD %>%
+#   dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, bias, wse, wse_u,
 #                 mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
 #                 width, width_u, node_id, reach_id, p_dist_out,
-#                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, lat, lon)
+#                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon, source, river_code, river)
+
+# SWOT version C
+save_to_csv <- node_SWOT_GNSS_vC %>%
+  dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, bias, wse, wse_u,
+                mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
+                width, width_u, node_id, reach_id, p_dist_out,
+                node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, lat, lon, source, river_code, river)
 
 # save joined_wse_subset to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_GNSS_3mdiff.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv', row.names = FALSE)
 
 
 # Calculating the linear regression model 
@@ -349,21 +347,6 @@ RiverTile_df <- time_space_matched_riverTile_GNSS %>%
 SWOT_versionCD_df <- bind_rows(RiverSP_df, RiverTile_df)
 
 
-# # Compare the same data subset from Version C & D
-# RiverTile_filtered <- RiverTile_df %>%
-#   semi_join(
-#     RiverSP_df %>% select(time_UTC, mean_node_drift_wse_m),
-#     by = c("time_UTC", "mean_node_drift_wse_m")
-#   )
-# 
-# RiverSP_filtered <- RiverSP_df %>%
-#   semi_join(
-#     RiverTile_df %>% select(time_UTC, mean_node_drift_wse_m),
-#     by = c("time_UTC", "mean_node_drift_wse_m")
-#   )
-# 
-# # Combine both filtered dataframes
-# SWOT_versionCD_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
 
 
 summary <- group_by(RiverTile_filtered, node_id) %>% summarise(

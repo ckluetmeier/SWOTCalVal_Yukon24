@@ -16,15 +16,17 @@ library(ggtext)
 # ---------------------------------------------------------------------------------------------------------------------------
 
 node_SWOT_ortho_vC <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv') %>%
-  mutate(source = "RiverSP")
+  mutate(source = "RiverSP") %>%
+  filter(abs(residuals) < 1500) %>%
+  filter(dark_frac < 0.8)
 
 node_SWOT_ortho_vD <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/node_width_SWOT_Ortho.csv') %>%
   mutate(source = "RiverTile") %>%
-  filter(abs(residuals) < 1500)
+  filter(abs(residuals) < 1500) %>%
+  filter(dark_frac < 0.8)
 
 # merge all dataframes together
 node_SWOT_ortho <- bind_rows(node_SWOT_ortho_vC, node_SWOT_ortho_vD) %>%
-  filter(residuals < 2000) %>%
   filter(dark_frac < 0.8)
 
 

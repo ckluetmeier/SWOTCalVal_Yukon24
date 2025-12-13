@@ -28,7 +28,7 @@ SWOT_reach_df_filtered <- SWOT_reach_df_noduplicates %>%
   filter(abs(xtrk_dist) >=10000) %>%
   filter(abs(xtrk_dist) <=60000) %>%
   filter(partial_f == 0)  %>%
-  filter(dark_frac <= .5)
+  filter(dark_frac <= 0.8)
 
 # time_tai is seconds since 2001-011-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -115,9 +115,9 @@ time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
 # Calculate the wse diff SWOT - PT (residuals)
 time_space_matched_SWOT_PT$residuals = time_space_matched_SWOT_PT$mean_reach_pt_wse_m - time_space_matched_SWOT_PT$wse
 
-# Filter values to sensical residuals (< 5 m diff)
+# Filter values to sensical residuals (< 10 m diff)
 time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
-  filter(abs(residuals) < 5) # %>%
+  filter(abs(residuals) < 10) # %>%
 # filter(node_total_error_m < 1)
 
 # Calculate the 68th percentile error
@@ -236,9 +236,9 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
 
 save_to_csv <- save_to_csv %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverTile")
+  mutate(source = "RiverSP")
 
-# save joined_wse_subset to csv
+# save to csv
 # write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_PT.csv', row.names = FALSE)
 
 
@@ -278,148 +278,6 @@ ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Compare GNSS wse & SWOT riverSP/RiverTile node wse
-# ---------------------------------------------------------------------------------------------------------------------------
-
-time_space_matched_riverSP_PT <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverTile_time_space_matched_SWOT_PT.csv")
-time_space_matched_riverTile_PT <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_time_space_matched_SWOT_PT.csv")
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Combine SWOT Version C & D results to plot
-# ---------------------------------------------------------------------------------------------------------------------------
-# label each verion
-RiverSP_df <- time_space_matched_riverSP_PT %>%
-  mutate(source = "RiverSP")
-
-RiverTile_df <- time_space_matched_riverTile_PT %>%
-  mutate(source = "RiverTile")
-
-# Combine both dataframes
-SWOT_versionCD_df <- bind_rows(RiverSP_df, RiverTile_df)
-
-
-# # Compare the same data subset from Version C & D
-# RiverTile_filtered <- RiverTile_df %>%
-#   semi_join(
-#     RiverSP_df %>% select(pt_time_UTC, reach_id, mean_reach_pt_wse_m),
-#     by = c("pt_time_UTC", "reach_id", "mean_reach_pt_wse_m")
-#   )
-# 
-# RiverSP_filtered <- RiverSP_df %>%
-#   semi_join(
-#     RiverTile_df %>% select(pt_time_UTC, reach_id, mean_reach_pt_wse_m),
-#     by = c("pt_time_UTC", "reach_id", "mean_reach_pt_wse_m")
-#   )
-# 
-# # Combine both filtered dataframes
-# SWOT_versionCD_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
-
-
-
-summary <- group_by(RiverSP_filtered, reach_id) %>% summarise(
-  count = n(),
-  mean = mean(abs(residuals_nobias), na.rm = TRUE),
-  sd = sd(abs(residuals_nobias), na.rm = TRUE),
-  median = median(abs(residuals_nobias), na.rm = TRUE),
-  IQR = IQR(abs(residuals_nobias), na.rm= TRUE),
-  min =min(abs(residuals_nobias), na.rm = TRUE),
-  max =max(abs(residuals_nobias), na.rm= TRUE),
-  lat =mean(p_lat),
-  lon =mean(p_lon)
-)
-
-#write.csv(summary, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/reach_summary_time_space_matched_SWOT_GNSS_nobias.csv', row.names = FALSE)
-
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(time_space_matched_riverSP_PT$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(time_space_matched_riverSP_PT$residuals), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(time_space_matched_riverTile_PT$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(time_space_matched_riverTile_PT$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(time_space_matched_riverSP_PT$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(time_space_matched_riverSP_PT$residuals_nobias), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile_nobias <- quantile(abs(time_space_matched_riverTile_PT$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(time_space_matched_riverTile_PT$residuals_nobias), 0.50, na.rm=TRUE)
-
-# 
-# # SUBSET TO SAME VERSION C/D data points
-# # Calculate the 68th & 50th percentile error
-# percentile_68_error <- quantile(abs(RiverSP_filtered$residuals), 0.68, na.rm=TRUE)
-# percentile_50_error <- quantile(abs(RiverSP_filtered$residuals), 0.50, na.rm=TRUE)
-# 
-# percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.68, na.rm=TRUE)
-# percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.50, na.rm=TRUE)
-# 
-# # Calculate the 68th &50th percentile error, no bias
-# percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-# percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.50, na.rm=TRUE)
-# 
-# percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-# percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.50, na.rm=TRUE)
-
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Plots
-
-# Combo CDF plot
-ggplot(SWOT_versionCD_df, aes(x = abs(residuals), color = source, linetype = source)) +
-  stat_ecdf(geom = "step", size = 1.2) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", 
-       title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 2.55, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile, 4)), 
-           color = "#222222", size = 5) +
-  annotate("text", x = 2.55, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile, 4)), 
-           color = "#222222", size = 5) +
-  theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "dashed"))
-
-
-# Combo CDF plot no bias
-ggplot(SWOT_versionCD_df, aes(x = abs(residuals_nobias), color = source, linetype = source)) +
-  stat_ecdf(geom = "step", size = 1.2) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT WSE - PT WSE (m)", y = "Cumulative Probability", 
-       title = "CDF of SWOT WSE - PT WSE") +
-  annotate("text", x = 2.55, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error_nobias, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile_nobias, 4)), 
-           color = "#222222", size = 5) +
-  annotate("text", x = 2.55, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error_nobias, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile_nobias, 4)), 
-           color = "#222222", size = 5) +
-  theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
-
-
-
-
-
-
-
-
-
 
 
 
