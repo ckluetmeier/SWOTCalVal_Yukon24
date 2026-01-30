@@ -267,7 +267,41 @@ ggplot(node_SWOT_ortho_vD, aes(x = river, y = abs(residuals), fill = river)) +
     labels = c("Coleen", "Sheenjek", "Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 20, hjust = 0.9)) + 
-  coord_cartesian(ylim = c(0, 750))
+  coord_cartesian(ylim = c(0, 700))
+
+
+
+
+# Expand to long df for width type comparisons
+long_df <- node_SWOT_ortho_vD %>%
+  select(river, ortho_width_m, width) %>%
+  pivot_longer(cols = c(ortho_width_m, width),
+               names_to = "width_type",
+               values_to = "width_value") %>%
+  mutate(width_type = recode(width_type,
+                             ortho_width_m = "Ortho",
+                             width = "SWOT"))
+
+# Set river order
+long_df$river <- factor(long_df$river, 
+                        levels = c("CL", "upper_PR", "upper_YR", "lower_YR"))
+
+# split violin comparisons
+devtools::install_github("psyteachr/introdataviz")
+ggplot(long_df, aes(x = river, y = width_value, fill = width_type)) +
+  introdataviz::geom_split_violin(alpha = .5, trim = FALSE, color= NA) +
+  geom_boxplot(width = .2, alpha = .8, fatten = NULL, show.legend = FALSE) +
+  stat_summary(fun.data = "mean_se", geom = "pointrange", show.legend = F, 
+               position = position_dodge(.175)) +
+  scale_x_discrete(labels = c("Coleen", 'Porcupine', "Single-channel Yukon", "Braided Yukon")) +
+  scale_fill_manual(values=c("lightblue","darkblue")) +
+  theme_minimal(base_size = 30) +
+  ylab("width (m)") +
+  ylim(0, 3500) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 25, hjust = 0.9))
+
 
 
 
