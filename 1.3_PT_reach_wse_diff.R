@@ -10,13 +10,13 @@ library(dplyr)
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
 # RiverSP
-SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+# SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
-# SWORD v17v
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+# SWORD v17b
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates from hydrocron pull
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
@@ -44,9 +44,9 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 
 # Set working directory to the reach df folder from the toolboxes
 # SWORD v16
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16"
 # SWORD v17b
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
 setwd(wd)
 
 # Get list of all PT reach csv files (these are munged PT dataframes created by the toolboxes)
@@ -91,20 +91,26 @@ time_space_matched_SWOT_PT <- time_matched_SWOT_PT %>%
 # get rid of any duplicate PT values
 time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT[!duplicated(time_space_matched_SWOT_PT[c("mean_reach_pt_wse_m","pt_time_UTC","flaglist")]),]
 
-# add river names to df
+# add river names, in situ type, and version to df
 time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
-  mutate(
-    river_code = substr(reach_id, 1, 6),
-    river = case_when(
-      river_code == "812701" ~ "lowerYR",
-      river_code == "812705" ~ "upperYR",
-      river_code == "812508" ~ "CD",
-      river_code == "812603" ~ "upperPR",
-      river_code == "812605" ~ "upperPR",
-      river_code == "812604" ~ "CL",
-      TRUE ~ NA_character_
-    )
-  )
+  mutate(river_code = substr(reach_id, 1, 6),
+         river = case_when(
+           # putting the reach id first ensures case_when won't overwrite SJ/BL labels
+           # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
+           # SWORD v17b: 81260300181", "81260300191", "81260300201", "81260300211
+           # only SJ reaches need to be adjusted here
+           reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ", 
+           reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+           river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
+           river_code == "812509" ~ "lowerYR", # past the PR confluence
+           river_code == "812705" ~ "upperYR", # Circle up
+           river_code == "812508" ~ "CD",
+           river_code == "812603" ~ "PR",
+           river_code == "812605" ~ "PR",
+           river_code == "812604" ~ "CL",
+           TRUE ~ NA_character_)) %>%
+  mutate(insitu_type = "PT") %>%
+  mutate(source = "RiverTile") ## CHANGE TO CORRECT VERSION!
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -148,7 +154,7 @@ p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 
 # for rivers
 color_palette <- c("#D86A1A", "#6D398B",  "#F8A31B", "#00429D", "#2E7D32",
-                   "#00429D",  "#C83232", "#008F7A", "#E3A700", "#124000")
+                   "#C83232", "#008F7A", "#E3A700", "#124000")
 
 # plot SWOT vs PT wse
 ggplot(time_space_matched_SWOT_PT, aes(x = mean_reach_pt_wse_m, y = wse, color = factor(river))) +
@@ -232,14 +238,11 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 mean_reach_pt_wse_m, pt_wse_nobias_m, flaglist, sorted_nodelist, Number_of_nodes,
                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, 
                 area_det_u, area_wse, layovr_val, node_dist,
-                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, river, cycle_id, pass_id) #SWOTFileName, p_n_nodes OR #cycle_id, pass_id
-
-save_to_csv <- save_to_csv %>%
-  mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverSP")
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, SWOTFileName, p_n_nodes,
+                source, river_code, river, insitu_type) #SWOTFileName, p_n_nodes OR #cycle_id, pass_id
 
 # save to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_SWOT_PT.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_PT.csv', row.names = FALSE)
 
 
 # correlation test
@@ -306,13 +309,13 @@ ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
 # RiverSP
-# SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates from hydrocron pull
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
@@ -337,9 +340,9 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # read in & prep PT reach data
 
 # SWORD v16
-# PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16/YR_PT_reach_slope.csv')
+PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16/YR_PT_reach_slope.csv')
 # SWORD v17b
-PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b/YR_PT_reach_slope.csv')
+# PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b/YR_PT_reach_slope.csv')
 
 
 # Convert time column to POSIXct
@@ -362,7 +365,6 @@ time_matched_SWOT_PT_reach <- PT_reach_df %>%
   dplyr::select(everything())
 
 # match PT and SWOT in space
-# node level
 time_space_matched_SWOT_PT_reach <- time_matched_SWOT_PT_reach %>%
   filter(PT_reach_id == reach_id)
 
@@ -417,12 +419,12 @@ percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT_reach$slop
 save_to_csv <- time_space_matched_SWOT_PT_reach %>%
   select(pt_time_UTC, time_utc, reach_id, slope_m_m, slope_m_m_abs, slope_uncertainty_m_m, slope_residuals_nobias, p_lat, p_lon,
          slope, slope_abs, slope_u, bias, slope_residuals_nobias, mean_reach_PT_slope_no_bias_m_m, residuals, width, width_u, area_total, 
-         area_tot_u, layovr_val, node_dist, xtrk_dist, reach_q, reach_q_b, dark_frac, xovr_cal_q, p_dist_out, n_good_nod
+         area_tot_u, layovr_val, node_dist, xtrk_dist, reach_q, reach_q_b, dark_frac, xovr_cal_q, cycle_id, pass_id
          ) #cycle_id, pass_id, OR p_dist_out, n_good_nod
 
 save_to_csv <- save_to_csv %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverTile") %>%
+  mutate(source = "RiverSP") %>%
   rename(slope_residuals = residuals)
 
 # add river names to df
@@ -433,7 +435,7 @@ save_to_csv <- save_to_csv %>%
            # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
            # SWORD v17b: "81260300181", "81260300191", "81260300201", "81260300211"
            # only SJ reaches need to be adjusted here
-           reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ", 
+           reach_id %in% c("81260300061", "81260300231", "81260300241", "81260300251") ~ "SJ", 
            reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
            river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
            river_code == "812509" ~ "lowerYR", # past the PR confluence
@@ -445,7 +447,7 @@ save_to_csv <- save_to_csv %>%
            TRUE ~ NA_character_))
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_slope_SWOT_PT.csv', row.names = FALSE)
+# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT.csv', row.names = FALSE)
 
 
 # Calculating the linear regression model 
@@ -521,142 +523,5 @@ ggplot(time_space_matched_SWOT_PT_reach, aes(x = slope_uncertainty_m_m, y = abs(
   theme_minimal(base_size = 30) +
   labs(color = "Reach ID")
 
-
-
-
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Compare PT & SWOT riverSP/RiverTile reach slope (SWOT Version C vs D)
-# ---------------------------------------------------------------------------------------------------------------------------
-
-time_space_matched_riverSP_PT <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/reach_slope_RiverSP_time_space_matched_SWOT_PT.csv")
-time_space_matched_riverTile_PT <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/reach_slope_RiverTile_time_space_matched_SWOT_PT.csv")
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Combine SWOT Version C & D results to plot
-# ---------------------------------------------------------------------------------------------------------------------------
-# label each verion
-RiverSP_df <- time_space_matched_riverSP_PT %>%
-  mutate(source = "RiverSP")
-
-RiverTile_df <- time_space_matched_riverTile_PT %>%
-  mutate(source = "RiverTile")
-
-# Combine both dataframes
-SWOT_versionCD_df <- bind_rows(RiverSP_df, RiverTile_df)
-
-
-
-# # Compare the same data subset from Version C & D
-RiverTile_filtered <- RiverTile_df %>%
-  semi_join(
-    RiverSP_df %>% select(pt_time_UTC, reach_id, slope_m_m),
-    by = c("pt_time_UTC", "reach_id", "slope_m_m")
-  )
-
-RiverSP_filtered <- RiverSP_df %>%
-  semi_join(
-    RiverTile_df %>% select(pt_time_UTC, reach_id, slope_m_m),
-    by = c("pt_time_UTC", "reach_id", "slope_m_m")
-  )
-
-# Combine both filtered dataframes
-SWOT_versionCD_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
-
-
-summary <- group_by(RiverSP_filtered, reach_id) %>% summarise(
-  count = n(),
-  mean = mean(abs(residuals), na.rm = TRUE),
-  sd = sd(abs(residuals), na.rm = TRUE),
-  median = median(abs(residuals), na.rm = TRUE),
-  IQR = IQR(abs(residuals), na.rm= TRUE),
-  min =min(abs(residuals), na.rm = TRUE),
-  max =max(abs(residuals), na.rm= TRUE)
-)
-
-
-# ---------------------------------------------------------------------------------------------------------------------------
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_df$residuals), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_df$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_df$slope_residuals_nobias), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_df$slope_residuals_nobias), 0.50, na.rm=TRUE)
-
-
-
-
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_filtered$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_filtered$residuals), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$slope_residuals_nobias), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$slope_residuals_nobias), 0.50, na.rm=TRUE)
-
-
-
-# correlation test
-cor_test <- cor.test(RiverTile_df$SWOT_slope, RiverTile_df$slope_m_m)
-
-# Extract r and p-value
-r_value <- cor_test$estimate # Pearson correlation coefficient
-p_value <- cor_test$p.value # highly statistically significant is P < 0.001
-
-
-
-# Combo CDF plot no bias
-ggplot(SWOT_versionCD_df, aes(x = abs(residuals*100000), color = source, linetype = source)) +
-  stat_ecdf(geom = "step", size = 1.2) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT slope - PT slope (cm/km)", y = "Cumulative Probability", 
-       title = "CDF of SWOT slope - PT slope") +
-  annotate("text", x = 10, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error*100000, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile*100000, 4)), 
-           color = "#222222", size = 5) +
-  annotate("text", x = 10, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error*100000, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile*100000, 4)), 
-           color = "#222222", size = 5) +
-  theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
-
-
-# Combo CDF plot no bias
-ggplot(SWOT_versionCD_df, aes(x = abs(slope_residuals_nobias*100000), color = source, linetype = source)) +
-  stat_ecdf(geom = "step", size = 1.2) +
-  geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-  geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT slope - PT slope (cm/km)", y = "Cumulative Probability", 
-       title = "CDF of SWOT slope - PT slope") +
-  annotate("text", x = 7.5, y = 0.71, 
-           label = paste("|68%ile| Version C:", round(percentile_68_error_nobias*100000, 4), 
-                         ", Version D:", round(percentile_68_error_RiverTile_nobias*100000, 4)), 
-           color = "#222222", size = 5) +
-  annotate("text", x = 7.5, y = 0.53, 
-           label = paste("|50%ile| Version C:", round(percentile_50_error_nobias*100000, 4), 
-                         ", Version D:", round(percentile_50_error_RiverTile_nobias*100000, 4)), 
-           color = "#222222", size = 5) +
-  theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "darkblue", "RiverTile" = "#E97132")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "longdash"))
 
 

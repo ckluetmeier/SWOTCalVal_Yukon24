@@ -21,13 +21,13 @@ library(dplyr)
 # read in & filter SWOT data
 
 # RiverSP (SWORD v16)
-# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates / empty observations
 # (e.g. time = -999999999999, wse = -1.000000e+12)
@@ -55,9 +55,9 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 # read in & prep GNSS data
 
 # SWORD v16
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_reach_wse_slope.csv')
 # SWORD v17b
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
 
 # Convert times to POSIXct
 GNSS_df$wse_drift_start_UTC <- as.POSIXct(GNSS_df$wse_drift_start_UTC, tz = "UTC")
@@ -155,7 +155,7 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = mean_reach_drift_wse_m, y = wse, co
 
 # CDF plot
 ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(wse - mean_reach_drift_wse_m))) +
-  stat_ecdf(geom = "step", color = "darkblue", size = 1) +
+  stat_ecdf(geom = "step", color = "darkblue", linewidth = 1) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(x = "SWOT WSE - GNSS WSE (m)", y = "Cumulative Probability", title = "CDF of SWOT WSE - GNSS WSE") +
@@ -188,8 +188,6 @@ time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
       NA_real_) %>%
   ungroup()
 
-
-
 # Calculate the wse diff SWOT - GNSS (residuals)
 time_space_matched_SWOT_GNSS$residuals_nobias = time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m - time_space_matched_SWOT_GNSS$wse
 
@@ -199,7 +197,6 @@ percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$residual
 
 print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
 print(paste("50th Percentile Error Without Bias:", percentile_50_error_nobias))
-
 
 # correlation test
 cor_test_nobias <- cor.test(time_space_matched_SWOT_GNSS$wse, time_space_matched_SWOT_GNSS$mean_reach_drift_wse_no_bias_m)
@@ -244,6 +241,63 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = time_utc, y = bias, color = factor(
   theme(legend.position = "none") 
   #labs(color = "Drift ID") 
 
+# ---------------------------------------------------------------------------------------------------------------------------
+# save dataframes
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# add river names to df
+time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
+  mutate(river_code = substr(reach_id, 1, 6),
+         river = case_when(
+           # putting the reach id first ensures case_when won't overwrite SJ/BL labels
+           # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
+           # SWORD v17b: 81260300181", "81260300191", "81260300201", "81260300211
+           # only SJ reaches need to be adjusted here
+           reach_id %in% c("81260300061", "81260300231", "81260300241", "81260300251") ~ "SJ", 
+           reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+           river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
+           river_code == "812509" ~ "lowerYR", # past the PR confluence
+           river_code == "812705" ~ "upperYR", # Circle up
+           river_code == "812508" ~ "CD",
+           river_code == "812603" ~ "PR",
+           river_code == "812605" ~ "PR",
+           river_code == "812604" ~ "CL",
+           TRUE ~ NA_character_)) %>%
+  mutate(insitu_type = "GNSS") %>%
+  mutate(source = "RiverSP") ## CHANGE TO CORRECT VERSION!
+
+
+# csv subset
+# # RiverSP
+save_to_csv <- time_space_matched_SWOT_GNSS %>%
+  dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+                mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u,
+                slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id,
+                river_code, river, insitu_type, source) # cycle_id, pass_id
+
+# # RiverTile
+# save_to_csv <- time_space_matched_SWOT_GNSS %>%
+#   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+#                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_precision_m, drift_id, wse, wse_u,
+#                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
+#                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, p_n_nodes, SWOTFileName,
+#                 river_code, river, insitu_type, source) # SWOTFileName, p_n_nodes
+
+
+# save joined_wse_subset to csv
+# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv', row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -254,6 +308,10 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = time_utc, y = bias, color = factor(
 # fix negative slopes in SWOT & GNSS data
 time_space_matched_SWOT_GNSS$slope_abs <- abs(time_space_matched_SWOT_GNSS$slope)
 time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs <- abs(time_space_matched_SWOT_GNSS$reach_drift_slope_m_m)
+
+# remove near 0 GNSS slopes (0.1 cm/km)
+time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
+  filter(abs(reach_drift_slope_m_m) > 0.000001)
 
 # Summary stats
 
@@ -345,13 +403,9 @@ time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
 # Calculate the wse diff SWOT - GNSS (residuals)
 time_space_matched_SWOT_GNSS$slope_residuals_nobias = time_space_matched_SWOT_GNSS$reach_drift_slope_m_m_abs_nobias - time_space_matched_SWOT_GNSS$slope_abs
 
-# time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
-#   filter(abs(reach_drift_slope_m_m) > 0.000001)
-
-
 
 # Calculate the 68th percentile error
-percentile_68_error_nobias <- quantile(abs(test$slope_residuals_nobias), 0.68, na.rm=TRUE)
+percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals_nobias), 0.68, na.rm=TRUE)
 percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_GNSS$slope_residuals_nobias), 0.50, na.rm=TRUE)
 
 print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias*100000))
@@ -399,22 +453,24 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(slope_abs*100000 - reach_drift_
 
 # csv subset
 # RiverSP
-# save_to_csv <- time_space_matched_SWOT_GNSS %>%
-#   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
-#                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_m_m_abs, reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias, bias_slope, reach_drift_slope_m_m_abs_nobias, drift_id, wse, wse_u,
-#                 slope, slope_abs, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
-#                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id) # cycle_id, pass_id
-
-# RiverTile
 save_to_csv <- time_space_matched_SWOT_GNSS %>%
   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_m_m_abs, reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias, bias_slope, reach_drift_slope_m_m_abs_nobias, drift_id, wse, wse_u,
                 slope, slope_abs, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
-                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, p_n_nodes, SWOTFileName) # SWOTFileName, p_n_nodes
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id,
+                river_code, river, insitu_type, source) # cycle_id, pass_id
+
+# RiverTile
+# save_to_csv <- time_space_matched_SWOT_GNSS %>%
+#   dplyr::select(reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC, wse_drift_midpoint_UTC, wse_drift_total_time_UTC, residuals, residuals_nobias, bias, mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+#                 mean_reach_drift_wse_no_bias_m, reach_drift_slope_m_m, reach_drift_slope_m_m_abs, reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias, bias_slope, reach_drift_slope_m_m_abs_nobias, drift_id, wse, wse_u,
+#                 slope, slope_abs, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, area_det_u, area_wse, layovr_val, node_dist,
+#                 xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, p_n_nodes, SWOTFileName,
+#                 river_code, river, insitu_type, source) # SWOTFileName, p_n_nodes
 
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv', row.names = FALSE)
+# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_GNSS.csv', row.names = FALSE)
 
 
 
@@ -458,38 +514,23 @@ SWOT_versionCD_df <- bind_rows(RiverSP_df, RiverTile_df)
 
 
 # add river names to df
-RiverTile_df <- RiverTile_df %>%
+node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
   mutate(river_code = substr(reach_id, 1, 6),
-    river = case_when(
-      river_code == "812701" ~ "lower_YR",
-      river_code == "812705" ~ "upper_YR",
-      river_code == "812508" ~ "CD",
-      river_code == "812603" ~ "upper_PR",
-      river_code == "812605" ~ "upper_PR",
-      river_code == "812604" ~ "CL",
-      river_code == "812603" ~ "SJ",
-      TRUE ~ NA_character_))
-
-
-
-
-
-# Compare the same data subset from Version C & D
-RiverTile_filtered <- RiverTile_df %>%
-  semi_join(
-    RiverSP_df %>% select(reach_id, wse_drift_start_UTC, mean_reach_drift_wse_m),
-    by = c("reach_id", "wse_drift_start_UTC", "mean_reach_drift_wse_m")
-  )
-
-RiverSP_filtered <- RiverSP_df %>%
-  semi_join(
-    RiverTile_df %>% select(reach_id, wse_drift_start_UTC, mean_reach_drift_wse_m),
-    by = c("reach_id", "wse_drift_start_UTC", "mean_reach_drift_wse_m")
-  )
-# 
-# # Combine both filtered dataframes
-# SWOT_versionCD_df <- bind_rows(RiverSP_filtered, RiverTile_filtered)
-
+         river = case_when(
+           # putting the reach id first ensures case_when won't overwrite SJ/BL labels
+           # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
+           # SWORD v17b: 81260300181", "81260300191", "81260300201", "81260300211
+           # only SJ reaches need to be adjusted here
+           reach_id %in% c("81260300061", "81260300231", "81260300241", "81260300251") ~ "SJ", 
+           reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+           river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
+           river_code == "812509" ~ "lowerYR", # past the PR confluence
+           river_code == "812705" ~ "upperYR", # Circle up
+           river_code == "812508" ~ "CD",
+           river_code == "812603" ~ "PR",
+           river_code == "812605" ~ "PR",
+           river_code == "812604" ~ "CL",
+           TRUE ~ NA_character_))
 
 
 
@@ -542,35 +583,6 @@ num_non_na_rows <- sum(complete.cases(RiverSP_df$residuals_nobias))
 t.test(abs(RiverTile_df$residuals), abs(RiverSP_df$residuals))
 t.test(abs(RiverTile_df$residuals_nobias), abs(RiverSP_df$residuals_nobias))
 
-
-# # SUBSET TO SAME VERSION C/D data points
-# Calculate the 68th & 50th percentile error
-percentile_68_error <- quantile(abs(RiverSP_filtered$residuals), 0.68, na.rm=TRUE)
-percentile_50_error <- quantile(abs(RiverSP_filtered$residuals), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile <- quantile(abs(RiverTile_filtered$residuals), 0.50, na.rm=TRUE)
-
-# Calculate the 68th &50th percentile error, no bias
-percentile_68_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(RiverSP_filtered$residuals_nobias), 0.50, na.rm=TRUE)
-
-percentile_68_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_RiverTile_nobias <- quantile(abs(RiverTile_filtered$residuals_nobias), 0.50, na.rm=TRUE)
-
-# correlation test
-# cor_test <- cor.test(RiverTile_filtered$wse, RiverTile_filtered$mean_reach_drift_wse_no_bias_m) # mean_reach_drift_wse_m
-cor_test <- cor.test(RiverSP_filtered$wse, RiverSP_filtered$mean_reach_drift_wse_m)
-
-# Extract r and p-value
-r_value <- cor_test$estimate # Pearson correlation coefficient
-p_value <- cor_test$p.value # highly statistically significant is P < 0.001
-
-# Mean Absolute Error (which is just the mean residual)
-MAE <- mean(abs(RiverSP_filtered$residuals))
-MAE <- mean(abs(RiverSP_filtered$residuals_nobias), na.rm=TRUE)
-
-num_non_na_rows <- sum(complete.cases(RiverSP_filtered$residuals_nobias))
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # Plots
@@ -747,29 +759,7 @@ p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 # ---------------------------------------------------------------------------------------------------------------------------
 # Plots
 
-RiverTile_df <- RiverTile_df %>%
-  filter(abs(slope_residuals_nobias) < 15/100000)
-RiverSP_df <- RiverSP_df %>%
-  filter(abs(slope_residuals_nobias) < 15/100000)
 
-SWOT_versionCD_df <- SWOT_versionCD_df %>%
-  filter(abs(slope_residuals_nobias) < 15/100000)
-
-
-# add river names to df
-RiverTile_df <- RiverTile_df %>%
-  mutate(
-    river_code = substr(reach_id, 1, 6),
-    river = case_when(
-      river_code == "812701" ~ "lower_YR",
-      river_code == "812705" ~ "upper_YR",
-      river_code == "812508" ~ "CD",
-      river_code == "812603" ~ "upper_PR",
-      river_code == "812605" ~ "upper_PR",
-      river_code == "812604" ~ "CL",
-      TRUE ~ NA_character_
-    )
-  )
 
 # for rivers
 color_palette <- c("#D86A1A", "#F8A31B", "#00429D", "#2E7D32", "#6D398B",

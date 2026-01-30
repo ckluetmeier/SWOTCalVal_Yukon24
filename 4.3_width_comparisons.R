@@ -18,16 +18,16 @@ library(ggtext)
 node_SWOT_ortho_vC <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv') %>%
   mutate(source = "RiverSP") %>%
   filter(abs(residuals) < 1500) %>%
-  filter(dark_frac < 0.8)
+  filter(dark_frac < 0.5)
 
 node_SWOT_ortho_vD <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/node_width_SWOT_Ortho.csv') %>%
   mutate(source = "RiverTile") %>%
   filter(abs(residuals) < 1500) %>%
-  filter(dark_frac < 0.8)
+  filter(dark_frac < 0.5)
 
 # merge all dataframes together
 node_SWOT_ortho <- bind_rows(node_SWOT_ortho_vC, node_SWOT_ortho_vD) %>%
-  filter(dark_frac < 0.8)
+  filter(dark_frac < 0.5)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -117,16 +117,16 @@ ggplot(node_SWOT_ortho, aes(x = abs(residuals), color = source, linetype = sourc
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT - in situ Width (m)", y = "Cumulative Probability", 
-       title = "By Absolute Difference") +
-  annotate("text", x = 335, y = 0.71,
+  labs(x = expression("| SWOT -" ~ italic("in situ") ~ "Width | (m)"), y = "Cumulative Probability",
+       title = "By absolute difference") +
+  annotate("text", x = 240, y = 0.71, hjust = 0,
            label = paste("|68%ile| vC:", 
                          round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$residuals), 0.68, na.rm = TRUE), 1),
                          "m, vD:", 
                          round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverTile", ]$residuals), 0.68, na.rm = TRUE), 1),
                          "m"),
            color = "#222222", size = 5) +
-  annotate("text", x = 335, y = 0.53,
+  annotate("text", x = 240, y = 0.53, hjust = 0,
            label = paste("|50%ile| vC:", 
                          round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$residuals), 0.5, na.rm = TRUE), 1),
                          "m, vD:", 
@@ -135,14 +135,14 @@ ggplot(node_SWOT_ortho, aes(x = abs(residuals), color = source, linetype = sourc
            color = "#222222", size = 5) +
   # Add counts in lower right
   annotate("text", x = Inf, y = 0.08,
-           hjust = 1.1, vjust = 0,
+           hjust = 1, vjust = 0,
            label = paste0("Version C: ", 
                           n_relative_df[n_relative_df$source == "RiverSP", ]$n_unique_nodes, 
                           " unique nodes, ", 
                           n_relative_df[n_relative_df$source == "RiverSP", ]$n, " total"),
            color = "#E97132", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
-           hjust = 1.1, vjust = 0, 
+           hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
                           n_relative_df[n_relative_df$source == "RiverTile", ]$n_unique_nodes, 
                           " unique nodes, ", 
@@ -153,7 +153,7 @@ ggplot(node_SWOT_ortho, aes(x = abs(residuals), color = source, linetype = sourc
   scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 500))
-# width 610 height 550
+# width 7.17 height 6.35
 
 
 
@@ -162,16 +162,16 @@ ggplot(node_SWOT_ortho, aes(x = abs(percent_diff), color = source, linetype = so
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-  labs(x = "SWOT - in situ Width (% difference)", y = "Cumulative Probability", 
-       title = "By Percent Difference") +
-  annotate("text", x = 100, y = 0.71,
+  labs(x = expression("| SWOT -" ~ italic("in situ") ~ "Width | (% difference)"), y = "Cumulative Probability", 
+       title = "By percent difference") +
+  annotate("text", x = 70, y = 0.71, hjust = 0,
            label = paste("|68%ile| vC:", 
                          round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$percent_diff), 0.68, na.rm = TRUE), 1),
                          "%, vD:", 
                          round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverTile", ]$percent_diff), 0.68, na.rm = TRUE), 1),
                          "%"),
            color = "#222222", size = 5) +
-  annotate("text", x = 100, y = 0.53,
+  annotate("text", x = 70, y = 0.53, hjust = 0,
            label = paste("|50%ile| vC:", 
                          round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$percent_diff), 0.5, na.rm = TRUE), 1),
                          "%, vD:", 
@@ -180,14 +180,14 @@ ggplot(node_SWOT_ortho, aes(x = abs(percent_diff), color = source, linetype = so
            color = "#222222", size = 5) +
   # Add counts in lower right
   annotate("text", x = Inf, y = 0.08,
-           hjust = 1.1, vjust = 0,
+           hjust = 1, vjust = 0,
            label = paste0("Version C: ", 
                           n_relative_df[n_relative_df$source == "RiverSP", ]$n_unique_nodes, 
                           " unique nodes, ", 
                           n_relative_df[n_relative_df$source == "RiverSP", ]$n, " total"),
            color = "#E97132", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
-           hjust = 1.1, vjust = 0, 
+           hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
                           n_relative_df[n_relative_df$source == "RiverTile", ]$n_unique_nodes, 
                           " unique nodes, ", 
