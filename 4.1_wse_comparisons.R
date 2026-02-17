@@ -89,7 +89,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
     error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
     MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
-    bias = round(median(bias, na.rm = TRUE)*100, 2),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
@@ -99,7 +99,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
 cor_table <- node_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),4),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -111,18 +111,18 @@ table_relative_node_WSE <- table_relative_node_WSE %>%
 # ft <- flextable(table_relative_node_WSE)
 # save_as_docx(ft, path = "my_table.docx")
 
+# BAR CHART of OBS COUNT
+
 # relabel and reorder
 table_relative_node_WSE <- table_relative_node_WSE %>%
   mutate(source = factor(source,
-                         levels = c("RiverTile", "RiverSP"),   # swapped order
-                         labels = c("vD0", "vC0")))            # relabels
+                         levels = c("RiverTile", "RiverSP"),  
+                         labels = c("vD0", "vC0")))
 
 # bar chart of count of residuals_nobias by version
 ggplot(table_relative_node_WSE, aes(x = source, y = n, fill = source)) +
   geom_col(width = 0.9) +
-  geom_text(aes(label = n),
-            vjust = -0.5,
-            size = 8) +
+  geom_text(aes(label = n), vjust = -0.5, size = 8) +
   ylab("Count") +
   coord_cartesian(ylim = c(2000, 7150)) +
   scale_fill_manual(values = c("vC0" = "#E97132",
@@ -142,7 +142,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
     error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
     MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
-    bias = round(median(bias, na.rm = TRUE)*100, 2),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
@@ -152,29 +152,29 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
 cor_table <- node_SWOT_full_insitu %>%
   group_by(version_inclusion) %>%
   summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),4),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
 # Join everything to one table
 table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = "version_inclusion")
+  left_join(cor_table, by = "version_inclusion") %>%
+  filter(version_inclusion != 0) %>% # drop 0, which are obs in both C&D
+  mutate(version_inclusion = factor(version_inclusion, labels = c("vC0", "vD0")))
 
 
-# SAME SUBSET
+# SAME SUBSET OF NODES FOR vC & vD
 same_version_subset_node_SWOT_insitu <- node_SWOT_full_insitu %>%
   filter(version_inclusion == 0) %>%                            # keep only reaches present in both versions
   group_by(node_id, insitu_time_utc, insitu_type) %>%
   filter(all(c("RiverSP", "RiverTile") %in% source)) %>%        # require both sources initially
   mutate(
     RiverSP_resid_na   = any(source == "RiverSP"   & is.na(residuals_nobias)),
-    RiverTile_resid_na = any(source == "RiverTile" & is.na(residuals_nobias))
-  ) %>%
+    RiverTile_resid_na = any(source == "RiverTile" & is.na(residuals_nobias))) %>%
   # drop the partner row when the counterpart has NA residuals_nobias
   filter(
     !(source == "RiverTile" & RiverSP_resid_na),
-    !(source == "RiverSP"   & RiverTile_resid_na)
-  ) %>%
+    !(source == "RiverSP"   & RiverTile_resid_na)) %>%
   # after removals, keep only triples that still contain both sources
   filter(all(c("RiverSP", "RiverTile") %in% source)) %>%
   ungroup() %>%
@@ -187,16 +187,23 @@ table_relative_node_WSE <- same_version_subset_node_SWOT_insitu %>%
     error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
     error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
     MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
-    bias = round(median(bias, na.rm = TRUE)*100, 2),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
     n_unique_nodes = n_distinct(node_id))
 
+# Add correlations
+cor_table <- same_version_subset_node_SWOT_insitu %>%
+  group_by(source) %>%
+  summarise(
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
+    p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
+    .groups = "drop")
 
-
-
-
+# Join everything to one table
+table_relative_node_WSE <- table_relative_node_WSE %>%
+  left_join(cor_table, by = "source")
 
 
 
@@ -210,8 +217,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
     error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
     MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
-    bias = round(median(bias, na.rm = TRUE)*100, 2),
-    
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
@@ -221,7 +227,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
 cor_table <- node_SWOT_full_insitu %>%
   group_by(insitu_type, source) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -229,32 +235,39 @@ cor_table <- node_SWOT_full_insitu %>%
 table_relative_node_WSE <- table_relative_node_WSE %>%
   left_join(cor_table, by = c("insitu_type", "source"))
 
+
 # RELATIVE NODE WSE TABLE BY RIVER
 # -----------------------------------------------------
+# for vD PT data
+
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
+  filter(source == "RiverTile") %>%
+  filter(insitu_type == "PT") %>%
+  mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river)) %>%
   group_by(river, insitu_type) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals_nobias), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals_nobias), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals_nobias), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
-    
     # count of unique nodes
     n_unique_nodes = n_distinct(node_id))
 
 # Add correlations
 cor_table <- node_SWOT_full_insitu %>%
-  group_by(river, insitu_type) %>%
+  group_by(river) %>%
+  mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR", TRUE ~ river)) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
 # Join everything to one table
 table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = c("river", "insitu_type"))
+  left_join(cor_table, by = c("river"))
 
 # ABSOLUTE WSE TABLE BY VERSION
 # -----------------------------------------------------
@@ -262,9 +275,9 @@ table_absolute_node_WSE <- node_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals)*100, na.rm = TRUE), 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals)),
     # count of unique nodes
@@ -274,7 +287,7 @@ table_absolute_node_WSE <- node_SWOT_full_insitu %>%
 cor_table <- node_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -285,12 +298,12 @@ table_absolute_node_WSE <- table_absolute_node_WSE %>%
 # ABSOLUTE WSE TABLE BY GNSS/PT
 # -----------------------------------------------------
 table_absolute_node_WSE <- node_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals)*100, na.rm = TRUE), 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals)),
     # count of unique nodes
@@ -298,15 +311,15 @@ table_absolute_node_WSE <- node_SWOT_full_insitu %>%
 
 # Add correlations
 cor_table <- node_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
 # Join everything to one table
 table_absolute_node_WSE <- table_absolute_node_WSE %>%
-  left_join(cor_table, by = "insitu_type")
+  left_join(cor_table, by = c("source", "insitu_type"))
 
 
 
@@ -507,9 +520,10 @@ table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals_nobias), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals_nobias), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals_nobias), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
@@ -519,7 +533,7 @@ table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -559,23 +573,26 @@ table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
     error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
     MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
-    bias = round(median(bias, na.rm = TRUE)*100, 2),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
     n_unique_reaches = n_distinct(reach_id))
 
-# # Add correlations
-# cor_table <- reach_SWOT_full_insitu %>%
-#   group_by(version_inclusion) %>%
-#   summarise(
-#     r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),4),
-#     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
-#     .groups = "drop")
-# 
-# # Join everything to one table
-# table_relative_reach_WSE <- table_relative_reach_WSE %>%
-#   left_join(cor_table, by = "version_inclusion")
+cor_table <- reach_SWOT_full_insitu %>%
+  group_by(version_inclusion) %>%
+  summarise(n = sum(complete.cases(wse, insitu_wse_nobias_m)),
+    r_value = if (n > 1) {round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4)} else {
+      NA_real_}, 
+    p_value = if (n > 1) {cor.test(wse, insitu_wse_nobias_m,
+               method = "pearson")$p.value} else {NA_real_},
+    .groups = "drop")
+
+# Join everything to one table
+table_relative_reach_WSE <- table_relative_reach_WSE %>%
+  left_join(cor_table, by = "version_inclusion") %>%
+  filter(version_inclusion != 0) %>% # drop 0, which are obs in both C&D
+  mutate(version_inclusion = factor(version_inclusion, labels = c("vC0", "vD0")))
 
 # SAME SUBSET
 same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
@@ -596,7 +613,15 @@ same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
   ungroup() %>%
   select(-RiverSP_resid_na, -RiverTile_resid_na)
 
-table_relative_node_WSE <- same_version_subset_reach_SWOT_insitu %>%
+# Add correlations
+cor_table <- same_version_subset_reach_SWOT_insitu %>%
+  group_by(source) %>%
+  summarise(
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
+    p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
+    .groups = "drop")
+
+table_relative_reach_WSE <- same_version_subset_reach_SWOT_insitu %>%
   group_by(source) %>%
   summarise(
     error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
@@ -607,6 +632,10 @@ table_relative_node_WSE <- same_version_subset_reach_SWOT_insitu %>%
     n_unique_reaches = n_distinct(reach_id),
     .groups = "drop")
 
+# Join everything to one table
+table_relative_reach_WSE <- table_relative_reach_WSE %>%
+  left_join(cor_table, by = c("source"))
+
 
 
 # RELATIVE REACH WSE TABLE BY GNSS/PT
@@ -615,22 +644,20 @@ table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
   group_by(insitu_type, source) %>%
   summarise(
     # error metrics (use all data)
-    error_68ile = quantile(abs(residuals_nobias), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals_nobias), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals_nobias), na.rm = TRUE),
-    bias = round(median(bias, na.rm = TRUE)*100, 2),
-    
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
-    
     # count of unique nodes
-    n_unique_nodes = n_distinct(reach_id))
+    n_unique_reaches = n_distinct(reach_id))
 
 # Add correlations
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(insitu_type, source) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -645,25 +672,26 @@ table_relative_reach_WSE <- table_relative_reach_WSE %>%
 # RELATIVE REACH WSE TABLE BY RIVER
 # -----------------------------------------------------
 table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
+  filter(source == "RiverTile") %>%
+  filter(insitu_type == "PT") %>%
+  mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river)) %>%
   group_by(river) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals_nobias), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals_nobias), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals_nobias), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals_nobias)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals_nobias)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias)*100, na.rm = TRUE), 1),
+    bias = round(median(bias, na.rm = TRUE)*100, 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals_nobias)),
-    
-    # !!!!!!!!!!!!!! how to quantify count when this will vary from vC to vD
-    # right now I'm taking RiverTile which has more unique obs
-    # count of unique nodes
-    n_unique_reaches = n_distinct(reach_id[source == "RiverTile"]))
+    # count of unique reaches
+    n_unique_reaches = n_distinct(reach_id))
 
 # Add correlations
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(river) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_nobias_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -677,9 +705,9 @@ table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals)*100, na.rm = TRUE), 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals)),
     # count of unique nodes
@@ -689,7 +717,7 @@ table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -700,12 +728,12 @@ table_absolute_reach_WSE <- table_absolute_reach_WSE %>%
 # ABSOLUTE WSE TABLE BY GNSS/PT
 # -----------------------------------------------------
 table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(residuals), 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(residuals), 0.50, na.rm = TRUE),
-    MAE = mean(abs(residuals), na.rm = TRUE),
+    error_68ile = round(quantile(abs(residuals)*100, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(residuals)*100, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals)*100, na.rm = TRUE), 1),
     # count of non-NA residuals
     n = sum(!is.na(residuals)),
     # count of unique nodes
@@ -713,15 +741,15 @@ table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
 
 # Add correlations
 cor_table <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
-    r_value = cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(wse, insitu_wse_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
 # Join everything to one table
 table_absolute_reach_WSE <- table_absolute_reach_WSE %>%
-  left_join(cor_table, by = "insitu_type")
+  left_join(cor_table, by = c("source", "insitu_type"))
 
 
 # ---------------------------------------------------------------------------------------------------------------------------

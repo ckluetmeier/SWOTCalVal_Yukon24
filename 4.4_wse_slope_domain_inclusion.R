@@ -150,11 +150,6 @@ st_write(all_YR_domain_nodes_sf_subset,
 
 
 
-
-
-
-
-
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in data
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -306,10 +301,47 @@ st_write(all_YR_domain_reaches_sf_subset,
 
 
 
+# ---------------------------------------------------------------------------------------------------------------------------
+# Table 1
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+# Bring in SWORD shapefile
+sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
+
+
+sword_subset <- sword_sf %>%
+  filter(reach_id %in% YR_domain$reach_id) %>%
+  distinct(reach_id, .keep_all = TRUE)
+
+
+cat("Total km of river:", sum(sword_subset$reach_len) / 1000, "km\n")
 
 
 
+# add river names to df
+sword_subset <- sword_subset %>%
+  mutate(river_code = substr(reach_id, 1, 6),
+         river = case_when(
+           reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ", 
+           reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+           river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
+           river_code == "812509" ~ "lowerYR", # past the PR confluence
+           river_code == "812705" ~ "upperYR", # Circle up
+           river_code == "812508" ~ "CD",
+           river_code == "812603" ~ "PR",
+           river_code == "812605" ~ "PR",
+           river_code == "812604" ~ "CL",
+           TRUE ~ NA_character_))
 
+
+river_stats <- sword_subset %>%
+  group_by(river) %>%
+  summarise(total_km = sum(reach_len, na.rm = TRUE) / 1000,
+            median_width = median(width),
+            median_slope = median(slope)*100,
+            n_distinct(reach_id)
+            )
 
 
 

@@ -76,9 +76,10 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE),
-    MAE = mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE),
+    error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
+    bias = round(median(bias, na.rm = TRUE)*100000, 1),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
     # count of unique nodes
@@ -88,7 +89,7 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -119,42 +120,45 @@ ggplot(table_relative_reach_slope, aes(x = source, y = n, fill = source)) +
 # RELATIVE REACH SLOPE TABLE BY GNSS/PT
 # -----------------------------------------------------
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
-    # error metrics (use all data)
-    error_68ile = quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE),
-    MAE = mean(abs(slope_residuals_nobias), na.rm = TRUE)*100000,
-    
+    # error metrics
+    error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
+    bias = round(median(bias, na.rm = TRUE)*100000, 1),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
-    
     # count of unique nodes
     n_unique_reaches = n_distinct(reach_id)
   )
 
 # Add correlations
 cor_table <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
-    r_value = cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
 # Join everything to one table
 table_relative_reach_slope <- table_relative_reach_slope %>%
-  left_join(cor_table, by = "insitu_type")
+  left_join(cor_table, by = c("source", "insitu_type"))
 
 
 # RELATIVE REACH WSE TABLE BY RIVER
 # -----------------------------------------------------
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
+  filter(source == "RiverTile") %>%
+  filter(insitu_type == "PT") %>%
+  mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river)) %>%
   group_by(river) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE),
-    MAE = mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE),
+    error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
+    bias = round(median(bias, na.rm = TRUE)*100000, 1),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
     # count of unique nodes
@@ -164,7 +168,7 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(river) %>%
   summarise(
-    r_value = cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -179,9 +183,9 @@ table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(slope_residuals)*100000, 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(slope_residuals)*100000, 0.50, na.rm = TRUE),
-    MAE = mean(abs(slope_residuals)*100000, na.rm = TRUE),
+    error_68ile = round(quantile(abs(slope_residuals)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals)*100000, na.rm = TRUE), 2),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals)),
     # count of unique nodes
@@ -191,7 +195,7 @@ table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
-    r_value = cor(slope_abs, insitu_slope_m_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(slope_abs, insitu_slope_m_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(slope_abs, insitu_slope_m_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
@@ -202,12 +206,12 @@ table_absolute_reach_slope <- table_absolute_reach_slope %>%
 # ABSOLUTE WSE TABLE BY GNSS/PT
 # -----------------------------------------------------
 table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
+  group_by(source, insitu_type) %>%
   summarise(
     # error metrics
-    error_68ile = quantile(abs(slope_residuals)*100000, 0.68, na.rm = TRUE),
-    error_50ile = quantile(abs(slope_residuals)*100000, 0.50, na.rm = TRUE),
-    MAE = mean(abs(slope_residuals)*100000, na.rm = TRUE),
+    error_68ile = round(quantile(abs(slope_residuals)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals)*100000, na.rm = TRUE), 2),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals)),
     # count of unique nodes
@@ -217,13 +221,114 @@ table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
 cor_table <- reach_SWOT_full_insitu %>%
   group_by(insitu_type) %>%
   summarise(
-    r_value = cor(slope_abs, insitu_slope_m_m, use = "complete.obs", method = "pearson"),
+    r_value = round(cor(slope_abs, insitu_slope_m_m, use = "complete.obs", method = "pearson"), 4),
     p_value = tryCatch(cor.test(slope_abs, insitu_slope_m_m)$p.value, error = function(e) NA_real_),
     .groups = "drop")
 
 # Join everything to one table
 table_absolute_reach_slope <- table_absolute_reach_slope %>%
   left_join(cor_table, by = "insitu_type")
+
+
+
+
+
+# RELATIVE REACH WSE TABLE BY VERSION INCLUSION
+# -----------------------------------------------------
+
+# REACHES UNIQUE TO vC & vD
+table_relative_reach_slope <- reach_SWOT_full_insitu %>%
+  group_by(version_inclusion) %>%
+  summarise(
+    # error metrics
+    error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
+    bias = round(median(bias, na.rm = TRUE)*100000, 2),
+    # count of non-NA residuals
+    n = sum(!is.na(slope_residuals_nobias)),
+    # count of unique nodes
+    n_unique_reaches = n_distinct(reach_id))
+
+cor_table <- reach_SWOT_full_insitu %>%
+  group_by(version_inclusion) %>%
+  summarise(n = sum(complete.cases(slope_abs, insitu_slope_nobias_m_m)),
+            r_value = if (n > 1) {round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4)} else {
+              NA_real_}, 
+            p_value = if (n > 1) {cor.test(slope_abs, insitu_slope_nobias_m_m,
+                                           method = "pearson")$p.value} else {NA_real_},
+            .groups = "drop") %>%
+  select(-n)
+
+
+# Join everything to one table
+table_relative_reach_slope <- table_relative_reach_slope %>%
+  left_join(cor_table, by = "version_inclusion") %>%
+  filter(version_inclusion != 0) %>% # drop 0, which are obs in both C&D
+  mutate(version_inclusion = factor(version_inclusion, labels = c("vC0", "vD0")))
+
+# SAME SUBSET
+same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
+  filter(version_inclusion == 0) %>%                            # keep only reaches present in both versions
+  group_by(reach_id, insitu_time_utc, insitu_type) %>%
+  filter(all(c("RiverSP", "RiverTile") %in% source)) %>%        # require both sources initially
+  mutate(
+    RiverSP_resid_na   = any(source == "RiverSP"   & is.na(slope_residuals_nobias)),
+    RiverTile_resid_na = any(source == "RiverTile" & is.na(slope_residuals_nobias))
+  ) %>%
+  # drop the partner row when the counterpart has NA slope_residuals_nobias
+  filter(
+    !(source == "RiverTile" & RiverSP_resid_na),
+    !(source == "RiverSP"   & RiverTile_resid_na)
+  ) %>%
+  # after removals, keep only triples that still contain both sources
+  filter(all(c("RiverSP", "RiverTile") %in% source)) %>%
+  ungroup() %>%
+  select(-RiverSP_resid_na, -RiverTile_resid_na)
+
+# Add correlations
+cor_table <- same_version_subset_reach_SWOT_insitu %>%
+  group_by(source) %>%
+  summarise(
+    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
+    p_value = tryCatch(cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value, error = function(e) NA_real_),
+    .groups = "drop")
+
+table_relative_reach_slope <- same_version_subset_reach_SWOT_insitu %>%
+  group_by(source) %>%
+  summarise(
+    error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+    error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
+    MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
+    bias = round(median(bias, na.rm = TRUE)*100000, 2),
+    n = sum(!is.na(slope_residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
+    .groups = "drop")
+
+# Join everything to one table
+table_relative_reach_slope <- table_relative_reach_slope %>%
+  left_join(cor_table, by = c("source"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
