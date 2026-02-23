@@ -1219,3 +1219,28 @@ reach_SWOT_GNSS_vD <- reach_SWOT_GNSS_vD %>%
 # save to CSV
 # write.csv(reach_SWOT_GNSS_vD, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_SWOT_GNSS.csv', row.names = FALSE)
 
+
+
+
+
+# 2024-07-20 -- lots of stuff filtered out
+# 2024-08-10 -- bottom reach, not middle reach
+
+
+GNSS_PR <- node_SWOT_GNSS_vC %>%
+  filter(river == 'PR') %>%
+  filter(lat > 66.95) %>%
+  filter(lat < 67.15) %>%
+  filter(as.Date(time_UTC) == as.Date("2024-08-10"))
+
+
+# plot SWOT vs PT timeseries 2023
+ggplot() +
+  geom_point(node_SWOT_GNSS_PR, mapping=aes(y=wse, x=p_dist_out/100000), color="#1f78b4", size=6) +
+  geom_point(node_SWOT_GNSS_PR, mapping=aes(y=mean_node_drift_wse_no_bias_m, x=p_dist_out/100000), color="#ED973D", size=2) +
+  
+  theme_minimal(base_size = 30)
+
+
+write.csv(node_SWOT_GNSS_PR, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/3_SWOT_examples/data/GNSS_2024-08-20.csv', row.names = FALSE)
+

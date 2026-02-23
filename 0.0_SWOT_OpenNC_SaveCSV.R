@@ -10,7 +10,7 @@ library(ncdf4)
 # -------------------------------------------------------------------------------------------
 
 # Set working directory
-wd = ("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVecRiver_v16")
+wd = ("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/3_SWOT_examples/data/PIXC")
 setwd(wd)
 
 # -------------------------------------------------------------------------------------------
@@ -137,20 +137,20 @@ for (j in file_list){
   
   # Quality filtering
   # Optional filters to add!
-  # SWOT_Points <- SWOT_Points %>%
-  #   # phase unwrapping error flags
-  #   filter(!geolocqual %in% c(
-  #     4, 4101, 5, 6, 4100, 4102, 524292, 524293,
-  #     524294, 524295, 528389, 528390, 7, 528388,
-  #     16777220, 17301508, 17305604, 528391, 4103
-  #   )) %>%
-  #   # water near land, water, dark water
-  #   filter(class %in% c(
-  #     3, 4, 5
-  #   )) %>%
-  #   # Cross track between 10-60km
-  #   filter(abs(crosstrack) >= 10000) %>%
-  #   filter(abs(crosstrack) <= 60000)
+  SWOT_Points <- SWOT_Points %>%
+    # phase unwrapping error flags
+    filter(!geolocqual %in% c(
+      4, 4101, 5, 6, 4100, 4102, 524292, 524293,
+      524294, 524295, 528389, 528390, 7, 528388,
+      16777220, 17301508, 17305604, 528391, 4103
+    )) %>%
+    # water near land, water, dark water
+    filter(class %in% c(
+      3, 4, 5
+    )) %>%
+    # Cross track between 10-60km
+    filter(abs(crosstrack) >= 10000) %>%
+    filter(abs(crosstrack) <= 60000)
   
   #Checks to make sure dimensions look good
   print(dim(SWOT_Points))
