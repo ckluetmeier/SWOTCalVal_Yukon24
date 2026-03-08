@@ -922,6 +922,31 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = abs(residuals_nobias)*100, fill = riv
 # 9.44, 6.01
 # **********************************
 
+# Replot
+ggplot(node_SWOT_PT_vD, aes(x = river, y = bias*100, fill = river)) + 
+  geom_violin(alpha = 0.8, color = NA) +
+  xlab("River") +
+  ylab("| SWOT - PT WSE | (cm)") +
+  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+  # add counts below each violin
+  geom_text(data = counts,
+            aes(x = river, y = -1, label = paste0("n=", n)),
+            inherit.aes = FALSE,
+            vjust = 1, size = 6) +
+  theme_minimal(base_size = 25) +
+  scale_fill_manual(
+    values = color_palette,
+    breaks = c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR"),
+    labels = c("Coleen", "Sheenjek", "Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
+  scale_x_discrete(
+    breaks = c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR"),
+    labels = c("Coleen", "Sheenjek", "Chandalar", "Porcupine", "Single-channel Yukon", "Braided Yukon")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 20, hjust = 0.9),
+        # give a little extra bottom margin so the -1 labels aren't cut off
+        plot.margin = margin(t = 5, r = 5, b = 20, l = 5)) +
+  coord_cartesian(ylim = c(-25, 50))
+
 
 
 

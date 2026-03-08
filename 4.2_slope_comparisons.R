@@ -444,3 +444,36 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color
 # width 7.17 height 6.35
 
 
+
+
+problems <- reach_SWOT_PT_vD %>%
+  filter(river == "PR") %>%
+  filter(slope_residuals_nobias*100000 > 3)
+  
+  
+  filter(reach_id != '81270100061')
+
+
+# Calculate the 68th percentile error
+percentile_68_error <- quantile(abs(problems$slope_residuals_nobias), 0.68, na.rm=TRUE)
+percentile_50_error <- quantile(abs(problems$slope_residuals_nobias), 0.50, na.rm=TRUE)
+
+#print the result
+print(paste("68th Percentile Error:", percentile_68_error*100000))
+print(paste("50th Percentile Error:", percentile_50_error*100000))
+
+
+color_palette <- c("#D86A1A", "#6D398B",  "#F8A31B", "#00429D", "#2E7D32",
+                   "#C83232", "#008F7A", "#E3A700", "#124000")
+
+# plot SWOT vs PT wse
+ggplot(reach_SWOT_PT_vD, aes(x = n_good_nod, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("slope") +
+  ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+
+
+# slope_m_m_abs

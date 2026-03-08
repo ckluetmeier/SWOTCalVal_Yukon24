@@ -542,15 +542,15 @@ ggplot() +
   geom_point(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = wse, color = wse), size = 4) +
   scale_color_gradient(low = "#2474b7", high = "#d3e3f3") +
   geom_point(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m),
-    color = "#404A22", size = 1) +
+    color = "orange", size = 1) +
   geom_line(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m, group = 1),
-    color = "#404A22", linewidth = 0.7) +
+    color = "orange", linewidth = 0.7) +
   # Upper bound line
   geom_line(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m + node_total_error_m, group = 1),
-    color = "#404A22", alpha = 0.3, linewidth = 2) +
+    color = "orange", alpha = 0.3, linewidth = 2) +
    # Lower bound line
   geom_line(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m - node_total_error_m, group = 1),
-    color = "#404A22", alpha = 0.3, linewidth = 2) +
+    color = "orange", alpha = 0.3, linewidth = 2) +
   guides(color = "none") +
   # ggtitle("GNSS") +
   xlab("Distance to river outlet (km)") +
