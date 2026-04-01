@@ -346,7 +346,7 @@ n_relative_df <- reach_SWOT_full_insitu %>%
   summarise(n_unique_reaches = n_distinct(reach_id), # count of non-NA residuals
             n = sum(!is.na(slope_residuals_nobias)), .groups = "drop") # count of unique reaches
 
-# CDF plot (fixed cm placement)
+# CDF plot 
 ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color = source, linetype = source)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
