@@ -10,7 +10,10 @@ library(dplyr)
 # read in SWOT data
 
 # RiverSP
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+# Version C
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+# Version D
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
 
 # RiverTile
 # SWORD v16
@@ -41,9 +44,9 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # read in & prep GNSS data
 
 # SWORD v16
-GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_node_wses.csv')
+# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v16/YR_drift_node_wses.csv')
 # SWORD v17b
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv')
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv')
 
 GNSS_df$time_UTC <- as.POSIXct(GNSS_df$time_UTC, tz = "UTC")
 
@@ -231,14 +234,14 @@ node_SWOT_GNSS_vD <- time_space_matched_SWOT_GNSS %>%
   mutate(source = "RiverTile")
 
 # add river names to df
-node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
+node_SWOT_GNSS_vD <- node_SWOT_GNSS_vD %>%
   mutate(river_code = substr(reach_id, 1, 6),
          river = case_when(
            # putting the reach id first ensures case_when won't overwrite SJ/BL labels
            # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
            # SWORD v17b: 81260300181", "81260300191", "81260300201", "81260300211
            # only SJ reaches need to be adjusted here
-           reach_id %in% c("81260300061", "81260300231", "81260300241", "81260300251") ~ "SJ", 
+           reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ", 
            reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
            river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
            river_code == "812509" ~ "lowerYR", # past the PR confluence
@@ -263,14 +266,14 @@ node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
 #                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon, source, river_code, river)
 
 # SWOT version C
-save_to_csv <- node_SWOT_GNSS_vC %>%
+save_to_csv <- node_SWOT_GNSS_vD %>%
   dplyr::select(time_utc,time_UTC, residuals, residuals_nobias, bias, wse, wse_u,
                 mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
                 width, width_u, node_id, reach_id, p_dist_out,
                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, cycle_id, pass_id, lat, lon, source, river_code, river)
 
 # save joined_wse_subset to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/node_SWOT_GNSS_3mdiff.csv', row.names = FALSE)
 
 
 # Calculating the linear regression model 

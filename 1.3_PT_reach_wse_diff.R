@@ -11,12 +11,14 @@ library(dplyr)
 # read in & filter SWOT data
 # RiverSP
 # SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+# SWORD v17b
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v17b/RiverSP_domain_reach_timeseries_PGD0_v17b.csv')
 
 # RiverTile
 # SWORD v16
 # SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v16/RiverTile_domain_reach_timeseries_v16.csv')
 # SWORD v17b
-SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverTile_v17b/RiverTile_domain_reach_timeseries_v17b.csv')
 
 # get ride of possible duplicates from hydrocron pull
 SWOT_reach_df_noduplicates <- SWOT_reach_df %>%
@@ -238,11 +240,11 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 mean_reach_pt_wse_m, pt_wse_nobias_m, flaglist, sorted_nodelist, Number_of_nodes,
                 slope, slope_u, slope_r_u, width, width_u, area_total, area_tot_u, area_detct, 
                 area_det_u, area_wse, layovr_val, node_dist,
-                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, SWOTFileName, p_n_nodes,
+                xtrk_dist, reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q, p_dist_out, p_lat, p_lon, cycle_id, pass_id,
                 source, river_code, river, insitu_type) #SWOTFileName, p_n_nodes OR #cycle_id, pass_id
 
 # save to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_PT.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_wse_SWOT_PT.csv', row.names = FALSE)
 
 
 # correlation test

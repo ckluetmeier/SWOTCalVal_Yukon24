@@ -12,12 +12,15 @@ library(dplyr)
 # read in & prep PT data
 # match PT & SWOT observations in time and space
 # all clusters comparison
-# Compare PT wse & SWOT riverSP (version C) vs RiverTile (version D) node wse
+# Compare PT wse & SWOT Version C (RiverSP) vs Version D (RiverSP, RiverTile) node wse
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
 # version C: RiverSP
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_nodes_merged_RiverSP.csv')
+
+# version D: RiverSP
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
 
 # version D: RiverTile
 # SWORD v17b
@@ -50,9 +53,9 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 
 # Set working directory to the folder chucked by separate rivers and PT clusters
 # SWORD v17b
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/SJ"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/lower_PR"
 # SWORD v16
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/SJ"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v16/SJ"
 setwd(wd)
 
 # Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
@@ -235,8 +238,8 @@ time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT %>%
 time_space_matched_SWOT_PT$residuals_nobias = time_space_matched_SWOT_PT$pt_wse_nobias_m - time_space_matched_SWOT_PT$wse
 
 # Calculate the 68th percentile error
-percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_nobias), 0.68, na.rm=TRUE)
-percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_nobias), 0.50, na.rm=TRUE)
+# percentile_68_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_nobias), 0.68, na.rm=TRUE)
+# percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT$residuals_nobias), 0.50, na.rm=TRUE)
 
 #print the result
 # print(paste("68th Percentile Error Without Bias:", percentile_68_error_nobias))
@@ -250,7 +253,7 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
                 node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q, lat, lon)
 
 # save joined_wse_subset to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/RiverSP_v16_time_space_matched_SWOT_PT_SJ.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/RiverSP_v17b_time_space_matched_SWOT_PT_lowerPR.csv', row.names = FALSE)
 
 # # correlation test
 # cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
@@ -294,7 +297,8 @@ save_to_csv <- time_space_matched_SWOT_PT %>%
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # Set working directory to CalVal_dataframes directory where the time&space matched SWOT/PT clusters are for each SWOT version
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b"
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v16"
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b"
 setwd(wd)
@@ -326,13 +330,13 @@ combined_time_space_matched_SWOT_PT_df <- bind_rows(data_list)
 
 # Create a source column to identify which dataset each row comes from
 RiverSP_df <- combined_time_space_matched_SWOT_PT_df %>%
-  mutate(source = "RiverSP")
+  mutate(source = "RiverSP_PGD0")
 
 # RiverTile_df <- combined_time_space_matched_RiverTile_PT_df %>%
 #   mutate(source = "RiverTile")
 
 # save dfs to csv
-write.csv(RiverSP_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_PT.csv', row.names = FALSE)
+write.csv(RiverSP_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/node_SWOT_PT.csv', row.names = FALSE)
 
 
 
