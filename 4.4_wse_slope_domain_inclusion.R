@@ -516,18 +516,13 @@ st_write(all_YR_domain_reaches_sf_subset,
 # Figure 3
 # ---------------------------------------------------------------------------------------------------------------------------
 
-# GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv')
-
 GNSS_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/3_SWOT_examples/data/GNSS_2024-08-20.csv")
 
 
 GNSS_PR <- GNSS_df %>%
   filter(p_dist_out > 2138400) %>%
   filter(p_dist_out < 2152139)
-  
-  
-  # filter(lat > 66.95) %>%
-  # filter(lat < 67.15) 
+
 
 GNSS_PR_oneday <- GNSS_PR %>%
   filter(as.Date(time_UTC) == as.Date("2024-08-20"))
@@ -542,15 +537,15 @@ ggplot() +
   geom_point(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = wse, color = wse), size = 4) +
   scale_color_gradient(low = "#2474b7", high = "#d3e3f3") +
   geom_point(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m),
-    color = "orange", size = 1) +
+    color = "#CC79A7", size = 1) +
   geom_line(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m, group = 1),
-    color = "orange", linewidth = 0.7) +
+    color = "#CC79A7", linewidth = 0.7) +
   # Upper bound line
   geom_line(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m + node_total_error_m, group = 1),
-    color = "orange", alpha = 0.3, linewidth = 2) +
+    color = "#CC79A7", alpha = 0.3, linewidth = 2) +
    # Lower bound line
   geom_line(data = GNSS_PR_oneday, aes(x = p_dist_out/1000, y = mean_node_drift_wse_no_bias_m - node_total_error_m, group = 1),
-    color = "orange", alpha = 0.3, linewidth = 2) +
+    color = "#CC79A7", alpha = 0.3, linewidth = 2) +
   guides(color = "none") +
   # ggtitle("GNSS") +
   xlab("Distance to river outlet (km)") +
@@ -575,14 +570,15 @@ ggplot() +
   geom_errorbar(data = PT_df, aes(x = pt_time_UTC,
       ymin = pt_wse_m - pt_correction_mean_total_error_m - 0.1098754,
       ymax = pt_wse_m + pt_correction_mean_total_error_m - 0.1098754),
-    color = "#c09da6", linewidth = 5,) +
-  geom_point(PT_df, mapping=aes(y=pt_wse_m - 0.1098754, x=pt_time_UTC), color="#c03f61", size=1.2) +
+    color = "#99D8C9", linewidth = 5, alpha=0.4) +
+  geom_point(PT_df, mapping=aes(y=pt_wse_m - 0.1098754, x=pt_time_UTC), color="#009E73", size=1.2) +
   # geom_errorbar(data = node_SWOT_PT_vD, mapping = aes(x = time_utc, ymin = wse - wse_u, ymax = wse + wse_u),
   #               linewidth = 1, width = 0) +
-  geom_point(node_SWOT_PT_vD, mapping=aes(y=wse, x=time_utc), color="#2474b7", size=5.5) +
+  geom_point(node_SWOT_PT_vD, mapping=aes(y=wse, x=time_utc), shape = 21, fill="#2474b7", color = "black", stroke =1.6, size=5.5) +
   # ggtitle("PT") + 
   xlab("Time") + ylab("WSE (m)") +
   theme_minimal(base_size = 30) 
+
 
 
 node_SWOT_ortho <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv') %>%
@@ -595,7 +591,7 @@ node_SWOT_ortho <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Y
 
 # plot widths along dist_out
 ggplot(node_SWOT_ortho) +
-  geom_point(aes(x = p_dist_out/1000, y = ortho_width_m), color = "black", size = 2.5, shape = 17, alpha = 0.7) +
+  geom_point(aes(x = p_dist_out/1000, y = ortho_width_m), color = "#E69F00", size = 2.5, shape = 17, alpha = 0.7) +
   geom_point(aes(x = p_dist_out/1000, y = width),  color = "#2474b7", size = 2.5) +
   xlab("Distance to river outlet (km)") +
   ylab("Width (m)") +

@@ -129,8 +129,8 @@ ggplot(table_relative_node_WSE, aes(x = source, y = n, fill = source)) +
   geom_text(aes(label = n), vjust = -0.5, size = 8) +
   ylab("Count") +
   coord_cartesian(ylim = c(2000, 7150)) +
-  scale_fill_manual(values = c("vC0" = "#E97132",
-                               "vD0" = "darkblue")) +
+  scale_fill_manual(values = c("vC0" = "#E69F00",
+                               "vD0" = "#0072B2")) +
   theme_classic(base_size = 34) +
   theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none")
 # 3.16, 6.54
@@ -368,16 +368,16 @@ ggplot(node_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = source,
                           n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_nodes, 
                           " unique nodes, ", 
                           n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
-           color = "#E97132", size = 5) +
+           color = "#E69F00", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
                           n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_nodes, 
                           " unique nodes, ", 
                           n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"), 
-           color = "darkblue", size = 5) +
+           color = "#0072B2", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("PIC0" = "#E97132", "PGD0" = "darkblue")) +
+  scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
   scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 150))
@@ -385,7 +385,7 @@ ggplot(node_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = source,
 
 
 
-# RELATIVE GNSS / PT with lines for C/D split
+# RELATIVE GNSS / PT for vD
 # --------------------------------------------------
 
 node_SWOT_PGD0_insitu <- node_SWOT_full_insitu %>%
@@ -425,16 +425,16 @@ ggplot(node_SWOT_PGD0_insitu, aes(x = abs(residuals_nobias)*100, color = insitu_
                           n_relative_df[n_relative_df$insitu_type == "PT", ]$n_unique_nodes, 
                           " unique nodes, ", 
                           n_relative_df[n_relative_df$insitu_type == "PT", ]$n, " total"),
-           color = "#C03F61", size = 5) +
+           color = "#009E73", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("GNSS: ", 
                           n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n_unique_nodes, 
                           " unique nodes, ", 
                           n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n, " total"), 
-           color = "#404A22", size = 5) +
+           color = "#CC79A7", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("PT" = "#C03F61", "GNSS" = "#404A22")) +
+  scale_color_manual(values = c("PT" = "#009E73", "GNSS" = "#CC79A7")) +
   scale_linetype_manual(values = c("PT" = "solid", "GNSS" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 150))
@@ -564,8 +564,8 @@ ggplot(table_relative_reach_WSE, aes(x = source, y = n, fill = source)) +
             size = 8) +
   ylab("Count") +
   coord_cartesian(ylim = c(11, 185)) +
-  scale_fill_manual(values = c("vC0" = "#E97132",
-                               "vD0" = "darkblue")) +
+  scale_fill_manual(values = c("vC0" = "#E69F00",
+                               "vD0" = "#0072B2")) +
   theme_classic(base_size = 34) +
   theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none")
 # 3.16, 6.54
@@ -802,16 +802,16 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(residuals_nobias)*100, color = source
                           n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
-           color = "#E97132", size = 5) +
+           color = "#E69F00", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
                           n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"), 
-           color = "darkblue", size = 5) +
+           color = "#0072B2", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("PIC0" = "#E97132", "PGD0" = "darkblue")) +
+  scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
   scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 150))
@@ -859,16 +859,16 @@ ggplot(reach_SWOT_PGD0_insitu, aes(x = abs(residuals_nobias)*100, color = insitu
                           n_relative_df[n_relative_df$insitu_type == "PT", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$insitu_type == "PT", ]$n, " total"),
-           color = "#C03F61", size = 5) +
+           color = "#009E73", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("GNSS: ", 
                           n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n, " total"), 
-           color = "#404A22", size = 5) +
+           color = "#CC79A7", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("PT" = "#C03F61", "GNSS" = "#404A22")) +
+  scale_color_manual(values = c("PT" = "#009E73", "GNSS" = "#CC79A7")) +
   scale_linetype_manual(values = c("PT" = "solid", "GNSS" = "solid")) +
   theme(legend.position = "none")  +
   coord_cartesian(xlim = c(0, 150))
@@ -964,32 +964,42 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = bias*100, fill = river)) +
 
 # Slope
 # -------------------------------------------
+reach_SWOT_GNSS_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
+  filter(dark_frac < 0.5)
+reach_SWOT_PT_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
+  filter(dark_frac < 0.5)
 
-reach_SWOT_PT_vD <- reach_SWOT_PT_vD %>%
+# merge all dataframes together
+reach_SWOT_full_insitu <- bind_rows(reach_SWOT_PT_vD, reach_SWOT_GNSS_vD) %>%
+  mutate(insitu_slope_m_m = coalesce(slope_m_m_abs, reach_drift_slope_m_m_abs)) %>%
+  mutate(insitu_slope_nobias_m_m = coalesce(mean_reach_PT_slope_no_bias_m_m, reach_drift_slope_m_m_abs_nobias)) %>%
+  mutate(insitu_time_utc = coalesce(pt_time_UTC, wse_drift_midpoint_UTC))
+
+reach_SWOT_full_insitu <- reach_SWOT_full_insitu %>%
   mutate(river = case_when(
     river %in% c("lowerPR", "upperPR") ~ "PR",   # merge into one
     TRUE ~ river                              # keep all others unchanged
   ))
 
 # Reorder the factor levels for river
-reach_SWOT_PT_vD$river <- factor(
-  reach_SWOT_PT_vD$river,
+reach_SWOT_full_insitu$river <- factor(
+  reach_SWOT_full_insitu$river,
   levels = c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
 )
 
 color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E")
 
 # compute n for each river
-counts <- reach_SWOT_PT_vD %>%
+counts <- reach_SWOT_full_insitu %>%
   group_by(river) %>%
   summarise(n = n()) %>%
   ungroup()
 
 # Replot
-ggplot(reach_SWOT_PT_vD, aes(x = river, y = abs(slope_residuals_nobias)*100000, fill = river)) + 
+ggplot(reach_SWOT_full_insitu, aes(x = river, y = abs(slope_residuals_nobias)*100000, fill = river)) + 
   geom_violin(alpha = 0.8, color = NA) +
   xlab("River") +
-  ylab("| SWOT - PT Slope | (cm/km)") +
+  ylab("| SWOT -" ~ italic("in situ") ~ "Slope | (cm/km)") +
   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
   # add counts below each violin
   geom_text(data = counts,
@@ -1008,51 +1018,11 @@ ggplot(reach_SWOT_PT_vD, aes(x = river, y = abs(slope_residuals_nobias)*100000, 
         axis.text.x = element_text(angle = 20, hjust = 0.9),
         # give a little extra bottom margin so the -1 labels aren't cut off
         plot.margin = margin(t = 5, r = 5, b = 20, l = 5)) +
-  coord_cartesian(ylim = c(-0.5, 6))
-# 1000, 515
+  coord_cartesian(ylim = c(-0.5, 12))
 # 9.44, 6.01
 
-# **********************************
 
 
 
 
-
-
-
-
-
-
-# AGU MESS
-# --------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-# 2024-07-20 -- lots of stuff filtered out
-# 2024-08-10 -- bottom reach, not middle reach
-
-
-GNSS_PR <- node_SWOT_GNSS_vC %>%
-  filter(river == 'PR') %>%
-  filter(lat > 66.95) %>%
-  filter(lat < 67.15) %>%
-  filter(as.Date(time_UTC) == as.Date("2024-08-10"))
-
-
-# plot SWOT vs PT timeseries 2023
-ggplot() +
-  geom_point(node_SWOT_GNSS_PR, mapping=aes(y=wse, x=p_dist_out/100000), color="#1f78b4", size=6) +
-  geom_point(node_SWOT_GNSS_PR, mapping=aes(y=mean_node_drift_wse_no_bias_m, x=p_dist_out/100000), color="#ED973D", size=2) +
-  
-  theme_minimal(base_size = 30)
-
-
-write.csv(node_SWOT_GNSS_PR, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/3_SWOT_examples/data/GNSS_2024-08-20.csv', row.names = FALSE)
 

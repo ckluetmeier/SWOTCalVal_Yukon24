@@ -110,8 +110,8 @@ ggplot(table_relative_reach_slope, aes(x = source, y = n, fill = source)) +
             size = 8) +
   ylab("Count") +
   coord_cartesian(ylim = c(11, 157)) +
-  scale_fill_manual(values = c("vC0" = "#E97132",
-                               "vD0" = "darkblue")) +
+  scale_fill_manual(values = c("vC0" = "#E69F00",
+                               "vD0" = "#0072B2")) +
   theme_classic(base_size = 34) +
   theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none")
 # 3.16, 6.54
@@ -367,16 +367,16 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color
                           n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
-           color = "#E97132", size = 5) +
+           color = "#E69F00", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
                           n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"), 
-           color = "darkblue", size = 5) +
+           color = "#0072B2", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("PIC0" = "#E97132", "PGD0" = "darkblue")) +
+  scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
   scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 13))
@@ -422,16 +422,16 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color
                           n_relative_df[n_relative_df$insitu_type == "PT", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$insitu_type == "PT", ]$n, " total"),
-           color = "#C03F61", size = 5) +
+           color = "#009E73", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("GNSS: ", 
                           n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n_unique_reaches, 
                           " unique reaches, ", 
                           n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n, " total"), 
-           color = "#404A22", size = 5) +
+           color = "#CC79A7", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("PT" = "#C03F61", "GNSS" = "#404A22")) +
+  scale_color_manual(values = c("PT" = "#009E73", "GNSS" = "#CC79A7")) +
   scale_linetype_manual(values = c("PT" = "solid", "GNSS" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 13))
@@ -457,8 +457,10 @@ print(paste("68th Percentile Error:", percentile_68_error*100000))
 print(paste("50th Percentile Error:", percentile_50_error*100000))
 
 
-color_palette <- c("#D86A1A", "#6D398B",  "#F8A31B", "#00429D", "#2E7D32",
-                   "#C83232", "#008F7A", "#E3A700", "#124000")
+color_palette <- c("#D86A1A", "#6D398B", "#E3A700","#00429D", "#2E7D32",
+                   "#C83232", "#008F7A", "#F8A31B", "#124000",
+                   "#0072B2", "#E69F00", "#009E73", "#CC79A7")
+
 
 # plot SWOT vs PT wse
 ggplot(reach_SWOT_PT_vD, aes(x = n_good_nod, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
