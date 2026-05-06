@@ -13,17 +13,15 @@ library(ggtext)
 # PT
 reach_SWOT_PT_vC <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT.csv") %>%
   rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5) %>%
-  rename(bias_slope = bias)
-reach_SWOT_PT_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_slope_SWOT_PT.csv") %>%
-  filter(dark_frac < 0.5) %>%
-  rename(bias_slope = bias)
+  filter(dark_frac < 0.5)
+reach_SWOT_PT_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
+  filter(dark_frac < 0.5)
 
 # GNSS
 reach_SWOT_GNSS_vC <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_GNSS.csv") %>%
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5)
-reach_SWOT_GNSS_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_slope_SWOT_GNSS.csv") %>%
+reach_SWOT_GNSS_vD <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
   filter(dark_frac < 0.5)
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -58,8 +56,8 @@ all_reaches <- reach_SWOT_full_insitu %>%
   distinct(reach_id, source, insitu_time_utc) %>%         
   group_by(reach_id) %>%
   summarise(
-    has_RiverSP   = any(source == "RiverSP"),
-    has_RiverTile = any(source == "RiverTile"),
+    has_RiverSP   = any(source == "PIC0"),
+    has_RiverTile = any(source == "PGD0"),
     .groups = "drop") %>%
   mutate(
     version_inclusion = case_when(has_RiverSP & has_RiverTile ~ 0L, has_RiverSP & !has_RiverTile ~ -1L, !has_RiverSP & has_RiverTile ~ 1L, TRUE ~ NA_integer_)) %>%
@@ -81,7 +79,6 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
     error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
     MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
-    bias = round(median(bias_slope, na.rm = TRUE)*100000, 2),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
     # count of unique nodes
@@ -102,7 +99,7 @@ table_relative_reach_slope <- table_relative_reach_slope %>%
 # relabel and reorder
 table_relative_reach_slope <- table_relative_reach_slope %>%
   mutate(source = factor(source,
-                         levels = c("RiverTile", "RiverSP"),   # swapped order
+                         levels = c("PGD0", "PIC0"),   # swapped order
                          labels = c("vD0", "vC0")))            # relabels
 
 # bar chart of count of residuals_nobias by version
@@ -112,7 +109,7 @@ ggplot(table_relative_reach_slope, aes(x = source, y = n, fill = source)) +
             vjust = -0.5,
             size = 8) +
   ylab("Count") +
-  coord_cartesian(ylim = c(11, 150)) +
+  coord_cartesian(ylim = c(11, 157)) +
   scale_fill_manual(values = c("vC0" = "#E97132",
                                "vD0" = "darkblue")) +
   theme_classic(base_size = 34) +
@@ -128,7 +125,6 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
     error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
     MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
-    bias = round(median(bias_slope, na.rm = TRUE)*100000, 2),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
     # count of unique nodes
@@ -151,7 +147,7 @@ table_relative_reach_slope <- table_relative_reach_slope %>%
 # RELATIVE REACH SLOPE TABLE BY RIVER
 # -----------------------------------------------------
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
-  filter(source == "RiverTile") %>%
+  filter(source == "PGD0") %>%
   filter(insitu_type == "GNSS") %>%
   mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river)) %>%
   group_by(river) %>%
@@ -160,7 +156,6 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
     error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
     MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
-    bias = round(median(bias_slope, na.rm = TRUE)*100000, 2),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
     # count of unique nodes
@@ -246,7 +241,6 @@ table_relative_reach_slope <- reach_SWOT_full_insitu %>%
     error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
     error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
     MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
-    bias = round(median(bias_slope, na.rm = TRUE)*100000, 2),
     # count of non-NA residuals
     n = sum(!is.na(slope_residuals_nobias)),
     # count of unique nodes
@@ -273,18 +267,18 @@ table_relative_reach_slope <- table_relative_reach_slope %>%
 same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
   filter(version_inclusion == 0) %>%                            # keep only reaches present in both versions
   group_by(reach_id, insitu_time_utc, insitu_type) %>%
-  filter(all(c("RiverSP", "RiverTile") %in% source)) %>%        # require both sources initially
+  filter(all(c("PIC0", "PGD0") %in% source)) %>%        # require both sources initially
   mutate(
-    RiverSP_resid_na   = any(source == "RiverSP"   & is.na(slope_residuals_nobias)),
-    RiverTile_resid_na = any(source == "RiverTile" & is.na(slope_residuals_nobias))
+    RiverSP_resid_na   = any(source == "PIC0"   & is.na(slope_residuals_nobias)),
+    RiverTile_resid_na = any(source == "PGD0" & is.na(slope_residuals_nobias))
   ) %>%
   # drop the partner row when the counterpart has NA slope_residuals_nobias
   filter(
-    !(source == "RiverTile" & RiverSP_resid_na),
-    !(source == "RiverSP"   & RiverTile_resid_na)
+    !(source == "PGD0" & RiverSP_resid_na),
+    !(source == "PIC0"   & RiverTile_resid_na)
   ) %>%
   # after removals, keep only triples that still contain both sources
-  filter(all(c("RiverSP", "RiverTile") %in% source)) %>%
+  filter(all(c("PIC0", "PGD0") %in% source)) %>%
   ungroup() %>%
   dplyr::select(-RiverSP_resid_na, -RiverTile_resid_na)
 
@@ -302,7 +296,6 @@ table_relative_reach_slope <- same_version_subset_reach_SWOT_insitu %>%
     error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
     error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 2),
     MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 2),
-    bias = round(median(bias_slope, na.rm = TRUE)*100000, 2),
     n = sum(!is.na(slope_residuals_nobias)),
     n_unique_reaches = n_distinct(reach_id),
     .groups = "drop")
@@ -355,36 +348,36 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color
        title = "By SWOT version") +
   annotate("text", x = 4, y = 0.71, hjust = 0,
            label = paste("|68%ile| vC:", 
-                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "RiverSP", ]$slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
                          "cm/km, vD:", 
-                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "RiverTile", ]$slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
+                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 2),
                          "cm/km"),
            color = "#222222", size = 5) +
   annotate("text", x = 4, y = 0.53, hjust = 0,
            label = paste("|50%ile| vC:", 
-                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "RiverSP", ]$slope_residuals_nobias)*100000, 0.5, na.rm = TRUE), 2),
+                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$slope_residuals_nobias)*100000, 0.5, na.rm = TRUE), 2),
                          "cm/km, vD:", 
-                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "RiverTile", ]$slope_residuals_nobias)*100000, 0.5, na.rm = TRUE), 2),
+                         round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$slope_residuals_nobias)*100000, 0.5, na.rm = TRUE), 2),
                          "cm/km"),
            color = "#222222", size = 5) +
   # Add counts in lower right
   annotate("text", x = Inf, y = 0.08,
            hjust = 1, vjust = 0,
            label = paste0("Version C: ", 
-                          n_relative_df[n_relative_df$source == "RiverSP", ]$n_unique_reaches, 
+                          n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_reaches, 
                           " unique reaches, ", 
-                          n_relative_df[n_relative_df$source == "RiverSP", ]$n, " total"),
+                          n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
            color = "#E97132", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
-                          n_relative_df[n_relative_df$source == "RiverTile", ]$n_unique_reaches, 
+                          n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_reaches, 
                           " unique reaches, ", 
-                          n_relative_df[n_relative_df$source == "RiverTile", ]$n, " total"), 
+                          n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"), 
            color = "darkblue", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "#E97132", "RiverTile" = "darkblue")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "solid")) +
+  scale_color_manual(values = c("PIC0" = "#E97132", "PGD0" = "darkblue")) +
+  scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 13))
 # width 7.17 height 6.35
@@ -396,8 +389,9 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color
 
 # Compute n
 n_relative_df <- reach_SWOT_full_insitu %>%
+  filter(source == "PGD0") %>%
   group_by(insitu_type) %>%
-  summarise(n_unique_reaches = n_distinct(reach_id[source == "RiverTile"]), # count of non-NA residuals
+  summarise(n_unique_reaches = n_distinct(reach_id[source == "PGD0"]), # count of non-NA residuals
             n = sum(!is.na(slope_residuals_nobias)), .groups = "drop") # count of unique reaches
 
 # CDF plot (fixed cm placement)
@@ -476,4 +470,4 @@ ggplot(reach_SWOT_PT_vD, aes(x = n_good_nod, y = abs(slope_residuals_nobias)*100
   labs(color = "River") 
 
 
-# slope_m_m_abs
+

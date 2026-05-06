@@ -310,8 +310,12 @@ ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
 # SLOPE
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in & filter SWOT data
-# RiverSP
-SWOT_reach_df <- read.csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+# RiverSP PIC0
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv')
+
+# RiverSP PGD0
+# SWORD v17b
+# SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v17b/RiverSP_domain_reach_timeseries_PGD0_v17b.csv')
 
 # RiverTile
 # SWORD v16
@@ -343,9 +347,24 @@ SWOT_reach_df_filtered$time_utc <- tai_epoch + SWOT_reach_df_filtered$time_tai -
 
 # SWORD v16
 PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16/YR_PT_reach_slope.csv')
+PT_reach_corrected_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v16/YR_PT_reach_slope_corrected.csv') %>%
+  rename(mean_reach_PT_slope_no_bias_m_m = slope_m_m)
+
 # SWORD v17b
 # PT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b/YR_PT_reach_slope.csv')
+# PT_reach_corrected_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b/YR_PT_reach_slope_corrected.csv') %>%
+  rename(mean_reach_PT_slope_no_bias_m_m = slope_m_m)
 
+
+PT_reach_df <- PT_reach_df %>%
+  inner_join(PT_reach_corrected_df %>%
+      select(pt_time_UTC, total_error_pt_wse_us_boundary, pt_serials_us, reach_id, mean_reach_PT_slope_no_bias_m_m, bias_us, bias_ds,
+        river),
+    by = c(
+      "pt_time_UTC",
+      "total_error_pt_wse_us_boundary",
+      "pt_serials_us",
+      "reach_id"))
 
 # Convert time column to POSIXct
 PT_reach_df$pt_time_UTC <- as.POSIXct(PT_reach_df$pt_time_UTC, format = "%m/%d/%y %H:%M", tz = "UTC")
@@ -394,18 +413,7 @@ percentile_50_error <- quantile(abs(time_space_matched_SWOT_PT_reach$residuals),
 print(paste("68th Percentile Error:", percentile_68_error*100000))
 print(paste("50th Percentile Error:", percentile_50_error*100000))
 
-
-# removed median bias for individual PT
-# need to set a min threshold of obs for us to calc a bias (using 3 currently)
-time_space_matched_SWOT_PT_reach <- time_space_matched_SWOT_PT_reach %>%
-  group_by(reach_id) %>%
-  mutate(
-    bias = if (n() >= 3) median(residuals, na.rm = TRUE) else NA_real_,
-    mean_reach_PT_slope_no_bias_m_m = if (n() >= 3)
-      slope_m_m_abs - bias
-    else NA_real_) %>%
-  ungroup()
-
+# no bias
 # 68th & 50th percentile error: wse diff calculation
 
 # Calculate the wse diff SWOT - GNSS (residuals)
@@ -420,13 +428,13 @@ percentile_50_error_nobias <- quantile(abs(time_space_matched_SWOT_PT_reach$slop
 #csv subset
 save_to_csv <- time_space_matched_SWOT_PT_reach %>%
   select(pt_time_UTC, time_utc, reach_id, slope_m_m, slope_m_m_abs, slope_uncertainty_m_m, slope_residuals_nobias, p_lat, p_lon,
-         slope, slope_abs, slope_u, bias, slope_residuals_nobias, mean_reach_PT_slope_no_bias_m_m, residuals, width, width_u, area_total, 
-         area_tot_u, layovr_val, node_dist, xtrk_dist, reach_q, reach_q_b, dark_frac, xovr_cal_q, cycle_id, pass_id
+         slope, slope_abs, slope_u, bias_us, bias_ds, slope_residuals_nobias, mean_reach_PT_slope_no_bias_m_m, residuals, width, width_u, area_total, 
+         area_tot_u, layovr_val, node_dist, xtrk_dist, reach_q, reach_q_b, dark_frac, xovr_cal_q, cycle_id, pass_id, river
          ) #cycle_id, pass_id, OR p_dist_out, n_good_nod
 
 save_to_csv <- save_to_csv %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverSP") %>%
+  mutate(source = "PIC0") %>%
   rename(slope_residuals = residuals)
 
 # add river names to df
@@ -449,7 +457,7 @@ save_to_csv <- save_to_csv %>%
            TRUE ~ NA_character_))
 
 # save joined_wse_subset to csv
-# write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT_new.csv', row.names = FALSE)
 
 
 # Calculating the linear regression model 
@@ -507,7 +515,7 @@ ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(slope_abs - slope_m_m_abs))
   xlim(0, .00025)
 
 # CDF plot no bias
-ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(slope_abs - mean_reach_PT_slope_no_bias_m)*100000)) +
+ggplot(time_space_matched_SWOT_PT_reach, aes(x = abs(slope_abs - mean_reach_PT_slope_no_bias_m_m)*100000)) +
   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
