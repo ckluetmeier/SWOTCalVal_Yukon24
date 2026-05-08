@@ -175,14 +175,95 @@ ggplot(trimmed_df, aes(x = slope*100, fill = river, color = river)) +
 
 
 
+# ---------------------------------------------------------------------------------------------------------------------------
+# SWOT Functional repeat times
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+# node scale
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
+
+SWOT_df_noduplicates <- SWOT_df %>%
+  distinct(node_id, time, wse, .keep_all = TRUE)
+
+SWOT_df_filtered <- SWOT_df_noduplicates %>%
+  filter(node_q < 2) %>%
+  filter(abs(xtrk_dist) >=10000) %>%
+  filter(abs(xtrk_dist) <=60000) %>%
+  filter(dark_frac <= 0.5)
+
+# time_tai is seconds since 2001-01-01, offset 37 seconds from UTC
+tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
+tai_utc_offset <- 37  # TAI-UTC offset in seconds
+
+# Convert time_tai to UTC
+SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_offset
+
+
+# Count of nodes
+n_unique_nodes <- n_distinct(SWOT_df_filtered$node_id)
+
+# Repeat time per node
+repeat_time_summary <- SWOT_df_filtered %>%
+  arrange(node_id, time_utc) %>%
+  group_by(node_id) %>%
+  summarise(
+    n_obs = n(),
+    mean_repeat_time_hours = median(diff(time_utc), na.rm = TRUE) / 86400
+  ) %>%
+  ungroup()
+
+# Median across all nodes
+avg_repeat_time_hours <- median(repeat_time_summary$mean_repeat_time_hours, na.rm = TRUE)
+
+cat("Unique node_id:", n_unique_nodes, "\n")
+cat("Median repeat time across nodes (days):", round(avg_repeat_time_hours, 2), "\n")
+cat("Average observations per node:", round(mean(repeat_time_summary$n_obs), 1), "\n")
 
 
 
 
 
+# reach scale
+SWOT_reach_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach/RiverSP_v17b/RiverSP_domain_reach_timeseries_PGD0_v17b.csv')
+
+SWOT_df_noduplicates <- SWOT_reach_df %>%
+  distinct(reach_id, time, wse, .keep_all = TRUE)
+
+SWOT_df_filtered <- SWOT_df_noduplicates %>%
+  filter(reach_q < 2) %>%
+  filter(abs(xtrk_dist) >=10000) %>%
+  filter(abs(xtrk_dist) <=60000) %>%
+  filter(partial_f == 0)  %>%
+  filter(dark_frac <= 0.5)
+
+# time_tai is seconds since 2001-01-01, offset 37 seconds from UTC
+tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
+tai_utc_offset <- 37  # TAI-UTC offset in seconds
+
+# Convert time_tai to UTC
+SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_offset
 
 
+# Count of reaches
+n_unique_reaches <- n_distinct(SWOT_df_filtered$reach_id)
 
+# Repeat time per node
+repeat_time_summary <- SWOT_df_filtered %>%
+  arrange(reach_id, time_utc) %>%
+  group_by(reach_id) %>%
+  summarise(
+    n_obs = n(),
+    mean_repeat_time_hours = median(diff(time_utc), na.rm = TRUE) / 86400
+  ) %>%
+  ungroup()
+
+# Median across all nodes
+avg_repeat_time_hours <- median(repeat_time_summary$mean_repeat_time_hours, na.rm = TRUE)
+
+cat("Unique reach_id:", n_unique_reaches, "\n")
+cat("Median repeat time across nodes (days):", round(avg_repeat_time_hours, 2), "\n")
+cat("Average observations per node:", round(mean(repeat_time_summary$n_obs), 1), "\n")
 
 
 
