@@ -9,7 +9,7 @@ library(sf)
 # Import
 
 # Directory with all pixcvec tiles in csv format
-folder_path = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v16'
+folder_path = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v17b'
 all_files = list.files(folder_path, pattern="*.csv", full.names=TRUE)
 
 # Extract unique identifiers from file names: start datetime only down to minutes of overpass
@@ -56,7 +56,7 @@ for (id in unique_ids) {
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # Directory to save the files
-output_dir <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVecRiver_v16/merged"
+output_dir <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v17b/merged"
 
 # Loop over PIXCVec_list and save each sf object as a CSV
 for (name in names(PIXCVec_list)) {
@@ -88,7 +88,7 @@ for (name in names(PIXCVec_list)) {
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # Define input data
-SWORD_reach <- data.frame(reach_id = c(81260401011, 81260401181, 81260401021, 81260500021, 81260500011, 81260300221, 81260300211, 81260300191)) # put small chunk of reaches here
+SWORD_reach <- data.frame(reach_id = c(81260300071, 81260300061, 81260300051, 81260300041, 81260300031, 81260300211, 81260300201, 81260300191, 81260300181, 81260300051)) # put small chunk of reaches here
 
 # need to build node polygons in small chunks for code to run
 # should come back and add a buffer reach so that reach/final node values are valid
@@ -121,7 +121,7 @@ PIXCVec_points <- bind_rows(PIXCVec_list, .id = "timestamp")
 PIXCVec_AOI_points <- semi_join(PIXCVec_points, SWORD_reach, by = c("reach" = "reach_id"))
 # Filter to one day (since the orthos cover PT reaches twice)
 PIXCVec_AOI_points <- PIXCVec_AOI_points %>%
-  filter(timestamp == '20240716T0926')
+  filter(timestamp == '20240726T0748')
 
 # ortho timestamps:
 # upper_YR: 20240710T1809, 20240721T1632, 20240724T0746
@@ -193,6 +193,6 @@ voronoi_sf_node <- st_transform(voronoi_sf_node, st_crs(4326))
 # Save polygons
 # ---------------------------------------------------------------------------------------------------------------------------
 
-st_write(voronoi_sf_node, "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v16/polygons/PIXCVec_upperPR_CL_20240716T0926_node.shp")
+st_write(voronoi_sf_node, "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v17b/polygons/PIXCVec_lowerPR_SJ_20240726T0748_node.shp")
 
-st_write(voronoi_sf_reach, "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v16/polygons/PIXCVec_upperPR_CL_20240716T0926_reach.shp")
+st_write(voronoi_sf_reach, "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/pixvec/for_orthos/PIXCVec_v17b/polygons/PIXCVec_lowerPR_SJ_20240726T0748_reach.shp")
