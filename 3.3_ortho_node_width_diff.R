@@ -9,7 +9,11 @@ library(dplyr)
 # ---------------------------------------------------------------------------------------------------------------------------
 # read in SWOT data
 # version C: RiverSP
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+
+# version D: RiverSP
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
+
 
 # version D: RiverTile
 # SWORD v17b
@@ -66,7 +70,22 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # coleen / upper PR 7/16
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperPR_CL_071624.csv')
 # upper YR 7/10
-ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv')
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv')
+
+
+# version D: RiverSP
+# chandalar 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_CD_071024.csv')
+# sheenjek 7/26
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_lowerPR_SJ_072624.csv')
+# lowerYR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_lowerYR_071624.csv')
+# coleen / upper PR 7/10
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_upperPR_CL_071024.csv')
+# coleen / upper PR 7/16
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_upperPR_CL_071624.csv')
+# upper YR 7/10
+ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_upperYR_071024.csv')
 
 
 # version D: RiverTile, SWORD v17b
@@ -327,7 +346,7 @@ save_to_csv <- combined_ortho_SWORD_df %>%
 #                 n_good_pix, rdr_sig0, xovr_cal_q, p_dist_out, p_length)
 
 # save to csv
-write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/combined_ortho_SWOT_upperYR_071024.csv', row.names = FALSE)
+write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/combined_ortho_SWOT_upperYR_071024.csv', row.names = FALSE)
 
 
 
@@ -343,7 +362,8 @@ write.csv(save_to_csv, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded
 # ---------------------------------------------------------------------------------------------------------------------------
 
 # Set working directory to the orthomosaics directory with the combined_ortho_SWOT_ csvs
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b"
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b"
 
 setwd(wd)
@@ -369,7 +389,7 @@ combined_df <- combined_df %>%
            # SWORD v16: "81260300061", "81260300231", "81260300241", "81260300251"
            # SWORD v17b: "81260300181", "81260300191", "81260300201", "81260300211"
            # only SJ reaches need to be adjusted here
-           reach_id %in% c("81260300061", "81260300231", "81260300241", "81260300251") ~ "SJ", 
+           reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ", 
            reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141", "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
            river_code == "812701" ~ "lowerYR", # until the Circle bifurcation
            river_code == "812509" ~ "lowerYR", # past the PR confluence
@@ -381,7 +401,7 @@ combined_df <- combined_df %>%
            TRUE ~ NA_character_))
 
 # save to csv
-write.csv(combined_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv', row.names = FALSE)
+write.csv(combined_df, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/node_width_SWOT_Ortho.csv', row.names = FALSE)
 
 
 

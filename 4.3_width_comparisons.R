@@ -16,13 +16,13 @@ library(ggtext)
 # ---------------------------------------------------------------------------------------------------------------------------
 
 node_SWOT_ortho_vC <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv') %>%
-  mutate(source = "RiverSP") %>%
+  mutate(source = "PIC0") %>%
   rename(old_node_id = node_id) %>%
   filter(abs(residuals) < 1500) %>%
   filter(dark_frac < 0.5)
 
-node_SWOT_ortho_vD <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/node_width_SWOT_Ortho.csv') %>%
-  mutate(source = "RiverTile") %>%
+node_SWOT_ortho_vD <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/node_width_SWOT_Ortho.csv') %>%
+  mutate(source = "PGD0") %>%
   filter(abs(residuals) < 1500) %>%
   filter(dark_frac < 0.5)
 
@@ -51,8 +51,8 @@ all_nodes <- node_SWOT_ortho %>%
   distinct(node_id, source) %>%         
   group_by(node_id) %>%
   summarise(
-    has_RiverSP   = any(source == "RiverSP"),
-    has_RiverTile = any(source == "RiverTile"),
+    has_RiverSP   = any(source == "PIC0"),
+    has_RiverTile = any(source == "PGD0"),
     .groups = "drop") %>%
   mutate(
     version_inclusion = case_when(has_RiverSP & has_RiverTile ~ 0L, has_RiverSP & !has_RiverTile ~ -1L, !has_RiverSP & has_RiverTile ~ 1L, TRUE ~ NA_integer_)) %>%
@@ -169,23 +169,23 @@ table_absolute_node_width <- table_absolute_node_width %>%
 # !!!!!!!!!! need to fix this chunk once I have vD from riverSP so I can sort based on pass/cycle id too
 
 # # SAME SUBSET OF NODES FOR vC & vD
-# same_version_subset_node_SWOT_insitu <- node_SWOT_ortho %>%
-#   filter(version_inclusion == 0) %>%                            # keep only reaches present in both versions
-#   group_by(node_id, cycle_id, pass_id) %>%
-#   filter(all(c("RiverSP", "RiverTile") %in% source)) %>%        # require both sources initially
-#   mutate(
-#     RiverSP_resid_na   = any(source == "RiverSP"   & is.na(residuals_nobias)),
-#     RiverTile_resid_na = any(source == "RiverTile" & is.na(residuals_nobias))) %>%
-#   # drop the partner row when the counterpart has NA residuals_nobias
-#   filter(
-#     !(source == "RiverTile" & RiverSP_resid_na),
-#     !(source == "RiverSP"   & RiverTile_resid_na)) %>%
-#   # after removals, keep only triples that still contain both sources
-#   filter(all(c("RiverSP", "RiverTile") %in% source)) %>%
-#   ungroup() %>%
-#   select(-RiverSP_resid_na, -RiverTile_resid_na)
+same_version_subset_node_SWOT_insitu <- node_SWOT_ortho %>%
+  filter(version_inclusion == 0) %>%                            # keep only reaches present in both versions
+  group_by(node_id, cycle_id, pass_id) %>%
+  filter(all(c("PIC0", "PGD0") %in% source)) %>%        # require both sources initially
+  mutate(
+    RiverSP_resid_na   = any(source == "PIC0"   & is.na(residuals_nobias)),
+    RiverTile_resid_na = any(source == "PGD0" & is.na(residuals_nobias))) %>%
+  # drop the partner row when the counterpart has NA residuals_nobias
+  filter(
+    !(source == "PGD0" & RiverSP_resid_na),
+    !(source == "PIC0"   & RiverTile_resid_na)) %>%
+  # after removals, keep only triples that still contain both sources
+  filter(all(c("PIC0", "PGD0") %in% source)) %>%
+  ungroup() %>%
+  select(-RiverSP_resid_na, -RiverTile_resid_na)
 
-table_absolute_node_width <- node_SWOT_ortho %>%
+table_absolute_node_width <- same_version_subset_node_SWOT_insitu %>%
   filter(version_inclusion == 0) %>%
   group_by(source) %>%
   summarise(
@@ -248,36 +248,36 @@ ggplot(node_SWOT_ortho, aes(x = abs(residuals), color = source, linetype = sourc
        title = "By absolute difference") +
   annotate("text", x = 240, y = 0.71, hjust = 0,
            label = paste("|68%ile| vC:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$residuals), 0.68, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PIC0", ]$residuals), 0.68, na.rm = TRUE), 1),
                          "m, vD:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverTile", ]$residuals), 0.68, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PGD0", ]$residuals), 0.68, na.rm = TRUE), 1),
                          "m"),
            color = "#222222", size = 5) +
   annotate("text", x = 240, y = 0.53, hjust = 0,
            label = paste("|50%ile| vC:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$residuals), 0.5, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PIC0", ]$residuals), 0.5, na.rm = TRUE), 1),
                          "m, vD:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverTile", ]$residuals), 0.5, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PGD0", ]$residuals), 0.5, na.rm = TRUE), 1),
                          "m"),
            color = "#222222", size = 5) +
   # Add counts in lower right
   annotate("text", x = Inf, y = 0.08,
            hjust = 1, vjust = 0,
            label = paste0("Version C: ", 
-                          n_relative_df[n_relative_df$source == "RiverSP", ]$n_unique_nodes, 
+                          n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_nodes, 
                           " unique nodes, ", 
-                          n_relative_df[n_relative_df$source == "RiverSP", ]$n, " total"),
-           color = "#E97132", size = 5) +
+                          n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
+           color = "#E69F00", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
-                          n_relative_df[n_relative_df$source == "RiverTile", ]$n_unique_nodes, 
+                          n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_nodes, 
                           " unique nodes, ", 
-                          n_relative_df[n_relative_df$source == "RiverTile", ]$n, " total"), 
-           color = "darkblue", size = 5) +
+                          n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"), 
+           color = "#0072B2", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "#E97132", "RiverTile" = "darkblue")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "solid")) +
+  scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
+  scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 500))
 # width 7.17 height 6.35
@@ -293,39 +293,39 @@ ggplot(node_SWOT_ortho, aes(x = abs(percent_diff), color = source, linetype = so
        title = "By percent difference") +
   annotate("text", x = 70, y = 0.71, hjust = 0,
            label = paste("|68%ile| vC:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$percent_diff), 0.68, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PIC0", ]$percent_diff), 0.68, na.rm = TRUE), 1),
                          "%, vD:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverTile", ]$percent_diff), 0.68, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PGD0", ]$percent_diff), 0.68, na.rm = TRUE), 1),
                          "%"),
            color = "#222222", size = 5) +
   annotate("text", x = 70, y = 0.53, hjust = 0,
            label = paste("|50%ile| vC:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverSP", ]$percent_diff), 0.5, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PIC0", ]$percent_diff), 0.5, na.rm = TRUE), 1),
                          "%, vD:", 
-                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "RiverTile", ]$percent_diff), 0.5, na.rm = TRUE), 1),
+                         round(quantile(abs(node_SWOT_ortho[node_SWOT_ortho$source == "PGD0", ]$percent_diff), 0.5, na.rm = TRUE), 1),
                          "%"),
            color = "#222222", size = 5) +
   # Add counts in lower right
   annotate("text", x = Inf, y = 0.08,
            hjust = 1, vjust = 0,
            label = paste0("Version C: ", 
-                          n_relative_df[n_relative_df$source == "RiverSP", ]$n_unique_nodes, 
+                          n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_nodes, 
                           " unique nodes, ", 
-                          n_relative_df[n_relative_df$source == "RiverSP", ]$n, " total"),
-           color = "#E97132", size = 5) +
+                          n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
+           color = "#E69F00", size = 5) +
   annotate("text", x = Inf, y = 0.02, 
            hjust = 1, vjust = 0, 
            label = paste0("Version D: ", 
-                          n_relative_df[n_relative_df$source == "RiverTile", ]$n_unique_nodes, 
+                          n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_nodes, 
                           " unique nodes, ", 
-                          n_relative_df[n_relative_df$source == "RiverTile", ]$n, " total"), 
-           color = "darkblue", size = 5) +
+                          n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"), 
+           color = "#0072B2", size = 5) +
   theme_minimal(base_size = 18) +
-  scale_color_manual(values = c("RiverSP" = "#E97132", "RiverTile" = "darkblue")) +
-  scale_linetype_manual(values = c("RiverSP" = "solid", "RiverTile" = "solid")) +
+  scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
+  scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
   coord_cartesian(xlim = c(0, 150))
-# width 610 height 550
+# width 7.17 height 6.35
 
 
 
@@ -409,9 +409,9 @@ ggplot(node_SWOT_ortho_vD, aes(x = river, y = abs(residuals), fill = river)) +
 # Reorder the factor levels by river to line up with color palette
 node_SWOT_ortho_vD$river <- factor(
   node_SWOT_ortho_vD$river,
-  levels = c("SJ", "CL", "CD", "PR", "upperYR", "lowerYR"))
+  levels = c("CL", "CD", "PR", "upperYR", "lowerYR", "SJ"))
 
-color_palette <- c("#8EAD7A", "#F2C14E","#3B6064", "#F4845F", "#DA627D", "#9A348E")
+color_palette <- c("#F2C14E","#3B6064", "#F4845F", "#DA627D", "#9A348E", "#8EAD7A")
 # correlation test
 cor_test <- cor.test(node_SWOT_ortho_vD$width, node_SWOT_ortho_vD$ortho_width_m)
 
@@ -419,22 +419,133 @@ cor_test <- cor.test(node_SWOT_ortho_vD$width, node_SWOT_ortho_vD$ortho_width_m)
 r_value <- cor_test$estimate # Pearson correlation coefficient
 p_value <- cor_test$p.value # highly statistically significant is P < 0.001
 
-# plot SWOT vs GNSS width
-ggplot(node_SWOT_ortho_vD, aes(x = ortho_width_m, y = width, color = factor(river))) +
-  geom_point(size = 2.5) +
+# scatterplot SWOT vs ortho width
+ggplot() +
+  geom_point(data = subset(node_SWOT_ortho_vD, river != "SJ"), aes(x = ortho_width_m, y = width, color = river), size = 2.5) +
+  # plot SJ last so we can see the points
+  geom_point(data = subset(node_SWOT_ortho_vD, river == "SJ"), aes(x = ortho_width_m, y = width, color = river), size = 2.5) +
   scale_color_manual(values = color_palette) +
   xlab(expression(atop(~ italic("In situ") ~ "Width (m)"))) +
   ylab("SWOT Width (m)") +
   theme_minimal(base_size = 25) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
+  geom_abline(linetype = "dashed", color = "gray") +
   ylim(0,2700) +
   xlim(0,2700) +
-  annotate("text", x = min(node_SWOT_ortho_vD$ortho_width_m, na.rm = TRUE), 
-           y = 2700, 
-           label = paste0("r = ", round(r_value, 4), "\np value = ", round(signif(p_value, 3), 4),
+  annotate("text",
+           x = min(node_SWOT_ortho_vD$ortho_width_m, na.rm = TRUE),
+           y = 2700,
+           label = paste0("r = ", round(r_value, 4),
+                          "\np value = ", round(signif(p_value, 3), 4),
                           "\nn = ", nrow(node_SWOT_ortho_vD)),
            hjust = 0, vjust = 1, size = 8) +
   theme(legend.position = "none")
+# 6.66, 6.01
+
+
+
+
+
+
+#-------------------------------------------------------------------------------------
+# Cross track bias explore
+
+# Filter residuals to 2.5–97.5% per river
+node_SWOT_ortho_vD_filt <- node_SWOT_ortho_vD %>%
+  filter(!is.na(residuals), !is.na(xtrk_dist)) %>%
+  group_by(river) %>%
+  filter(
+    residuals >= quantile(residuals, 0.025, na.rm = TRUE),
+    residuals <= quantile(residuals, 0.975, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Correlation stats by river after filtering
+cor_stats <- node_SWOT_ortho_vD_filt %>%
+  group_by(river) %>%
+  summarise(
+    n = n(),
+    r_value = ifelse(n >= 3, cor(residuals, abs(xtrk_dist), method = "pearson"), NA_real_),
+    p_value = ifelse(n >= 3, cor.test(residuals, abs(xtrk_dist))$p.value, NA_real_),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    label = paste0(
+      "r = ", round(r_value, 4),
+      "\np value = ", signif(p_value, 3),
+      "\nn = ", n
+    )
+  )
+
+# Plot
+ggplot(
+  node_SWOT_ortho_vD_filt,
+  aes(x = abs(xtrk_dist / 1000), y = residuals, color = river)
+) +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  facet_wrap(~ river, scales = "free") +
+  scale_color_manual(values = color_palette) +
+  xlab(expression(atop("|Cross-track distance| (km)"))) +
+  ylab("SWOT Width residuals (m)") +
+  geom_text(
+    data = cor_stats,
+    aes(x = -Inf, y = Inf, label = label),
+    inherit.aes = FALSE,
+    hjust = -0.05,
+    vjust = 1.1,
+    size = 6
+  ) +
+  theme_minimal(base_size = 25) +
+  theme(legend.position = "none")
+
+
+
+
+
+
+# Overall correlation stats across all rivers
+cor_stats_all <- node_SWOT_ortho_vD_filt %>%
+  summarise(
+    n = n(),
+    r_value = ifelse(n >= 3, cor(residuals, abs(xtrk_dist), method = "pearson"), NA_real_),
+    p_value = ifelse(n >= 3, cor.test(residuals, abs(xtrk_dist))$p.value, NA_real_)
+  ) %>%
+  mutate(
+    label = paste0(
+      "All rivers\n",
+      "r = ", round(r_value, 4),
+      "\np = ", signif(p_value, 3),
+      "\nn = ", n
+    )
+  )
+
+ggplot(
+  node_SWOT_ortho_vD_filt,
+  aes(x = abs(xtrk_dist / 1000), y = residuals, color = river)
+) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  geom_smooth(
+    aes(group = 1),
+    method = "lm",
+    se = FALSE,
+    linewidth = 1,
+    color = "black"
+  ) +
+  scale_color_manual(values = color_palette) +
+  xlab("|Cross-track distance| (km)") +
+  ylab("SWOT Width residuals (m)") +
+  geom_text(
+    data = cor_stats_all,
+    aes(x = -Inf, y = Inf, label = label),
+    inherit.aes = FALSE,
+    hjust = -0.05,
+    vjust = 1.1,
+    size = 6
+  ) +
+  theme_minimal(base_size = 25)
+
+
+
 
 
 
