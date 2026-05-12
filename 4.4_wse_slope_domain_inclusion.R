@@ -1,5 +1,6 @@
 library(sf)
 library(dplyr)
+library(tidyverse)
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # SWOT WSE & slope domain inclusion by version
@@ -509,6 +510,123 @@ st_write(all_YR_domain_reaches_sf_subset,
 
 
 
+
+
+
+
+
+
+
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# Figure 2
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# PT
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+# Merge all PT files into one file
+# Directory containing all subfolders with CSVs
+base_dir <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b"
+
+# Get all CSV files recursively
+csv_files <- list.files(path = base_dir, pattern = "\\.csv$", full.names = TRUE, recursive = TRUE)
+
+# Read and combine all CSVs
+combined_PT_df <- map_dfr(csv_files, read_csv, show_col_types = FALSE)
+
+# Write to a single CSV
+write_csv(combined_df, file.path(base_dir, "flyby_SWOTCalVal_YR_PT_L1_v17b.csv"))
+
+# version D: RiverSP
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
+
+SWOT_df_filtered <- SWOT_df %>%
+  semi_join(combined_df, by = c("node_id" = "Node_ID"))
+
+# time_tai is seconds since 2001-01-01, offset 37 seconds from UTC
+tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
+tai_utc_offset <- 37  # TAI-UTC offset in seconds
+
+# Convert time_tai to UTC
+SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_offset
+
+
+# match PT and SWOT in time
+# observation are matched by 7.5min buffer (a SWOT obs should always be within 7.5min of a PT)
+time_matched_SWOT_PT <- combined_PT_df %>%
+  rowwise() %>%
+  mutate(
+    closest_match = list(SWOT_df_filtered %>%
+                           filter(abs(difftime(pt_time_UTC, time_utc, units = "mins")) <= 7.5))) %>%
+  unnest(closest_match) %>%
+  dplyr::select(everything())
+
+# match PT and SWOT in space
+# node level
+time_space_matched_SWOT_PT <- time_matched_SWOT_PT %>%
+  filter(Node_ID == node_id)
+
+# a catch to get rid of any duplicate PT values
+time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT[!duplicated(time_space_matched_SWOT_PT[c("pt_wse_m","pt_time_UTC","pt_serial")]),]
+
+
+PT_summary_stats <- time_space_matched_SWOT_PT %>%
+  mutate(
+    pt_install_UTC = ymd_hms(pt_install_UTC),
+    pt_uninstall_UTC = ymd_hms(pt_uninstall_UTC)
+  ) %>%
+  group_by(pt_serial) %>%
+  summarise(
+    n_observations = n(),
+    observation_length_days = as.numeric(
+      difftime(max(pt_uninstall_UTC, na.rm = TRUE),
+               min(pt_install_UTC, na.rm = TRUE),
+               units = "days")
+    ),
+    avg_pt_lat = mean(pt_lat, na.rm = TRUE),
+    avg_pt_lon = mean(pt_lon, na.rm = TRUE),
+    Node_ID = first(Node_ID),
+    Reach_ID = first(Reach_ID),
+    .groups = "drop"
+  )
+
+write.csv(PT_summary_stats, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/2_domain_map/data/PT_summary_stats.csv', row.names = FALSE)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# GNSS
+# ---------------------------------------------------------------------------------------------------------------------------
+
+
+GNSS_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv')
+
+GNSS_summary_stats <- GNSS_df %>%
+  group_by(reach_id) %>%
+  summarise(
+    n_observations = n(),
+    reach_id = first(reach_id),
+    .groups = "drop"
+  )
+
+
+# Bring in SWORD shapefile
+sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
+
+# Add version_inclusion to SWORD
+GNSS_summary_stats_sf <- sword_sf %>%
+  left_join(GNSS_summary_stats, by = "reach_id") %>%
+  filter(!is.na(n_observations))
+
+# save!
+st_write(GNSS_summary_stats_sf,
+         "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/2_domain_map/data/GNSS_summary_stats_sf.shp",
+         delete_layer = TRUE
+)
 
 
 

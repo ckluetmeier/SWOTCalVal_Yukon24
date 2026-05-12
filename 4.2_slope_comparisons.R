@@ -148,7 +148,7 @@ table_relative_reach_slope <- table_relative_reach_slope %>%
 # -----------------------------------------------------
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
   filter(source == "PGD0") %>%
-  filter(insitu_type == "GNSS") %>%
+  filter(insitu_type == "PT") %>%
   mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river)) %>%
   group_by(river) %>%
   summarise(
