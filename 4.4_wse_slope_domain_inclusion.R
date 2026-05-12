@@ -540,13 +540,13 @@ csv_files <- list.files(path = base_dir, pattern = "\\.csv$", full.names = TRUE,
 combined_PT_df <- map_dfr(csv_files, read_csv, show_col_types = FALSE)
 
 # Write to a single CSV
-write_csv(combined_df, file.path(base_dir, "flyby_SWOTCalVal_YR_PT_L1_v17b.csv"))
+write_csv(combined_PT_df, file.path(base_dir, "flyby_SWOTCalVal_YR_PT_L1_v17b.csv"))
 
 # version D: RiverSP
 SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
 
 SWOT_df_filtered <- SWOT_df %>%
-  semi_join(combined_df, by = c("node_id" = "Node_ID"))
+  semi_join(combined_PT_df, by = c("node_id" = "Node_ID"))
 
 # time_tai is seconds since 2001-01-01, offset 37 seconds from UTC
 tai_epoch <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
@@ -582,8 +582,8 @@ PT_summary_stats <- time_space_matched_SWOT_PT %>%
   ) %>%
   group_by(pt_serial) %>%
   summarise(
-    n_observations = n(),
-    observation_length_days = as.numeric(
+    n_obs = n(),
+    obs_days = as.numeric(
       difftime(max(pt_uninstall_UTC, na.rm = TRUE),
                min(pt_install_UTC, na.rm = TRUE),
                units = "days")
@@ -594,6 +594,16 @@ PT_summary_stats <- time_space_matched_SWOT_PT %>%
     Reach_ID = first(Reach_ID),
     .groups = "drop"
   )
+
+# Convert to sf (WGS84)
+PT_summary_sf <- st_as_sf(
+  PT_summary_stats,
+  coords = c("avg_pt_lon", "avg_pt_lat"),
+  crs = 4326
+)
+
+# Write to shapefile
+st_write(PT_summary_sf, "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/2_domain_map/data/PT_summary_stats.shp", delete_dsn = TRUE)
 
 write.csv(PT_summary_stats, file = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/2_domain_map/data/PT_summary_stats.csv', row.names = FALSE)
 
