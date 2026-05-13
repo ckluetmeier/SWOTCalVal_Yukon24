@@ -61,7 +61,6 @@ all_nodes <- node_SWOT_ortho %>%
 node_SWOT_ortho <- node_SWOT_ortho %>%
   left_join(all_nodes, by = "node_id")
 
-
 # ---------------------------------------------------------------------------------------------------------------------------
 # TABLES -- SUMMARY STATS
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -106,14 +105,14 @@ table_absolute_node_width <- node_SWOT_ortho_vD %>%
     # error metrics
     error_abs_68ile = round(quantile(abs(residuals), 0.68, na.rm = TRUE), 1),
     error_abs_50ile = round(quantile(abs(residuals), 0.50, na.rm = TRUE), 1),
-    MAE = round(mean(abs(residuals), na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals_nobias), na.rm = TRUE), 1),
     bias = round(median(bias, na.rm = TRUE), 1),
     error_perdiff_68ile = round(quantile(abs(percent_diff), 0.68, na.rm = TRUE), 2),
     error_perdiff_50ile = round(quantile(percent_diff, 0.50, na.rm = TRUE), 2),
     # min_error_percentdiff_68ile = round(min(abs(percent_diff)), 1),
     # max_error_percentdiff_50ile = round(max(abs(percent_diff)), 1),
     # count of non-NA residuals
-    n = sum(!is.na(residuals)),
+    n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
     n_unique_nodes = n_distinct(node_id))
 
@@ -147,7 +146,7 @@ table_absolute_node_width <- node_SWOT_ortho %>%
     error_perdiff_68ile = round(quantile(abs(percent_diff), 0.68, na.rm = TRUE), 2),
     error_perdiff_50ile = round(quantile(percent_diff, 0.50, na.rm = TRUE), 2),
     # count of non-NA residuals
-    n = sum(!is.na(residuals)),
+    n = sum(!is.na(residuals_nobias)),
     # count of unique nodes
     n_unique_nodes = n_distinct(node_id))
 

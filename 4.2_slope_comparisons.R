@@ -441,11 +441,32 @@ ggplot(reach_SWOT_full_insitu, aes(x = abs(slope_residuals_nobias)*100000, color
 
 
 problems <- reach_SWOT_PT_vD %>%
-  filter(river == "PR") %>%
-  filter(slope_residuals_nobias*100000 > 3)
+  filter(river == "PR") 
+
+
+ggplot(problems, aes(x = factor(reach_id), y = slope_residuals_nobias*100000)) + 
+  geom_violin(alpha = 0.8) +
+  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+  theme_minimal(base_size = 25)
   
   
-  filter(reach_id != '81270100061')
+problems_table <- problems %>%
+  group_by(reach_id) %>%
+  summarise(
+    # error metrics
+    error_68ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.68, na.rm = TRUE), 1),
+    error_50ile = round(quantile(abs(slope_residuals_nobias)*100000, 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(slope_residuals_nobias)*100000, na.rm = TRUE), 1),
+    # count of non-NA residuals
+    n = sum(!is.na(slope_residuals_nobias)),
+    # count of unique reaches
+    n_unique_reaches = n_distinct(reach_id))
+
+
+# %>%
+#   filter(slope_residuals_nobias*100000 > 3)
+#   
+#   filter(reach_id != '81270100061')
 
 
 # Calculate the 68th percentile error
@@ -457,17 +478,108 @@ print(paste("68th Percentile Error:", percentile_68_error*100000))
 print(paste("50th Percentile Error:", percentile_50_error*100000))
 
 
-color_palette <- c("#D86A1A", "#6D398B", "#E3A700","#00429D", "#2E7D32",
-                   "#C83232", "#008F7A", "#F8A31B", "#124000",
-                   "#0072B2", "#E69F00", "#009E73", "#CC79A7")
+color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E")
 
 
-# plot SWOT vs PT wse
-ggplot(reach_SWOT_PT_vD, aes(x = n_good_nod, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+# correlation plot explorations:
+
+reach_SWOT_PT_vD <- reach_SWOT_PT_vD %>%
+  mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river))
+reach_SWOT_GNSS_vD <- reach_SWOT_GNSS_vD %>%
+  mutate(river = case_when(river %in% c("lowerPR", "upperPR") ~ "PR",TRUE ~ river))
+
+# plot layovr_val
+ggplot(reach_SWOT_PT_vD, aes(x = layovr_val, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
   geom_point(size = 4) +
   scale_color_manual(values = color_palette) +
-  xlab("slope") +
+  xlab("layovr_val") +
   ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+ggplot(reach_SWOT_GNSS_vD, aes(x = layovr_val, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("layovr_val") +
+  ylab("slope error") +
+  ylim(0,7) +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+
+# plot abs(xtrk_dist)
+ggplot(reach_SWOT_PT_vD, aes(x = abs(xtrk_dist), y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("abs(xtrk_dist)") +
+  ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+ggplot(reach_SWOT_GNSS_vD, aes(x = abs(xtrk_dist), y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("abs(xtrk_dist)") +
+  ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  ylim(0,7) +
+  labs(color = "River") 
+
+# plot dark_frac
+ggplot(reach_SWOT_PT_vD, aes(x = dark_frac, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("dark_frac") +
+  ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+ggplot(reach_SWOT_GNSS_vD, aes(x = dark_frac, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("dark_frac") +
+  ylab("slope error") +
+  ylim(0,7) +
+  theme_minimal(base_size = 30) +
+  labs(color = "River")
+
+# plot slope_m_m_abs
+ggplot(reach_SWOT_PT_vD, aes(x = slope_m_m_abs, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("slope_m_m") +
+  ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+ggplot(reach_SWOT_GNSS_vD, aes(x = reach_drift_slope_m_m_abs_nobias, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("slope_m_m") +
+  ylab("slope error") +
+  ylim(0,7) +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+
+# plot width
+ggplot(reach_SWOT_PT_vD, aes(x = width, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("width") +
+  ylab("slope error") +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+ggplot(reach_SWOT_GNSS_vD, aes(x = width, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("width") +
+  ylab("slope error") +
+  ylim(0,7) +
+  theme_minimal(base_size = 30) +
+  labs(color = "River") 
+
+# plot n_good_nod
+ggplot(reach_SWOT_GNSS_vD, aes(x = n_good_nod, y = abs(slope_residuals_nobias)*100000, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  xlab("n_good_nod") +
+  ylab("slope error") +
+  ylim(0,7) +
   theme_minimal(base_size = 30) +
   labs(color = "River") 
 

@@ -138,8 +138,23 @@ st_write(all_YR_domain_nodes_sf_subset,
 # didn't remove bad nodes (e.g. no matched overpass) from the field data, so manually deleted these in QGIS
 
 
-
-
+# FOR WIDTH VERSION INCLUSION
+# # Bring in SWORD shapefile
+# sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
+# 
+# # Add version_inclusion to SWORD
+# node_SWOT_ortho <- sword_sf %>%
+#   left_join(node_SWOT_ortho, by = "node_id")
+# 
+# # Subset to only version_inclusion reaches
+# node_SWOT_ortho_subset <- node_SWOT_ortho %>%
+#   filter(!is.na(version_inclusion))
+# 
+# # save!
+# st_write(node_SWOT_ortho_subset,
+#          "/Users/camryn/Desktop/all_YR_domain_nodes_width_subset.shp",
+#          delete_layer = TRUE
+# )
 
 
 
