@@ -161,7 +161,7 @@ time_matched_SWOT_ortho <- time_matched_SWOT_ortho %>%
 
 
 time_matched_SWOT_ortho <- time_matched_SWOT_ortho %>%
-  filter(dark_frac < 0.5)
+  filter(reach_q < 2)
 
 # # Calculate the 68th percentile error
 percentile_68_error <- quantile(abs(time_matched_SWOT_ortho$residuals), 0.68, na.rm=TRUE)
@@ -232,3 +232,49 @@ ggplot(time_matched_SWOT_ortho, aes(x = abs(percent_diff))) +
   annotate("text", x = 70, y = 0.71, label = paste("68% abs diff:", round(percentile_68_percent, 4)), color = "#222222", size = 6) +
   annotate("text", x = 70, y = 0.53, label = paste("50% abs diff:", round(percentile_50_percent, 4)), color = "#222222", size = 6) +
   theme_minimal(base_size = 20)
+
+
+
+
+
+
+
+
+
+
+
+
+# ABSOLUTE NODE WIDTH TABLE BY RIVER vD
+# -----------------------------------------------------
+table_absolute_node_width <- time_matched_SWOT_ortho %>%
+  st_drop_geometry() %>%
+  group_by(river) %>%
+  summarise(
+    med_swot_wd = round(median(width), 1),
+    med_ortho_wd = round(median(ortho_width_m), 1),
+    # error metrics
+    error_abs_68ile = round(quantile(abs(residuals), 0.68, na.rm = TRUE), 1),
+    error_abs_50ile = round(quantile(abs(residuals), 0.50, na.rm = TRUE), 1),
+    MAE = round(mean(abs(residuals), na.rm = TRUE), 1),
+    # bias = round(median(bias, na.rm = TRUE), 1),
+    error_perdiff_68ile = round(quantile(abs(percent_diff), 0.68, na.rm = TRUE), 2),
+    error_perdiff_50ile = round(quantile(percent_diff, 0.50, na.rm = TRUE), 2),
+    # min_error_percentdiff_68ile = round(min(abs(percent_diff)), 1),
+    # max_error_percentdiff_50ile = round(max(abs(percent_diff)), 1),
+    # count of non-NA residuals
+    n = sum(!is.na(residuals)),
+    # count of unique nodes
+    n_unique_reaches = n_distinct(reach_id))
+
+# Add correlations
+cor_table <- time_matched_SWOT_ortho %>%
+  st_drop_geometry() %>%
+  group_by(river) %>%
+  summarise(
+    r_value = round(cor(width, ortho_width_m, use = "complete.obs", method = "pearson"), 4),
+    p_value = tryCatch(cor.test(width, ortho_width_m)$p.value, error = function(e) NA_real_),
+    .groups = "drop")
+
+# Join everything to one table
+table_absolute_node_width <- table_absolute_node_width %>%
+  left_join(cor_table, by = "river")
