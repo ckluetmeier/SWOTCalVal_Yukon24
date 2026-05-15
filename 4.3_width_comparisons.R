@@ -9,6 +9,10 @@
 # SWOT and in situ measurements are matched in time/space in scripts 3.1 - 3.4
 # and all data are harmonized to SWORD v17b node IDs before analysis.
 # Outliers with |residuals| >= 1500 m are excluded from both data frames.
+#
+# Contains:
+#   - Tables: 7, 8, S5
+#   - Figures: 7a, b
 # =============================================================================
 
 library(tidyverse)

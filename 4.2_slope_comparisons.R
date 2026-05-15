@@ -9,6 +9,10 @@
 # SWOT and in situ measurements are matched in time/space in scripts 1.3 & 2.2
 # and all data are harmonized to SWORD v17b node/reach IDs before analysis.
 # Units: slope residuals are stored in m/m; multiplied by 100,000 to get cm/km.
+#
+# Contains:
+#   - Tables: 5, 6, S3, S4
+#   - Figures: 5a, b, c
 # =============================================================================
 
 library(tidyverse)

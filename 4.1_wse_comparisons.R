@@ -8,6 +8,10 @@
 #   - Version D / PGD0 (SWORD v17b, RiverSP)
 # SWOT and in situ measurements are matched in time/space in scripts 1.2 - 2.2
 # and all data are harmonized to SWORD v17b node/reach IDs before analysis.
+#
+# Contains:
+#   - Tables: 3, 4, S1, S2
+#   - Figures: 4a, b, c, d, e, f; 6a, b
 # =============================================================================
 
 library(tidyverse)
@@ -1034,7 +1038,7 @@ color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A34
 
 
 # -----------------------------------------------------------------------------
-# 7a. Violin: absolute node WSE residuals by river (D PT)
+# 7a. Violin: absolute node WSE residuals by river (Version D with PT)
 # -----------------------------------------------------------------------------
 
 # Merge Porcupine River sub-reaches and set factor order
@@ -1059,7 +1063,7 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = abs(residuals_nobias) * 100, fill = r
     aes(x = river, y = -1, label = paste0("n=", n)),
     inherit.aes = FALSE, vjust = 1, size = 6) +
   xlab("River") +
-  ylab("| SWOT - PT WSE | (cm)") +
+  ylab("SWOT - PT WSE (cm)") +
   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
   scale_x_discrete(breaks = river_levels, labels = river_labels) +
   theme_minimal(base_size = 25) +

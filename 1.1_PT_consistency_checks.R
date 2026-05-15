@@ -1,70 +1,105 @@
+# =============================================================================
+# PT Data Consistency Checks
+# -----------------------------------------------------------------------------
+# Consistency checks to confirm PT observations make physical sense:
+#   - WSE decreases downstream
+#   - No unexplained jumps between adjacent PT sensors
+#
+# WARNING: dist_out topology in SWORD v16 is incorrect for the Sheenjek and
+# Coleen rivers. Use v17b dist_out (p_dist_out) for those tributaries.
+# =============================================================================
+
 library(tidyverse)
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# Consistency checks to make sure AK PT data make physical sense
-# ---------------------------------------------------------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# load SWORD nodes -- make sure to turn on SWORD version that matches PT processing version!
+# =============================================================================
+# 1. Load SWORD node reference data
+# =============================================================================
 
-# SWORD v16 nodes
-# SWORD_node_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/SWORD_v16_domain_nodes.csv')
-# SWORD v17 nodes
-# SWORD_node_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/SWORD_v17_domain_nodes.csv')
-# SWORD v17b nodes (loaded by pulling in RiverTile SWOT df from JPL as of July, 2025)
-SWORD_node_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv')
+# --- SWORD v16 nodes ---------------------------------------------------------
+# SWORD_node_df <- read_csv(
+#   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/SWORD_v16_domain_nodes.csv"
+# )
+
+# --- SWORD v17 nodes ---------------------------------------------------------
+# SWORD_node_df <- read_csv(
+#   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/SWORD_v17_domain_nodes.csv"
+# )
+
+# --- SWORD v17b nodes (from RiverTile) ---------------------------------------
+SWORD_node_df <- read_csv(
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv"
+)
+# De-duplicate: v17b time series can have repeated node entries; keep one per node
 SWORD_node_df <- SWORD_node_df %>%
-  distinct(node_id, .keep_all = TRUE) #only need this filter with v17b
+  distinct(node_id, .keep_all = TRUE)
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# Munge PT data & join to SWORD
 
-# Set working directory to a folder with PTs chucked by separate rivers and clusters
+# =============================================================================
+# 2. Load and merge PT data
+# =============================================================================
+
+# Working directory containing PT CSVs split by PT cluster
 wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/upper_YR"
 setwd(wd)
 
-# Get list of all PT CSV files (these are munged PT dataframes created by the toolboxes)
+# All CSV files in the directory
 csv_files <- list.files(wd, pattern = "\\.csv$", full.names = TRUE)
 
-# Merge all PT files into a combined dataframe
+# Read and merge all PT cluster files into one data frame
 data_list <- lapply(seq_along(csv_files), function(i) {
-  df <- read.csv(csv_files[i])
-  return(df)
+  read.csv(csv_files[i])
 })
-
 combined_PT_df <- bind_rows(data_list)
 
-# Convert time column to POSIXct
-combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, format="%Y-%m-%d %H:%M:%S", tz = "UTC")
-# watch out for funky datetimes in PT data -- some old toolbox runs vary in how datetime is output
-# for example, run this line with old upper_YR PTs
-# combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, format = "%m/%d/%y %H:%M", tz = "UTC")
+# Parse time column to POSIXct (UTC)
+# NOTE: Some older toolbox runs format datetime as "%m/%d/%y %H:%M"; swap
+# the format string below if the data were created by an older toolbox version.
+combined_PT_df$pt_time_UTC <- as.POSIXct(
+  combined_PT_df$pt_time_UTC,
+  format = "%Y-%m-%d %H:%M:%S",
+  tz     = "UTC"
+)
 
-# combine PT df with SWORD nodes
-# SWORD v16, v17
+# Join PT data to SWORD node attributes
+# --- SWORD v16 / v17 join ---------------------------------------------------
 # combined_PT_SWORD_df <- combined_PT_df %>%
-#   left_join(SWORD_node_df %>% select(Node_ID, dist_out, node_len), by = "Node_ID")
-# SWORD v17b
+#   left_join(
+#     SWORD_node_df %>% select(Node_ID, dist_out, node_len),
+#     by = "Node_ID"
+#   )
+
+# --- SWORD v17b join --------------------------------------------------------
 combined_PT_SWORD_df <- combined_PT_df %>%
-  left_join(SWORD_node_df %>% select(node_id, p_dist_out), by = c("Node_ID" = "node_id"))
+  left_join(
+    SWORD_node_df %>% select(node_id, p_dist_out),
+    by = c("Node_ID" = "node_id")
+  )
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# Plot PT data to make sure PT wse go downstream as expected by install node & look for jumps in PTs
 
-# watch out for topology issues with dist_out in SWORD v16!!
-# Sheenjek and Coleen dist_out are incorrect!!!
+# =============================================================================
+# 3. Consistency plots
+# =============================================================================
 
-# Plot PT timeseries for each cluster colored by dist_out
-ggplot(combined_PT_SWORD_df, aes(x = pt_time_UTC, y = pt_wse_m, color = p_dist_out*0.001)) +
+# Plot 1: PT WSE time series colored by distance from outlet (km).
+ggplot(combined_PT_SWORD_df, aes(x = pt_time_UTC, y = pt_wse_m, color = p_dist_out * 0.001)) +
   geom_point(size = 0.1) +
   scale_color_gradient(low = "lightblue", high = "darkblue") +
-  labs(x = "Time (UTC)", y = "Water Surface Elevation (m)", color = "dist_out (km)") +
-  theme_minimal(base_size = 15) +
-  ggtitle('upper_YR')
+  labs(
+    x     = "Time (UTC)",
+    y     = "Water Surface Elevation (m)",
+    color = "dist_out (km)"
+  ) +
+  ggtitle("upper_YR — WSE by distance from outlet") +
+  theme_minimal(base_size = 15)
 
-# Plot PT timeseries for each cluster colored by pt_serial
+# Plot 2: PT WSE time series colored by PT serial number.
+# Checking for gaps or jumps
 ggplot(combined_PT_SWORD_df, aes(x = pt_time_UTC, y = pt_wse_m, color = factor(pt_serial))) +
   geom_point(size = 0.1) +
-  labs(x = "Time (UTC)", y = "Water Surface Elevation (m)") +
-  theme_minimal(base_size = 15) +
-  ggtitle('upper_YR')
+  labs(
+    x = "Time (UTC)",
+    y = "Water Surface Elevation (m)"
+  ) +
+  ggtitle("upper_YR — WSE by PT serial") +
+  theme_minimal(base_size = 15)
