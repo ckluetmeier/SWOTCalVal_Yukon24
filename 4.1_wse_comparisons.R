@@ -3,10 +3,10 @@
 # -----------------------------------------------------------------------------
 # Compares SWOT water surface elevation (WSE) against in situ
 # measurements (PT and GNSS) at node and reach levels.
-# Covers two SWOT processing versions:
+# SWOT processing versions:
 #   - Version C / PIC0 (SWORD v16, RiverSP)
 #   - Version D / PGD0 (SWORD v17b, RiverSP)
-# SWOT and insitu measurements are matched in time/space in scripts 1.2 - 2.2
+# SWOT and in situ measurements are matched in time/space in scripts 1.2 - 2.2
 # and all data are harmonized to SWORD v17b node/reach IDs before analysis.
 # =============================================================================
 
@@ -64,7 +64,7 @@ node_SWOT_GNSS_vD <- read_csv(
 # 2. Harmonize to SWORD v17b node IDs
 # -----------------------------------------------------------------------------
 
-# Translation table: maps v16 node IDs to v17b equivalents
+# Translator: maps v16 node IDs to v17b
 SWORD_translator <- read_csv(
   "/Users/camryn/Desktop/SWORD_translation/NA_NodeIDs_v17b_vs_v16.csv")
 
@@ -101,20 +101,20 @@ all_nodes <- node_SWOT_full_insitu %>%
   distinct(node_id, source) %>%
   group_by(node_id) %>%
   summarise(
-    has_RiverSP   = any(source == "PIC0"),
-    has_RiverTile = any(source == "PGD0"),
+    has_PIC0   = any(source == "PIC0"),
+    has_PGD0 = any(source == "PGD0"),
     .groups = "drop"
   ) %>%
   mutate(
     version_inclusion = case_when(
-      has_RiverSP & has_RiverTile  ~  0L,
-      has_RiverSP & !has_RiverTile ~ -1L,
-      !has_RiverSP & has_RiverTile ~  1L,
+      has_PIC0 & has_PGD0  ~  0L,
+      has_PIC0 & !has_PGD0 ~ -1L,
+      !has_PIC0 & has_PGD0 ~  1L,
       TRUE                         ~ NA_integer_
     )) %>%
   select(node_id, version_inclusion)
 
-# Join version inclusion flag back to full dataset
+# Join version inclusion to full dataset
 node_SWOT_full_insitu <- node_SWOT_full_insitu %>%
   left_join(all_nodes, by = "node_id")
 
@@ -125,7 +125,7 @@ node_SWOT_full_insitu <- node_SWOT_full_insitu %>%
 
 
 # -----------------------------------------------------------------------------
-# 2a. Relative node WSE: by SWOT version (PIC0 vs PGD0)
+# 2a. Relative node WSE: by SWOT version (C vs D)
 # -----------------------------------------------------------------------------
 
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
@@ -154,7 +154,7 @@ cor_table <- node_SWOT_full_insitu %>%
 table_relative_node_WSE <- table_relative_node_WSE %>%
   left_join(cor_table, by = "source")
 
-# Relabel and reorder source factor for bar chart
+# Relabel and reorder source for bar chart
 table_relative_node_WSE <- table_relative_node_WSE %>%
   mutate(
     source = factor(source,
@@ -220,16 +220,16 @@ same_version_subset_node_SWOT_insitu <- node_SWOT_full_insitu %>%
   group_by(node_id, insitu_time_utc, insitu_type) %>%
   filter(all(c("PIC0", "PGD0") %in% source)) %>%
   mutate(
-    RiverSP_resid_na   = any(source == "PIC0" & is.na(residuals_nobias)),
-    RiverTile_resid_na = any(source == "PGD0" & is.na(residuals_nobias))
+    PIC0_resid_na   = any(source == "PIC0" & is.na(residuals_nobias)),
+    PGD0_resid_na = any(source == "PGD0" & is.na(residuals_nobias))
   ) %>%
   filter(
-    !(source == "PGD0" & RiverSP_resid_na),
-    !(source == "PIC0" & RiverTile_resid_na)
+    !(source == "PGD0" & PIC0_resid_na),
+    !(source == "PIC0" & PGD0_resid_na)
   ) %>%
   filter(all(c("PIC0", "PGD0") %in% source)) %>%
   ungroup() %>%
-  select(-RiverSP_resid_na, -RiverTile_resid_na)
+  select(-PIC0_resid_na, -PGD0_resid_na)
 
 # Summary stats for matched subset
 table_relative_node_WSE <- same_version_subset_node_SWOT_insitu %>%
@@ -297,7 +297,7 @@ table_relative_node_WSE <- table_relative_node_WSE %>%
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
   filter(source == "PGD0", insitu_type == "PT") %>%
   mutate(river = case_when(
-    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge Porcupine sub-reaches
+    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
     TRUE ~ river
   )) %>%
   group_by(river, insitu_type) %>%
@@ -345,7 +345,7 @@ table_absolute_node_WSE <- node_SWOT_full_insitu %>%
     n_unique_nodes = n_distinct(node_id)
   )
 
-# Pearson correlation using raw (biased) WSE
+# Pearson correlation using absolute WSE
 cor_table <- node_SWOT_full_insitu %>%
   group_by(source) %>%
   summarise(
@@ -375,7 +375,7 @@ table_absolute_node_WSE <- node_SWOT_full_insitu %>%
     n_unique_nodes = n_distinct(node_id)
   )
 
-# Pearson correlation by source and in situ type (raw WSE)
+# Pearson correlation by source and in situ type
 cor_table <- node_SWOT_full_insitu %>%
   group_by(source, insitu_type) %>%
   summarise(
@@ -418,33 +418,33 @@ ggplot(node_SWOT_full_insitu,
     y     = "Cumulative Probability",
     title = "By SWOT version"
   ) +
-  annotate("text", x = 40, y = 0.71, hjust = 0,
+  annotate("text", x = 40, y = 0.72, hjust = 0,
     label = paste("68% C:",
       round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm, D:",
       round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 6) +
-  annotate("text", x = 40, y = 0.53, hjust = 0,
+    color = "#222222", size = 8) +
+  annotate("text", x = 40, y = 0.54, hjust = 0,
     label = paste("50% C:",
       round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm, D:",
       round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 6) +
-  annotate("text", x = Inf, y = 0.08, hjust = 1, vjust = 0,
+    color = "#222222", size = 8) +
+  annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
     label = paste0("Version C: ",
       n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_nodes,
-      " unique nodes, ",
+      " unique, ",
       n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
-    color = "#E69F00", size = 6) +
-  annotate("text", x = Inf, y = 0.02, hjust = 1, vjust = 0,
+    color = "#E69F00", size = 8) +
+  annotate("text", x = Inf, y = 0.01, hjust = 1, vjust = 0,
     label = paste0("Version D: ",
       n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_nodes,
-      " unique nodes, ",
+      " unique, ",
       n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"),
-    color = "#0072B2", size = 6) +
-  theme_minimal(base_size = 18) +
+    color = "#0072B2", size = 8) +
+  theme_minimal(base_size = 22) +
   scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
   scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
@@ -453,7 +453,7 @@ ggplot(node_SWOT_full_insitu,
 
 
 # -----------------------------------------------------------------------------
-# 3b. CDF: relative node WSE by in situ type (PT vs GNSS), vD only
+# 3b. CDF: relative node WSE by in situ type (PT vs GNSS), D only
 # -----------------------------------------------------------------------------
 
 # Subset to Version D only
@@ -475,37 +475,37 @@ ggplot(node_SWOT_PGD0_insitu,
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("|SWOT -" ~ italic("in situ") ~ "WSE| (cm)"),
+    x     = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
     y     = "Cumulative Probability",
     title = expression("By" ~ italic("in situ") ~ "measurement type")
   ) +
-  annotate("text", x = 40, y = 0.71, hjust = 0,
-    label = paste("|68%ile| PT:",
+  annotate("text", x = 31, y = 0.72, hjust = 0,
+    label = paste("68% PT:",
       round(quantile(abs(node_SWOT_PGD0_insitu[node_SWOT_PGD0_insitu$insitu_type == "PT",  ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm, GNSS:",
       round(quantile(abs(node_SWOT_PGD0_insitu[node_SWOT_PGD0_insitu$insitu_type == "GNSS", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 5) +
-  annotate("text", x = 40, y = 0.53, hjust = 0,
-    label = paste("|50%ile| PT:",
+    color = "#222222", size = 8) +
+  annotate("text", x = 31, y = 0.54, hjust = 0,
+    label = paste("50% PT:",
       round(quantile(abs(node_SWOT_PGD0_insitu[node_SWOT_PGD0_insitu$insitu_type == "PT",  ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm, GNSS:",
       round(quantile(abs(node_SWOT_PGD0_insitu[node_SWOT_PGD0_insitu$insitu_type == "GNSS", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 5) +
-  annotate("text", x = Inf, y = 0.08, hjust = 1, vjust = 0,
+    color = "#222222", size = 8) +
+  annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
     label = paste0("PT: ",
       n_relative_df[n_relative_df$insitu_type == "PT", ]$n_unique_nodes,
-      " unique nodes, ",
+      " unique, ",
       n_relative_df[n_relative_df$insitu_type == "PT", ]$n, " total"),
-    color = "#009E73", size = 5) +
-  annotate("text", x = Inf, y = 0.02, hjust = 1, vjust = 0,
+    color = "#009E73", size = 8) +
+  annotate("text", x = Inf, y = 0.01, hjust = 1, vjust = 0,
     label = paste0("GNSS: ",
       n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n_unique_nodes,
-      " unique nodes, ",
+      " unique, ",
       n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n, " total"),
-    color = "#CC79A7", size = 5) +
-  theme_minimal(base_size = 18) +
+    color = "#CC79A7", size = 8) +
+  theme_minimal(base_size = 22) +
   scale_color_manual(values = c("PT" = "#009E73", "GNSS" = "#CC79A7")) +
   scale_linetype_manual(values = c("PT" = "solid", "GNSS" = "solid")) +
   theme(legend.position = "none") +
@@ -551,7 +551,6 @@ reach_SWOT_GNSS_vC <- read_csv(
   filter(dark_frac < 0.5)
 
 # Version D (SWORD v17b / RiverSP PGD0)
-# NOTE: insitu_type is not explicitly set here; same note as vC above.
 reach_SWOT_GNSS_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_GNSS.csv") %>%
   mutate(source = "PGD0") %>%
@@ -562,7 +561,7 @@ reach_SWOT_GNSS_vD <- read_csv(
 # 5. Harmonize to SWORD v17b reach IDs
 # -----------------------------------------------------------------------------
 
-# Translation table: maps v16 reach IDs to v17b equivalents
+# Translator: maps v16 reach IDs to v17b
 SWORD_translator <- read_csv(
   "/Users/camryn/Desktop/SWORD_translation/NA_ReachIDs_v17b_vs_v16.csv")
 
@@ -603,15 +602,15 @@ all_reaches <- reach_SWOT_full_insitu %>%
   distinct(reach_id, source, insitu_time_utc) %>%
   group_by(reach_id) %>%
   summarise(
-    has_RiverSP   = any(source == "PIC0"),
-    has_RiverTile = any(source == "PGD0"),
+    has_PIC0   = any(source == "PIC0"),
+    has_PGD0 = any(source == "PGD0"),
     .groups = "drop"
   ) %>%
   mutate(
     version_inclusion = case_when(
-      has_RiverSP & has_RiverTile  ~  0L,
-      has_RiverSP & !has_RiverTile ~ -1L,
-      !has_RiverSP & has_RiverTile ~  1L,
+      has_PIC0 & has_PGD0  ~  0L,
+      has_PIC0 & !has_PGD0 ~ -1L,
+      !has_PIC0 & has_PGD0 ~  1L,
       TRUE                         ~ NA_integer_
     )
   ) %>%
@@ -656,7 +655,7 @@ cor_table <- reach_SWOT_full_insitu %>%
 table_relative_reach_WSE <- table_relative_reach_WSE %>%
   left_join(cor_table, by = "source")
 
-# Relabel and reorder source factor for plotting
+# Relabel and reorder source for bar chart
 table_relative_reach_WSE <- table_relative_reach_WSE %>%
   mutate(
     source = factor(source,
@@ -924,37 +923,37 @@ ggplot(reach_SWOT_full_insitu,
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("|SWOT -" ~ italic("in situ") ~ "WSE| (cm)"),
+    x     = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
     y     = "Cumulative Probability",
     title = "By SWOT version"
   ) +
-  annotate("text", x = 40, y = 0.71, hjust = 0,
-    label = paste("|68%ile| vC:",
+  annotate("text", x = 40, y = 0.72, hjust = 0,
+    label = paste("68% C:",
       round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
-      "cm, vD:",
+      "cm, D:",
       round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 5) +
-  annotate("text", x = 40, y = 0.53, hjust = 0,
-    label = paste("|50%ile| vC:",
+    color = "#222222", size = 8) +
+  annotate("text", x = 40, y = 0.54, hjust = 0,
+    label = paste("50% C:",
       round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
-      "cm, vD:",
+      "cm, D:",
       round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 5) +
-  annotate("text", x = Inf, y = 0.08, hjust = 1, vjust = 0,
+    color = "#222222", size = 8) +
+  annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
     label = paste0("Version C: ",
       n_relative_df[n_relative_df$source == "PIC0", ]$n_unique_reaches,
-      " unique reaches, ",
+      " unique, ",
       n_relative_df[n_relative_df$source == "PIC0", ]$n, " total"),
-    color = "#E69F00", size = 5) +
-  annotate("text", x = Inf, y = 0.02, hjust = 1, vjust = 0,
+    color = "#E69F00", size = 8) +
+  annotate("text", x = Inf, y = 0.01, hjust = 1, vjust = 0,
     label = paste0("Version D: ",
       n_relative_df[n_relative_df$source == "PGD0", ]$n_unique_reaches,
-      " unique reaches, ",
+      " unique, ",
       n_relative_df[n_relative_df$source == "PGD0", ]$n, " total"),
-    color = "#0072B2", size = 5) +
-  theme_minimal(base_size = 18) +
+    color = "#0072B2", size = 8) +
+  theme_minimal(base_size = 22) +
   scale_color_manual(values = c("PIC0" = "#E69F00", "PGD0" = "#0072B2")) +
   scale_linetype_manual(values = c("PIC0" = "solid", "PGD0" = "solid")) +
   theme(legend.position = "none") +
@@ -963,7 +962,7 @@ ggplot(reach_SWOT_full_insitu,
 
 
 # -----------------------------------------------------------------------------
-# 6b. CDF: relative reach WSE by in situ type (PT vs GNSS), vD only
+# 6b. CDF: relative reach WSE by in situ type (PT vs GNSS), D only
 # -----------------------------------------------------------------------------
 
 # Subset to Version D only
@@ -985,37 +984,37 @@ ggplot(reach_SWOT_PGD0_insitu,
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("|SWOT -" ~ italic("in situ") ~ "WSE| (cm)"),
+    x     = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
     y     = "Cumulative Probability",
     title = expression("By" ~ italic("in situ") ~ "measurement type")
   ) +
-  annotate("text", x = 40, y = 0.71, hjust = 0,
-    label = paste("|68%ile| PT:",
+  annotate("text", x = 34, y = 0.72, hjust = 0,
+    label = paste("68% PT:",
       round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "PT",  ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm, GNSS:",
       round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "GNSS", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 5) +
-  annotate("text", x = 40, y = 0.53, hjust = 0,
-    label = paste("|50%ile| PT:",
+    color = "#222222", size = 8) +
+  annotate("text", x = 27, y = 0.54, hjust = 0,
+    label = paste("50% PT:",
       round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "PT",  ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm, GNSS:",
       round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "GNSS", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm"),
-    color = "#222222", size = 5) +
-  annotate("text", x = Inf, y = 0.08, hjust = 1, vjust = 0,
+    color = "#222222", size = 8) +
+  annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
     label = paste0("PT: ",
       n_relative_df[n_relative_df$insitu_type == "PT", ]$n_unique_reaches,
       " unique reaches, ",
       n_relative_df[n_relative_df$insitu_type == "PT", ]$n, " total"),
-    color = "#009E73", size = 5) +
-  annotate("text", x = Inf, y = 0.02, hjust = 1, vjust = 0,
+    color = "#009E73", size = 8) +
+  annotate("text", x = Inf, y = 0.01, hjust = 1, vjust = 0,
     label = paste0("GNSS: ",
       n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n_unique_reaches,
       " unique reaches, ",
       n_relative_df[n_relative_df$insitu_type == "GNSS", ]$n, " total"),
-    color = "#CC79A7", size = 5) +
-  theme_minimal(base_size = 18) +
+    color = "#CC79A7", size = 8) +
+  theme_minimal(base_size = 22) +
   scale_color_manual(values = c("PT" = "#009E73", "GNSS" = "#CC79A7")) +
   scale_linetype_manual(values = c("PT" = "solid", "GNSS" = "solid")) +
   theme(legend.position = "none") +
@@ -1027,7 +1026,7 @@ ggplot(reach_SWOT_PGD0_insitu,
 # INTER-RIVER COMPARISON PLOTS
 # =============================================================================
 
-# Shared river factor levels and colour palette used across all inter-river plots
+# Shared river factor levels and color palette used across all inter-river plots
 river_levels  <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
 river_labels  <- c("Coleen", "Sheenjek", "Chandalar", "Porcupine",
                    "Single-channel Yukon", "Braided Yukon")
@@ -1035,7 +1034,7 @@ color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A34
 
 
 # -----------------------------------------------------------------------------
-# 7a. Violin: absolute node WSE residuals by river (vD PT)
+# 7a. Violin: absolute node WSE residuals by river (D PT)
 # -----------------------------------------------------------------------------
 
 # Merge Porcupine River sub-reaches and set factor order
@@ -1074,7 +1073,7 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = abs(residuals_nobias) * 100, fill = r
 
 
 # -----------------------------------------------------------------------------
-# 7b. Violin: node WSE bias by river (vD PT)
+# 7b. Violin: node WSE bias by river (D PT)
 # -----------------------------------------------------------------------------
 
 
@@ -1103,7 +1102,7 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = bias * 100, fill = river)) +
 
 
 # -----------------------------------------------------------------------------
-# 8. Read in reach-level slope data (vD only)
+# 8. Read in reach-level slope data (D only)
 # -----------------------------------------------------------------------------
 
 reach_SWOT_GNSS_vD <- read_csv(
