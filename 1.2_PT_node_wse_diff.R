@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Matches pressure transducer (PT) WSE observations to SWOT node WSE in time
 # (±7.5 min buffer) and space (same node ID), computes residuals, removes
-# per-sensor median bias, and exports the matched dataset to CSV.
+# per-PT median bias, and exports the matched dataset to CSV.
 #
 # Script sections:
 #   1. Read and filter SWOT node data
