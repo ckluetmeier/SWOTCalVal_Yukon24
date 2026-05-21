@@ -1,4 +1,4 @@
-# SWOTCalVal_Yukon24
+# Validation of SWOT water surface elevation, slope, and inundation extent in the Yukon River Basin, Alaska, USA
 
 Calibration/validation (CalVal) workflow for SWOT water surface elevation (WSE), slope, and river width against field data collected during the Yukon River field campaign (July–September 2024). The study area spans the Yukon Flats domain, covering the Yukon River (YR), Porcupine River (PR), Chandalar River (CD), Coleen River (CL), and Sheenjek River (SJ).
 
