@@ -65,12 +65,11 @@ Scripts are numbered by phase. Phase 0 prepares input data; Phases 1–3 compute
 
 ---
 
-## Key Data Dependencies
+## Data Dependencies
 
 - **SWOT products**: PIXC, PIXCVec, RiverSP (PIC0/v16, PGD0/v17b), RiverTile (v16, v17b)
 - **SWORD**: SWORD v16 and v17b (North America, HB81)
-- **In situ**: Pressure transducer (PT) WSE time series; GNSS boat-drift WSE surveys; UAV RGB/NIR orthomosaics (1 m → resampled to 3 m)
-- **Quality filters applied**: node/reach quality flag < 2, cross-track distance 10–60 km, dark water fraction ≤ 0.8, ≥ 50% node coverage per reach
+- **In situ**: Pressure transducer (PT) WSE time series (processed with CalVal toolboxes); GNSS boat-drift WSE surveys (processed with CalVal toolboxes & JPL GipsyX software); RGB/NIR orthomosaics water masks (manually digitized)
 
 ## Software Requirements
 
