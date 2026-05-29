@@ -564,6 +564,37 @@ ggplot(node_SWOT_ortho_vD_filt, aes(x = abs(xtrk_dist / 1000), y = residuals, co
   theme_minimal(base_size = 25)
 
 
+
+# Compute per-river median ortho_width_m and normalize residuals
+node_SWOT_ortho_vD_filt <- node_SWOT_ortho_vD_filt %>%
+  group_by(river) %>%
+  mutate(median_width = median(width, na.rm = TRUE),
+         residuals_norm = residuals / median_width) %>%
+  ungroup()
+
+# Overall correlation stats across all rivers (using normalized residuals)
+cor_stats_all <- node_SWOT_ortho_vD_filt %>%
+  summarise(
+    n       = n(),
+    r_value = ifelse(n >= 3, cor(residuals_norm, abs(xtrk_dist), method = "pearson"), NA_real_),
+    p_value = ifelse(n >= 3, cor.test(residuals_norm, abs(xtrk_dist))$p.value, NA_real_)
+  ) %>%
+  mutate(
+    label = paste0("All rivers\nr = ", round(r_value, 4), "\np = ", signif(p_value, 3), "\nn = ", n)
+  )
+
+ggplot(node_SWOT_ortho_vD_filt, aes(x = abs(xtrk_dist / 1000), y = residuals_norm, color = river)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  geom_smooth(aes(group = 1), method = "lm", se = FALSE, linewidth = 1, color = "black") +
+  scale_color_manual(values = color_palette_scatter) +
+  xlab("|Cross-track distance| (km)") +
+  ylab("SWOT Width residuals / median river width") +
+  geom_text(data = cor_stats_all,
+            aes(x = -Inf, y = Inf, label = label),
+            inherit.aes = FALSE, hjust = -0.05, vjust = 1.1, size = 6) +
+  theme_minimal(base_size = 25)
+
+
 # =============================================================================
 # SPLIT VIOLIN COMPARISONS: SWOT vs ORTHO WIDTH BY RIVER (vD)
 # =============================================================================

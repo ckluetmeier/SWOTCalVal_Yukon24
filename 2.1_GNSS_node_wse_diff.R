@@ -96,10 +96,10 @@ time_space_matched_SWOT_GNSS <- time_matched_SWOT_GNSS %>%
 
 
 # =============================================================================
-# 4. Raw residuals and summary statistics
+# 4. Absolute residuals and summary statistics
 # =============================================================================
 
-# Compute raw residuals: GNSS WSE - SWOT WSE
+# Compute absolute residuals: GNSS WSE - SWOT WSE
 time_space_matched_SWOT_GNSS$residuals <- (
   time_space_matched_SWOT_GNSS$mean_node_drift_wse_m - time_space_matched_SWOT_GNSS$wse
 )

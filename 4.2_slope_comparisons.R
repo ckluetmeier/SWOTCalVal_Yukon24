@@ -535,7 +535,12 @@ ggplot(reach_SWOT_PGD0_insitu,
 
 # Subset to PR reaches in D PT for a little lookie
 problems <- reach_SWOT_PT_vD %>%
-  filter(river == "PR")
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
+    TRUE ~ river
+  )) %>%
+  filter(river == "PR") %>% 
+  filter(slope_residuals_nobias * 100000 > 3)
 
 # Violin plot of slope residuals per reach
 ggplot(problems, aes(x = factor(reach_id), y = slope_residuals_nobias * 100000)) +
