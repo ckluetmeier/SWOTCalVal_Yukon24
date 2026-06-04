@@ -602,22 +602,78 @@ time_space_matched_SWOT_PT <- time_space_matched_SWOT_PT[
 PT_summary_stats <- time_space_matched_SWOT_PT %>%
   mutate(
     pt_install_UTC   = ymd_hms(pt_install_UTC),
-    pt_uninstall_UTC = ymd_hms(pt_uninstall_UTC)
-  ) %>%
-  group_by(pt_serial) %>%
+    pt_uninstall_UTC = ymd_hms(pt_uninstall_UTC)) %>%
+  group_by(pt_serial, pt_install_UTC, pt_uninstall_UTC) %>%
   summarise(
-    n_obs     = n(),
-    obs_days  = as.numeric(
-      difftime(max(pt_uninstall_UTC, na.rm = TRUE),
-               min(pt_install_UTC,   na.rm = TRUE),
-               units = "days")
-    ),
+    n_obs = n(),
+    obs_days = as.numeric(
+      difftime(first(pt_uninstall_UTC), first(pt_install_UTC), units = "days")),
     avg_pt_lat = mean(pt_lat, na.rm = TRUE),
     avg_pt_lon = mean(pt_lon, na.rm = TRUE),
     Node_ID    = first(Node_ID),
     Reach_ID   = first(Reach_ID),
-    .groups = "drop"
+    .groups = "drop") %>%
+  group_by(pt_serial) %>%
+  summarise(
+    n_obs = sum(n_obs, na.rm = TRUE),
+    obs_days = sum(obs_days, na.rm = TRUE),
+    pt_install_UTC   = min(pt_install_UTC, na.rm = TRUE),
+    pt_uninstall_UTC = max(pt_uninstall_UTC, na.rm = TRUE),
+    avg_pt_lat = mean(avg_pt_lat, na.rm = TRUE),
+    avg_pt_lon = mean(avg_pt_lon, na.rm = TRUE),
+    Node_ID    = first(Node_ID),
+    Reach_ID   = first(Reach_ID),
+    .groups = "drop")
+
+# Add river name labels to data frame
+PT_summary_stats <- PT_summary_stats %>%
+  mutate(
+    river_code = substr(Reach_ID, 1, 6),
+    river = case_when(
+      # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
+      # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
+      Reach_ID %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      Reach_ID %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      river_code == "812701" ~ "lowerYR",
+      river_code == "812509" ~ "lowerYR",
+      river_code == "812705" ~ "upperYR",
+      river_code == "812508" ~ "CD",
+      river_code == "812603" ~ "PR",
+      river_code == "812605" ~ "PR",
+      river_code == "812604" ~ "CL",
+      TRUE ~ NA_character_
+    )
   )
+
+river_order <- c("upperYR", "lowerYR", "PR", "CD", "SJ", "CL")
+
+PT_summary_stats <- PT_summary_stats %>%
+  mutate(river = factor(river, levels = river_order)) %>%
+  arrange(river)
+
+PT_summary_by_river <- PT_summary_stats %>%
+  group_by(river) %>%
+  summarise(
+    earliest_pt_install_UTC   = min(pt_install_UTC, na.rm = TRUE),
+    latest_pt_install_UTC     = max(pt_install_UTC, na.rm = TRUE),
+    earliest_pt_uninstall_UTC = min(pt_uninstall_UTC, na.rm = TRUE),
+    latest_pt_uninstall_UTC   = max(pt_uninstall_UTC, na.rm = TRUE),
+    mean_obs_days   = mean(obs_days, na.rm = TRUE),
+    median_obs_days = median(obs_days, na.rm = TRUE),
+    mean_n_obs      = mean(n_obs, na.rm = TRUE),
+    median_n_obs    = median(n_obs, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(river)
+
+# NOTE PT 2159244 ERRONEOUSLY HAS 7/31 LISTED AS FIRST INSTALL TIME 
+# THIS IS BECAUSE FIRST TIME IS PARSED AS NA
+# should be 2024-07-08T00:00:00.000000Z to 2024-07-26T18:50:00.000000Z
+# and then 2024-07-31T00:25:00.000000Z to 2024-08-21T15:35:00.000000Z
+PT_summary_stats$obs_days[abs(PT_summary_stats$obs_days - 21.63194) < 1e-5] <- 40.416667
+PT_summary_stats$obs_days <- as.numeric(PT_summary_stats$obs_days)
+
 
 # Convert to sf (WGS84) and save shapefile + CSV
 PT_summary_sf <- st_as_sf(
@@ -625,6 +681,7 @@ PT_summary_sf <- st_as_sf(
   coords = c("avg_pt_lon", "avg_pt_lat"),
   crs    = 4326
 )
+
 
 st_write(
   PT_summary_sf,
@@ -640,20 +697,20 @@ write.csv(
 
 
 # -----------------------------------------------------------------------------
-# 16. GNSS summary stats per reach
+# 16. GNSS summary stats per reach and node
 # -----------------------------------------------------------------------------
 
-GNSS_df <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv"
-)
+# REACH
+# ---------------------------
 
+GNSS_df <- read_csv(
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv")
 
 GNSS_summary_stats <- GNSS_df %>%
   group_by(reach_id) %>%
   summarise(
     n_observations = n(),
-    .groups        = "drop"
-  )
+    .groups        = "drop")
 
 # Attach to SWORD geometry, keep only reaches with GNSS observations
 sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
@@ -666,6 +723,105 @@ st_write(
   GNSS_summary_stats_sf,
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/2_domain_map/data/GNSS_summary_stats_sf.shp",
   delete_layer = TRUE
+)
+
+# NODE
+# ---------------------------
+
+GNSS_df <- read_csv(
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv")
+
+GNSS_summary_stats <- GNSS_df %>%
+  group_by(node_id) %>%
+  summarise(
+    n_observations = n(),
+    .groups        = "drop"
+  )
+
+# Attach to SWORD geometry, keep only reaches with GNSS observations
+sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
+
+GNSS_summary_stats_sf <- sword_sf %>%
+  left_join(GNSS_summary_stats, by = "node_id") %>%
+  filter(!is.na(n_observations))
+
+st_write(
+  GNSS_summary_stats_sf,
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/2_domain_map/data/GNSS_summary_stats_node_sf.shp",
+  delete_layer = TRUE
+)
+
+# =============================================================================
+# Table S4 — GNSS METADATA
+# =============================================================================
+
+GNSS_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv") %>%
+  filter(time_UTC > as.POSIXct("2024-01-01 00:00:00", tz = "UTC"))
+
+# Attach to SWORD geometry, keep only reaches with GNSS observations
+sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
+
+GNSS_sf <- sword_sf %>%
+  right_join(GNSS_df, by = "node_id")
+
+# Add river name labels to data frame
+GNSS_sf <- GNSS_sf %>%
+  mutate(
+    river_code = substr(reach_id, 1, 6),
+    river = case_when(
+      # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
+      # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
+      reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      river_code == "812701" ~ "lowerYR",
+      river_code == "812509" ~ "lowerYR",
+      river_code == "812705" ~ "upperYR",
+      river_code == "812508" ~ "CD",
+      river_code == "812603" ~ "PR",
+      river_code == "812605" ~ "PR",
+      river_code == "812604" ~ "CL",
+      TRUE ~ NA_character_
+    )
+  )
+
+
+GNSS_summary_stats <- GNSS_sf %>%
+  group_by(drift_id) %>%
+  summarise(
+    river_list       = paste(unique(river), collapse = ", "),
+    start_time       = min(time_UTC, na.rm = TRUE),
+    end_time         = max(time_UTC, na.rm = TRUE),
+    survey_length_km = round(sum(node_len) / 1000, 2),
+    reach_list       = paste(unique(reach_id), collapse = ", "),
+    .groups          = "drop"
+  ) %>%
+  mutate(
+    survey_time_hours = round(as.numeric(difftime(end_time, start_time, units = "hours")), 2)
+  ) %>%
+  arrange(start_time) %>%
+  filter(survey_time_hours > 0.000000) %>%
+  st_drop_geometry() %>%
+  select(-drift_id) %>%
+  relocate(survey_time_hours, .after = end_time)
+
+# total km of GNSS data collected
+sum(GNSS_summary_stats$survey_length_km, na.rm = TRUE)
+
+# unique number of days we have GNSS data from
+map2(
+  as.Date(GNSS_summary_stats$start_time),
+  as.Date(GNSS_summary_stats$end_time),
+  ~ seq(.x, .y, by = "day")
+) %>%
+  unlist() %>%
+  as.Date(origin = "1970-01-01") %>%
+  n_distinct()
+
+write.csv(
+  GNSS_summary_stats,
+  file      = "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/Tables/GNSS_summary_stats.csv",
+  row.names = FALSE
 )
 
 
@@ -773,3 +929,6 @@ ggplot(node_SWOT_ortho) +
   ylab("Width (m)") +
   theme_minimal(base_size = 30)
 # export dimensions: width 8.13 in, height 3.96 in
+
+
+
