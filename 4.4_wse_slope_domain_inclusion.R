@@ -932,3 +932,36 @@ ggplot(node_SWOT_ortho) +
 
 
 
+
+
+
+
+
+
+
+ortho_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/Tables/ortho_summary_stats.csv") %>%
+  mutate(
+    start_time_UTC = as.POSIXct(start_time_UTC, format = "%m/%d/%y %H:%M", tz = "UTC"),
+    end_time_UTC   = as.POSIXct(end_time_UTC,   format = "%m/%d/%y %H:%M", tz = "UTC"),
+    SWOT_time_UTC  = as.POSIXct(SWOT_time_UTC,  format = "%m/%d/%y %H:%M", tz = "UTC"))
+
+
+# Compute midpoint
+ortho_df$midpoint_time_UTC <- ortho_df$start_time_UTC + 
+  (ortho_df$end_time_UTC - ortho_df$start_time_UTC) / 2
+
+# Compute absolute offset in hours between midpoint and SWOT time
+ortho_df$offset_time_UTC <- round(abs(as.numeric(difftime(ortho_df$midpoint_time_UTC, ortho_df$SWOT_time_UTC, units = "hours"))), 2)
+
+ortho_df$survey_length_hours <- round(as.numeric(difftime(ortho_df$end_time_UTC, ortho_df$start_time_UTC, units = "hours")), 2)
+
+
+# Remove midpoint column and reorder
+ortho_df <- ortho_df[, c("River(s)", "start_time_UTC", "end_time_UTC", 
+                         "survey_length_hours", "SWOT_pass_id", 
+                         "SWOT_time_UTC", "offset_time_UTC")]
+
+# Save to CSV
+write.csv(ortho_df, 
+          "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/Tables/ortho_summary_stats.csv",
+          row.names = FALSE)
