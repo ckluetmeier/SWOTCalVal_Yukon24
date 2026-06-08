@@ -10,7 +10,7 @@
 # and all data are harmonized to SWORD v17b node/reach IDs before analysis.
 #
 # Contains:
-#   - Tables: 3, 4, S1, S2
+#   - Tables: 2, 3, S6, S7
 #   - Figures: 4a, b, c, d, e, f; 6a, b
 # =============================================================================
 
@@ -122,6 +122,10 @@ all_nodes <- node_SWOT_full_insitu %>%
 node_SWOT_full_insitu <- node_SWOT_full_insitu %>%
   left_join(all_nodes, by = "node_id")
 
+# Create a separate PT and GNSS dataset
+node_SWOT_PT   <- node_SWOT_full_insitu %>% filter(insitu_type == "PT")
+node_SWOT_GNSS <- node_SWOT_full_insitu %>% filter(insitu_type == "GNSS")
+
 
 # =============================================================================
 # NODE TABLES — SUMMARY STATISTICS
@@ -129,34 +133,20 @@ node_SWOT_full_insitu <- node_SWOT_full_insitu %>%
 
 
 # -----------------------------------------------------------------------------
-# 2a. Relative node WSE: by SWOT version (C vs D)
+# 2a. Relative node WSE: by SWOT version (C vs D) and in situ type
 # -----------------------------------------------------------------------------
 
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n             = sum(!is.na(residuals_nobias)),    # count of non-NA residuals
+    n_unique_nodes = n_distinct(node_id),              # count of unique nodes
     error_68ile   = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    # RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
-    bias          = round(median(bias, na.rm = TRUE) * 100, 1),
-    n             = sum(!is.na(residuals_nobias)),    # count of non-NA residuals
-    n_unique_nodes = n_distinct(node_id)              # count of unique nodes
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
+    bias          = round(median(bias, na.rm = TRUE) * 100, 1)
   )
-
-# Pearson correlation and p-value by source
-cor_table <- node_SWOT_full_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_),
-    .groups = "drop")
-
-# Join correlation columns to summary table
-table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = "source")
 
 # Relabel and reorder source for bar chart
 table_relative_node_WSE <- table_relative_node_WSE %>%
@@ -183,38 +173,29 @@ ggplot(table_relative_node_WSE, aes(x = source, y = n, fill = source)) +
 
 
 # -----------------------------------------------------------------------------
-# 2b. Relative node WSE: by version inclusion (nodes unique to C or D)
+# 2b. Relative node WSE: by version inclusion (C or D unique nodes), in situ type
 # -----------------------------------------------------------------------------
 
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
-  group_by(version_inclusion) %>%
+  group_by(insitu_type, version_inclusion) %>%
   summarise(
+    n             = sum(!is.na(residuals_nobias)),
+    n_unique_nodes = n_distinct(node_id),
     error_68ile   = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    bias          = round(median(bias, na.rm = TRUE) * 100, 1),
-    n             = sum(!is.na(residuals_nobias)),
-    n_unique_nodes = n_distinct(node_id))
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
+    bias          = round(median(bias, na.rm = TRUE) * 100, 1)
+    )
 
-# Pearson correlation by version inclusion
-cor_table <- node_SWOT_full_insitu %>%
-  group_by(version_inclusion) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_),
-    .groups = "drop")
-
-# Join; drop version_inclusion == 0 (nodes present in both versions)
+# Drop version_inclusion == 0 (nodes present in both versions)
 table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = "version_inclusion") %>%
   filter(version_inclusion != 0) %>%
   mutate(version_inclusion = factor(version_inclusion, labels = c("PIC0", "PGD0")))
 
 
 # -----------------------------------------------------------------------------
-# 2c. Relative node WSE: matched subset (same nodes present in both versions)
+# 2c. Relative node WSE: matched subset (nodes in both versions), in situ type
 # -----------------------------------------------------------------------------
 
 # Retain only nodes present in both C and D; drop rows where the paired
@@ -237,65 +218,20 @@ same_version_subset_node_SWOT_insitu <- node_SWOT_full_insitu %>%
 
 # Summary stats for matched subset
 table_relative_node_WSE <- same_version_subset_node_SWOT_insitu %>%
-  group_by(source) %>%
-  summarise(
-    error_68ile   = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
-    error_50ile   = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
-    MAE           = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    bias          = round(median(bias, na.rm = TRUE) * 100, 1),
-    n             = sum(!is.na(residuals_nobias)),
-    n_unique_nodes = n_distinct(node_id)
-  )
-
-# Pearson correlation for matched subset
-cor_table <- same_version_subset_node_SWOT_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = "source")
-
-
-# -----------------------------------------------------------------------------
-# 2d. Relative node WSE: by in situ type (PT vs GNSS) and version
-# -----------------------------------------------------------------------------
-
-table_relative_node_WSE <- node_SWOT_full_insitu %>%
   group_by(insitu_type, source) %>%
   summarise(
+    n             = sum(!is.na(residuals_nobias)),
+    n_unique_nodes = n_distinct(node_id),
     error_68ile   = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
     RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
-    bias          = round(median(bias, na.rm = TRUE) * 100, 1),
-    n             = sum(!is.na(residuals_nobias)),
-    n_unique_nodes = n_distinct(node_id))
-
-# Pearson correlation by in situ type and source
-cor_table <- node_SWOT_full_insitu %>%
-  group_by(insitu_type, source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
+    bias          = round(median(bias, na.rm = TRUE) * 100, 1)
   )
-
-table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = c("insitu_type", "source"))
 
 
 # -----------------------------------------------------------------------------
-# 2e. Relative node WSE: by river (D PT only)
+# 2d. Relative node WSE: by river (D PT only)
 # -----------------------------------------------------------------------------
 
 table_relative_node_WSE <- node_SWOT_full_insitu %>%
@@ -306,93 +242,30 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
   )) %>%
   group_by(river, insitu_type) %>%
   summarise(
+    n             = sum(!is.na(residuals_nobias)),
+    n_unique_nodes = n_distinct(node_id),
     error_68ile   = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
     bias          = round(median(bias, na.rm = TRUE) * 100, 1),
-    n             = sum(!is.na(residuals_nobias)),
-    n_unique_nodes = n_distinct(node_id)
   )
-
-# Pearson correlation by river
-cor_table <- node_SWOT_full_insitu %>%
-  filter(source == "PGD0", insitu_type == "PT") %>%
-  mutate(river = case_when(
-    river %in% c("lowerPR", "upperPR") ~ "PR",
-    TRUE ~ river
-  )) %>%
-  group_by(river) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_relative_node_WSE <- table_relative_node_WSE %>%
-  left_join(cor_table, by = "river")
 
 
 # -----------------------------------------------------------------------------
-# 2f. Absolute node WSE: by version
+# 2e. Absolute node WSE: by in situ type and version
 # -----------------------------------------------------------------------------
 
 table_absolute_node_WSE <- node_SWOT_full_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n             = sum(!is.na(residuals)),
+    n_unique_nodes = n_distinct(node_id),
     error_68ile   = round(quantile(abs(residuals) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals) * 100, na.rm = TRUE), 1),
-    n             = sum(!is.na(residuals)),
-    n_unique_nodes = n_distinct(node_id)
+    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1)
   )
-
-# Pearson correlation using absolute WSE
-cor_table <- node_SWOT_full_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_node_WSE <- table_absolute_node_WSE %>%
-  left_join(cor_table, by = "source")
-
-
-# -----------------------------------------------------------------------------
-# 2g. Absolute node WSE: by in situ type and version
-# -----------------------------------------------------------------------------
-
-table_absolute_node_WSE <- node_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    error_68ile   = round(quantile(abs(residuals) * 100, 0.68, na.rm = TRUE), 1),
-    error_50ile   = round(quantile(abs(residuals) * 100, 0.50, na.rm = TRUE), 1),
-    MAE           = round(mean(abs(residuals) * 100, na.rm = TRUE), 1),
-    n             = sum(!is.na(residuals)),
-    n_unique_nodes = n_distinct(node_id)
-  )
-
-# Pearson correlation by source and in situ type
-cor_table <- node_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_node_WSE <- table_absolute_node_WSE %>%
-  left_join(cor_table, by = c("source", "insitu_type"))
 
 
 # =============================================================================
@@ -401,39 +274,39 @@ table_absolute_node_WSE <- table_absolute_node_WSE %>%
 
 
 # -----------------------------------------------------------------------------
-# 3a. CDF: relative node WSE by SWOT version (C vs D)
+# 3a. CDF: relative node WSE by SWOT version (C vs D) against PT data
 # -----------------------------------------------------------------------------
 
 # Observation counts for annotation
-n_relative_df <- node_SWOT_full_insitu %>%
+n_relative_df <- node_SWOT_PT %>%
   group_by(source) %>%
   summarise(
     n_unique_nodes = n_distinct(node_id),
     n              = sum(!is.na(residuals_nobias)),
     .groups = "drop")
 
-ggplot(node_SWOT_full_insitu,
+ggplot(node_SWOT_PT,
        aes(x = abs(residuals_nobias) * 100, color = source, linetype = source)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
+    x     = expression("SWOT - PT WSE (cm)"),
     y     = "Cumulative Probability",
     title = "By SWOT version"
   ) +
   annotate("text", x = 40, y = 0.72, hjust = 0,
     label = paste("68% C:",
-      round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
+      round(quantile(abs(node_SWOT_PT[node_SWOT_PT$source == "PIC0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm, D:",
-      round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
+      round(quantile(abs(node_SWOT_PT[node_SWOT_PT$source == "PGD0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm"),
     color = "#222222", size = 8) +
   annotate("text", x = 40, y = 0.54, hjust = 0,
     label = paste("50% C:",
-      round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
+      round(quantile(abs(node_SWOT_PT[node_SWOT_PT$source == "PIC0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm, D:",
-      round(quantile(abs(node_SWOT_full_insitu[node_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
+      round(quantile(abs(node_SWOT_PT[node_SWOT_PT$source == "PGD0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm"),
     color = "#222222", size = 8) +
   annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
@@ -623,6 +496,10 @@ all_reaches <- reach_SWOT_full_insitu %>%
 reach_SWOT_full_insitu <- reach_SWOT_full_insitu %>%
   left_join(all_reaches, by = "reach_id")
 
+# Create a separate PT and GNSS dataset
+reach_SWOT_PT   <- reach_SWOT_full_insitu %>% filter(insitu_type == "PT")
+reach_SWOT_GNSS <- reach_SWOT_full_insitu %>% filter(insitu_type == "GNSS")
+
 
 # =============================================================================
 # REACH TABLES — SUMMARY STATISTICS
@@ -634,30 +511,16 @@ reach_SWOT_full_insitu <- reach_SWOT_full_insitu %>%
 # -----------------------------------------------------------------------------
 
 table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n              = sum(!is.na(residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
     bias           = round(median(bias, na.rm = TRUE) * 100, 1),
-    n              = sum(!is.na(residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
   )
-
-# Pearson correlation by source
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_relative_reach_WSE <- table_relative_reach_WSE %>%
-  left_join(cor_table, by = "source")
 
 # Relabel and reorder source for bar chart
 table_relative_reach_WSE <- table_relative_reach_WSE %>%
@@ -674,7 +537,7 @@ ggplot(table_relative_reach_WSE, aes(x = source, y = n, fill = source)) +
   geom_text(aes(label = n), vjust = -0.5, size = 8) +
   ylab("Count") +
   coord_cartesian(ylim = c(11, 185)) +
-  scale_fill_manual(values = c("vC0" = "#E69F00", "vD0" = "#0072B2")) +
+  scale_fill_manual(values = c("C" = "#E69F00", "D" = "#0072B2")) +
   theme_classic(base_size = 34) +
   theme(
     axis.title.x    = element_blank(),
@@ -686,51 +549,32 @@ ggplot(table_relative_reach_WSE, aes(x = source, y = n, fill = source)) +
 
 
 # -----------------------------------------------------------------------------
-# 5b. Relative reach WSE: by version inclusion (reaches unique to vC or vD)
+# 5b. Relative reach WSE: by version inclusion (reaches unique to C or D)
 # -----------------------------------------------------------------------------
 
 table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
-  group_by(version_inclusion) %>%
+  group_by(insitu_type, version_inclusion) %>%
   summarise(
+    n              = sum(!is.na(residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
     bias           = round(median(bias, na.rm = TRUE) * 100, 1),
-    n              = sum(!is.na(residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
   )
 
-# Pearson correlation by version inclusion (guards against n <= 1)
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(version_inclusion) %>%
-  summarise(
-    n       = sum(complete.cases(wse, insitu_wse_nobias_m)),
-    r_value = if (n > 1) {
-      round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4)
-    } else {
-      NA_real_
-    },
-    p_value = if (n > 1) {
-      cor.test(wse, insitu_wse_nobias_m, method = "pearson")$p.value
-    } else {
-      NA_real_
-    },
-    .groups = "drop"
-  )
-
-# Join; drop version_inclusion == 0 (reaches present in both versions)
+# Drop version_inclusion == 0 (reaches present in both versions)
 table_relative_reach_WSE <- table_relative_reach_WSE %>%
-  left_join(cor_table, by = "version_inclusion") %>%
-  filter(version_inclusion != 0) %>%
-  mutate(version_inclusion = factor(version_inclusion, labels = c("vC0", "vD0")))
+  filter(version_inclusion != 0)
 
 
 # -----------------------------------------------------------------------------
-# 5c. Relative reach WSE: matched subset (same reaches present in both versions)
+# 5c. Relative reach WSE: matched subset (same reaches in both versions)
 # -----------------------------------------------------------------------------
 
-# Retain only reaches present in both vC and vD; drop rows where the paired
-# source has a missing residuals_nobias value, then confirm both sources remain.
+# Retain only reaches in both C and D; drop rows where the paired source
+# has a missing residuals_nobias value, then confirm both sources remain.
 same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
   filter(version_inclusion == 0) %>%
   group_by(reach_id, insitu_time_utc, insitu_type) %>%
@@ -747,160 +591,57 @@ same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
   ungroup() %>%
   select(-RiverSP_resid_na, -RiverTile_resid_na)
 
-# Pearson correlation for matched reach subset
-cor_table <- same_version_subset_reach_SWOT_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
 # Summary stats for matched reach subset
 table_relative_reach_WSE <- same_version_subset_reach_SWOT_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
-    error_68ile    = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
-    error_50ile    = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
-    MAE            = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    bias           = round(median(bias, na.rm = TRUE) * 100, 2),
     n              = sum(!is.na(residuals_nobias)),
     n_unique_reaches = n_distinct(reach_id),
-    .groups = "drop"
-  )
-
-table_relative_reach_WSE <- table_relative_reach_WSE %>%
-  left_join(cor_table, by = "source")
-
-
-# -----------------------------------------------------------------------------
-# 5d. Relative reach WSE: by in situ type (PT vs GNSS) and version
-# -----------------------------------------------------------------------------
-
-table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type, source) %>%
-  summarise(
     error_68ile    = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    bias           = round(median(bias, na.rm = TRUE) * 100, 1),
-    n              = sum(!is.na(residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
-  )
-
-# Pearson correlation by in situ type and source
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type, source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
+    bias           = round(median(bias, na.rm = TRUE) * 100, 2),
     .groups = "drop"
   )
 
-table_relative_reach_WSE <- table_relative_reach_WSE %>%
-  left_join(cor_table, by = c("insitu_type", "source"))
-
 
 # -----------------------------------------------------------------------------
-# 5e. Relative reach WSE: by river (vD PT only)
+# 5d. Relative reach WSE: by river (D PT only)
 # -----------------------------------------------------------------------------
 
 table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
-  filter(source == "PGD0", insitu_type == "PT") %>%
+  filter(source == "PGD0", insitu_type == "GNSS") %>%
   mutate(river = case_when(
     river %in% c("lowerPR", "upperPR") ~ "PR",
     TRUE ~ river
   )) %>%
   group_by(river) %>%
   summarise(
+    n              = sum(!is.na(residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    bias           = round(median(bias, na.rm = TRUE) * 100, 1),
-    n              = sum(!is.na(residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
+    bias           = round(median(bias, na.rm = TRUE) * 100, 1)
   )
-
-# Pearson correlation by river (all sources/types)
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(river) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_nobias_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_nobias_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_relative_reach_WSE <- table_relative_reach_WSE %>%
-  left_join(cor_table, by = "river")
 
 
 # -----------------------------------------------------------------------------
-# 5f. Absolute reach WSE: by version
+# 5e. Absolute reach WSE: by version
 # -----------------------------------------------------------------------------
 
 table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n              = sum(!is.na(residuals)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(residuals) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals) * 100, na.rm = TRUE), 1),
-    n              = sum(!is.na(residuals)),
-    n_unique_reaches = n_distinct(reach_id)
+    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1)
   )
-
-# Pearson correlation using raw (biased) WSE
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_reach_WSE <- table_absolute_reach_WSE %>%
-  left_join(cor_table, by = "source")
-
-
-# -----------------------------------------------------------------------------
-# 5g. Absolute reach WSE: by in situ type and version
-# -----------------------------------------------------------------------------
-
-table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    error_68ile    = round(quantile(abs(residuals) * 100, 0.68, na.rm = TRUE), 1),
-    error_50ile    = round(quantile(abs(residuals) * 100, 0.50, na.rm = TRUE), 1),
-    MAE            = round(mean(abs(residuals) * 100, na.rm = TRUE), 1),
-    n              = sum(!is.na(residuals)),
-    n_unique_reaches = n_distinct(reach_id)
-  )
-
-# Pearson correlation by source and in situ type (raw WSE)
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    r_value = round(cor(wse, insitu_wse_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(wse, insitu_wse_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_reach_WSE <- table_absolute_reach_WSE %>%
-  left_join(cor_table, by = c("source", "insitu_type"))
 
 
 # =============================================================================
@@ -909,11 +650,11 @@ table_absolute_reach_WSE <- table_absolute_reach_WSE %>%
 
 
 # -----------------------------------------------------------------------------
-# 6a. CDF: relative reach WSE by SWOT version (C vs D)
+# 6a. CDF: relative reach WSE by SWOT version (C vs D) against PT data
 # -----------------------------------------------------------------------------
 
 # Observation counts for annotation
-n_relative_df <- reach_SWOT_full_insitu %>%
+n_relative_df <- reach_SWOT_PT %>%
   group_by(source) %>%
   summarise(
     n_unique_reaches = n_distinct(reach_id),
@@ -921,28 +662,28 @@ n_relative_df <- reach_SWOT_full_insitu %>%
     .groups = "drop"
   )
 
-ggplot(reach_SWOT_full_insitu,
+ggplot(reach_SWOT_PT,
        aes(x = abs(residuals_nobias) * 100, color = source, linetype = source)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
+    x     = expression("SWOT - PT WSE (cm)"),
     y     = "Cumulative Probability",
     title = "By SWOT version"
   ) +
   annotate("text", x = 40, y = 0.72, hjust = 0,
     label = paste("68% C:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
+      round(quantile(abs(reach_SWOT_PT[reach_SWOT_PT$source == "PIC0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm, D:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
+      round(quantile(abs(reach_SWOT_PT[reach_SWOT_PT$source == "PGD0", ]$residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
       "cm"),
     color = "#222222", size = 8) +
   annotate("text", x = 40, y = 0.54, hjust = 0,
     label = paste("50% C:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
+      round(quantile(abs(reach_SWOT_PT[reach_SWOT_PT$source == "PIC0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm, D:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
+      round(quantile(abs(reach_SWOT_PT[reach_SWOT_PT$source == "PGD0", ]$residuals_nobias) * 100, 0.5, na.rm = TRUE), 1),
       "cm"),
     color = "#222222", size = 8) +
   annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
@@ -1081,23 +822,23 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = abs(residuals_nobias) * 100, fill = r
 # -----------------------------------------------------------------------------
 
 
-ggplot(node_SWOT_PT_vD, aes(x = river, y = bias * 100, fill = river)) +
-  geom_violin(alpha = 0.8, color = NA) +
-  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
-  geom_text(data = counts,
-    aes(x = river, y = -1, label = paste0("n=", n)),
-    inherit.aes = FALSE, vjust = 1, size = 6) +
-  xlab("River") +
-  ylab("SWOT - PT WSE bias (cm)") +  # corrected from absolute-residual label
-  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
-  scale_x_discrete(breaks = river_levels, labels = river_labels) +
-  theme_minimal(base_size = 25) +
-  theme(
-    legend.position = "none",
-    axis.text.x  = element_text(angle = 20, hjust = 0.9),
-    plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
-  ) +
-  coord_cartesian(ylim = c(-25, 50))
+# ggplot(node_SWOT_PT_vD, aes(x = river, y = bias * 100, fill = river)) +
+#   geom_violin(alpha = 0.8, color = NA) +
+#   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+#   geom_text(data = counts,
+#     aes(x = river, y = -1, label = paste0("n=", n)),
+#     inherit.aes = FALSE, vjust = 1, size = 6) +
+#   xlab("River") +
+#   ylab("SWOT - PT WSE bias (cm)") +
+#   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
+#   scale_x_discrete(breaks = river_levels, labels = river_labels) +
+#   theme_minimal(base_size = 25) +
+#   theme(
+#     legend.position = "none",
+#     axis.text.x  = element_text(angle = 20, hjust = 0.9),
+#     plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
+#   ) +
+#   coord_cartesian(ylim = c(-25, 50))
 
 
 # =============================================================================
@@ -1110,14 +851,18 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = bias * 100, fill = river)) +
 # -----------------------------------------------------------------------------
 
 reach_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv"
-) %>%
-  filter(dark_frac < 0.5)
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
+  filter(dark_frac < 0.5) %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",
+    TRUE ~ river))
 
 reach_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv"
-) %>%
-  filter(dark_frac < 0.5)
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
+  filter(dark_frac < 0.5) %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",
+    TRUE ~ river))
 
 # Merge slope data frames; unify slope and time column names
 reach_SWOT_full_insitu <- bind_rows(reach_SWOT_PT_vD, reach_SWOT_GNSS_vD) %>%
@@ -1127,17 +872,11 @@ reach_SWOT_full_insitu <- bind_rows(reach_SWOT_PT_vD, reach_SWOT_GNSS_vD) %>%
     insitu_time_utc         = coalesce(pt_time_UTC, wse_drift_midpoint_UTC)
   )
 
-# Merge Porcupine River sub-reaches and set factor order
-reach_SWOT_full_insitu <- reach_SWOT_full_insitu %>%
-  mutate(river = case_when(
-    river %in% c("lowerPR", "upperPR") ~ "PR",
-    TRUE ~ river
-  ))
-
+# Set factor order
 reach_SWOT_full_insitu$river <- factor(reach_SWOT_full_insitu$river, levels = river_levels)
 
 # Per-river sample sizes for plot annotation
-counts <- reach_SWOT_full_insitu %>%
+counts <- reach_SWOT_PT_vD %>%
   group_by(river) %>%
   summarise(n = n()) %>%
   ungroup()
@@ -1155,7 +894,7 @@ ggplot(reach_SWOT_full_insitu,
     aes(x = river, y = -0.2, label = paste0("n=", n)),
     inherit.aes = FALSE, vjust = 1, size = 6) +
   xlab("River") +
-  ylab("| SWOT -" ~ italic("in situ") ~ "Slope | (cm/km)") +
+  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
   scale_x_discrete(breaks = river_levels, labels = river_labels) +
   theme_minimal(base_size = 25) +
@@ -1165,4 +904,45 @@ ggplot(reach_SWOT_full_insitu,
     plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
   ) +
   coord_cartesian(ylim = c(-0.5, 12))
+# export dimensions: width 9.44 in, height 6.01 in
+
+
+ggplot(reach_SWOT_GNSS_vD,
+       aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
+  geom_violin(alpha = 0.8, color = NA) +
+  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+  geom_text(data = counts,
+            aes(x = river, y = -0.2, label = paste0("n=", n)),
+            inherit.aes = FALSE, vjust = 1, size = 6) +
+  xlab("River") +
+  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
+  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
+  scale_x_discrete(breaks = river_levels, labels = river_labels) +
+  theme_minimal(base_size = 25) +
+  theme(
+    legend.position = "none",
+    axis.text.x  = element_text(angle = 20, hjust = 0.9),
+    plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
+  ) +
+  coord_cartesian(ylim = c(-0.5, 7))
+# export dimensions: width 9.44 in, height 6.01 in
+
+ggplot(reach_SWOT_PT_vD,
+       aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
+  geom_violin(alpha = 0.8, color = NA) +
+  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+  geom_text(data = counts,
+            aes(x = river, y = -0.2, label = paste0("n=", n)),
+            inherit.aes = FALSE, vjust = 1, size = 6) +
+  xlab("River") +
+  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
+  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
+  scale_x_discrete(breaks = river_levels, labels = river_labels) +
+  theme_minimal(base_size = 25) +
+  theme(
+    legend.position = "none",
+    axis.text.x  = element_text(angle = 20, hjust = 0.9),
+    plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
+  ) +
+  coord_cartesian(ylim = c(-0.5, 7))
 # export dimensions: width 9.44 in, height 6.01 in

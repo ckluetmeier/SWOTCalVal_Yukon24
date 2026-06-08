@@ -30,14 +30,20 @@ node_SWOT_ortho_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv") %>%
   mutate(source = "PIC0") %>%
   rename(old_node_id = node_id) %>%
-  filter(abs(residuals) < 1500, dark_frac < 0.5)
+  filter(abs(residuals) < 1500, dark_frac < 0.5) %>%
+  # remove cloudy nodes from upper Yukon
+  filter(!old_node_id %in% c(81270501180291, 81270501180281, 81270501180271, 81270501180261,81270501180251, 
+                         81270501180241, 81270501180231, 81270501180221, 81270501180211))
+
 
 # Version D (SWORD v17b / RiverSP PGD0)
 node_SWOT_ortho_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/node_width_SWOT_Ortho.csv") %>%
   mutate(source = "PGD0") %>%
-  filter(abs(residuals) < 1500, dark_frac < 0.5)
-
+  filter(abs(residuals) < 1500, dark_frac < 0.5) %>%
+  # remove cloudy nodes from upper Yukon
+  filter(!node_id %in% c(81270500150281, 81270500150271, 81270500150261, 81270500150251, 81270500150241,
+                             81270500150231, 81270500150221, 81270500150211, 81270500150201, 81270500150191))
 
 # =============================================================================
 # 2. Harmonize to SWORD v17b node IDs
@@ -104,28 +110,16 @@ color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A34
 table_absolute_node_width <- node_SWOT_ortho %>%
   group_by(source) %>%
   summarise(
+    n                   = sum(!is.na(residuals)),
+    n_unique_nodes      = n_distinct(node_id),
     error_abs_68ile     = round(quantile(abs(residuals), 0.68, na.rm = TRUE), 1),
     error_abs_50ile     = round(quantile(abs(residuals), 0.50, na.rm = TRUE), 1),
     MAE                 = round(mean(abs(residuals), na.rm = TRUE), 1),
+    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1),
     bias                = round(median(bias, na.rm = TRUE), 1),
     error_perdiff_68ile = round(quantile(percent_diff, 0.68, na.rm = TRUE), 2),
     error_perdiff_50ile = round(quantile(percent_diff, 0.50, na.rm = TRUE), 2),
-    n                   = sum(!is.na(residuals)),
-    n_unique_nodes      = n_distinct(node_id)
   )
-
-# Pearson correlation by source
-cor_table <- node_SWOT_ortho %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(width, ortho_width_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(width, ortho_width_m)$p.value,
-      error = function(e) NA_real_),
-    .groups = "drop")
-
-table_absolute_node_width <- table_absolute_node_width %>%
-  left_join(cor_table, by = "source")
 
 
 # -----------------------------------------------------------------------------
@@ -149,21 +143,6 @@ table_absolute_node_width <- node_SWOT_ortho_vD %>%
     n_unique_nodes      = n_distinct(node_id)
   )
 
-# Pearson correlation by river (vD only)
-cor_table <- node_SWOT_ortho_vD %>%
-  group_by(river) %>%
-  summarise(
-    r_value = round(cor(width, ortho_width_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(width, ortho_width_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_node_width <- table_absolute_node_width %>%
-  left_join(cor_table, by = "river")
-
 
 # -----------------------------------------------------------------------------
 # 3c. Absolute node width: by version inclusion (nodes unique to C or D)
@@ -180,18 +159,6 @@ table_absolute_node_width <- node_SWOT_ortho %>%
     error_perdiff_50ile = round(quantile(percent_diff, 0.50, na.rm = TRUE), 2),
     n                   = sum(!is.na(residuals_nobias)),
     n_unique_nodes      = n_distinct(node_id)
-  )
-
-# Pearson correlation by version inclusion
-cor_table <- node_SWOT_ortho %>%
-  group_by(version_inclusion) %>%
-  summarise(
-    r_value = round(cor(width, ortho_width_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(width, ortho_width_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
   )
 
 # Join; drop version_inclusion == 0 (nodes present in both versions)
@@ -237,22 +204,6 @@ table_absolute_node_width <- same_version_subset_node_SWOT_insitu %>%
     n                   = sum(!is.na(residuals)),
     n_unique_nodes      = n_distinct(node_id)
   )
-
-# Pearson correlation for matched subset (version_inclusion == 0 only)
-cor_table <- node_SWOT_ortho %>%
-  filter(version_inclusion == 0) %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(width, ortho_width_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(width, ortho_width_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_node_width <- table_absolute_node_width %>%
-  left_join(cor_table, by = "source")
 
 
 # =============================================================================

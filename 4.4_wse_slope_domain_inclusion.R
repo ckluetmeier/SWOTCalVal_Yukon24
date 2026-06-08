@@ -808,6 +808,10 @@ GNSS_summary_stats <- GNSS_sf %>%
 # total km of GNSS data collected
 sum(GNSS_summary_stats$survey_length_km, na.rm = TRUE)
 
+# mean survey time in hours
+mean(GNSS_summary_stats$survey_time_hours, na.rm = TRUE)
+max(GNSS_summary_stats$survey_time_hours, na.rm = TRUE)
+
 # unique number of days we have GNSS data from
 map2(
   as.Date(GNSS_summary_stats$start_time),
