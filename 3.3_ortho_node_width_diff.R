@@ -29,10 +29,10 @@ library(dplyr)
 # =============================================================================
 
 # --- RiverSP Version C (SWORD v16) -------------------------------------------
-# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
+SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv')
 
 # --- RiverSP Version D (SWORD v17b) ------------------------------------------
-SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
+# SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv')
 
 # --- RiverTile (SWORD v17b) --------------------------------------------------
 # SWOT_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node/RiverTile_v17b/RiverTile_domain_node_timeseries_v17b.csv')
@@ -78,7 +78,10 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # coleen / upper PR 7/16
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperPR_CL_071624.csv')
 # upper YR 7/10
-# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv')
+ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/ortho_upperYR_071024.csv') %>%
+  # remove cloudy nodes from upper Yukon
+  filter(!node_id %in% c(81270501180291, 81270501180281, 81270501180271, 81270501180261,81270501180251, 
+                             81270501180241, 81270501180231, 81270501180221, 81270501180211))
 
 # --- RiverSP Version D (SWORD v17b) ------------------------------------------
 # chandalar 7/10
@@ -92,7 +95,10 @@ SWOT_df_filtered$time_utc <- tai_epoch + SWOT_df_filtered$time_tai - tai_utc_off
 # coleen / upper PR 7/16
 # ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_upperPR_CL_071624.csv')
 # upper YR 7/10
-ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_upperYR_071024.csv')
+# ortho_df <- read_csv('/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/ortho_upperYR_071024.csv') %>%
+#   # remove cloudy nodes from upper Yukon
+#   filter(!node_id %in% c(81270500150281, 81270500150271, 81270500150261, 81270500150251, 81270500150241,
+#                          81270500150231, 81270500150221, 81270500150211, 81270500150201, 81270500150191))
 
 # --- RiverTile (SWORD v17b) --------------------------------------------------
 # chandalar 7/10
@@ -297,7 +303,7 @@ save_to_csv <- combined_ortho_SWORD_df %>%
 
 write.csv(
   save_to_csv,
-  file      = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/combined_ortho_SWOT_upperYR_071024.csv',
+  file      = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/combined_ortho_SWOT_upperYR_071024.csv',
   row.names = FALSE)
 
 
@@ -306,8 +312,8 @@ write.csv(
 # =============================================================================
 
 # Set working directory containing the combined_ortho_SWOT_*.csv files
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b"
-# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16"
+# wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b"
+wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16"
 # wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b"
 
 setwd(wd)
@@ -339,5 +345,5 @@ combined_df <- combined_df %>%
 
 write.csv(
   combined_df,
-  file      = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/node_width_SWOT_Ortho.csv',
+  file      = '/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v16/node_width_SWOT_Ortho.csv',
   row.names = FALSE)
