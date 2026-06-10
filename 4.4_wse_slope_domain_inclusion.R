@@ -39,31 +39,35 @@ library(lubridate)
 # 1. Read in node-level WSE data (time/space matched SWOT vs. in situ)
 # -----------------------------------------------------------------------------
 
-# PT — Version C (SWORD v16 / RiverSP) and Version D (SWORD v17b / RiverTile)
+# PT — Version C (SWORD v16 / RiverSP) and Version D (SWORD v17b / RiverSP)
 node_SWOT_PT_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
+  mutate(source = "PIC0") %>%
   rename(old_node_id = node_id) %>%
   filter(dark_frac < 0.5)
 node_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_PT.csv") %>%
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/node_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
+  mutate(source = "PGD0") %>%
   filter(dark_frac < 0.5)
 
 # GNSS — Version C and Version D
 node_SWOT_GNSS_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv") %>%
   mutate(insitu_type = "GNSS") %>%
+  mutate(source = "PIC0") %>%
   rename(old_node_id = node_id) %>%
   filter(dark_frac < 0.5)
 node_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_GNSS_3mdiff.csv") %>%
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/node_SWOT_GNSS_3mdiff.csv") %>%
   mutate(insitu_type = "GNSS") %>%
+  mutate(source = "PGD0") %>%
   filter(dark_frac < 0.5)
 
 
 # -----------------------------------------------------------------------------
-# 2. Build the in situ node domain (union of PT and GNSS observations)
+# 2. Build the in situ node domain (from all PT and GNSS obs)
 # -----------------------------------------------------------------------------
 
 # Combine the munged PT files (per-river, per-PT cluster) into one frame.
@@ -132,8 +136,8 @@ all_nodes <- node_SWOT_full_insitu %>%
   distinct(node_id, source) %>%                  # one row per node_id × source
   group_by(node_id) %>%
   summarise(
-    has_RiverSP   = any(source == "RiverSP"),
-    has_RiverTile = any(source == "RiverTile"),
+    has_RiverSP   = any(source == "PIC0"),
+    has_RiverTile = any(source == "PGD0"),
     .groups = "drop"
   ) %>%
   mutate(
@@ -173,7 +177,7 @@ all_YR_domain_nodes_sf_subset <- all_YR_domain_nodes_sf %>%
 # data, so they were manually deleted in QGIS.
 st_write(
   all_YR_domain_nodes_sf_subset,
-  "/Users/camryn/Desktop/all_YR_domain_nodes_subset.shp",
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_nodes_subset.shp",
   delete_layer = TRUE
 )
 
@@ -207,22 +211,24 @@ st_write(
 reach_SWOT_PT_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverSP") %>%
+  mutate(source = "PIC0") %>%
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5)
 reach_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_PT.csv") %>%
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_wse_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
-  mutate(source = "RiverTile") %>%
+  mutate(source = "PGD0") %>%
   filter(dark_frac < 0.5)
 
 # GNSS — Version C and Version D
 reach_SWOT_GNSS_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv") %>%
   rename(old_reach_id = reach_id) %>%
+  mutate(source = "PIC0") %>%
   filter(dark_frac < 0.5)
 reach_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_GNSS.csv") %>%
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_wse_SWOT_GNSS.csv") %>%
+  mutate(source = "PGD0") %>%
   filter(dark_frac < 0.5)
 
 
@@ -331,9 +337,9 @@ st_write(
 )
 
 # Colors used in the corresponding plot:
-#   #e97132  (Version C only)
+#   #E69F00  (Version C only)
 #   #ececec  (both)
-#   #00008b  (Version D only)
+#   #0072B2  (Version D only)
 #   dashed gray 2 (no SWOT match)
 
 

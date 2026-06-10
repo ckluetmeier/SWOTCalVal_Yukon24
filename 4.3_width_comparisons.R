@@ -336,7 +336,7 @@ ggplot(node_SWOT_ortho_vD, aes(x = river, y = abs(percent_diff), fill = river)) 
     aes(x = river, y = -2, label = paste0("n=", n)),
     inherit.aes = FALSE, vjust = 1, size = 6) +
   xlab("River") +
-  ylab(expression(atop("SWOT -" ~ italic("in situ") ~ "Width", "(% difference)"))) +
+  ylab(expression(atop("SWOT - Orthomosaic", " Width (% difference)"))) +
   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
   scale_x_discrete(breaks = river_levels, labels = river_labels) +
   theme_minimal(base_size = 25) +
@@ -360,7 +360,7 @@ ggplot(node_SWOT_ortho_vD, aes(x = river, y = abs(residuals), fill = river)) +
     aes(x = river, y = -2, label = paste0("n=", n)),
     inherit.aes = FALSE, vjust = 1, size = 6) +
   xlab("River") +
-  ylab(expression(atop("SWOT -" ~ italic("in situ") ~ "Width (m)"))) +
+  ylab(expression(atop("SWOT - Orthomosaic", "Width (m)"))) +
   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
   scale_x_discrete(breaks = river_levels, labels = river_labels) +
   theme_minimal(base_size = 25) +
@@ -407,7 +407,7 @@ ggplot() +
   ) +
   geom_abline(linetype = "dashed", color = "gray") +
   scale_color_manual(values = color_palette_scatter) +
-  xlab(expression(italic("In situ") ~ "Width (m)")) +
+  xlab(expression("Orthomosaic Width (m)")) +
   ylab("SWOT Width (m)") +
   ylim(0, 2700) +
   xlim(0, 2700) +
@@ -422,7 +422,7 @@ ggplot() +
     hjust = 0, vjust = 1, size = 8) +
   theme_minimal(base_size = 25) +
   theme(legend.position = "none")
-# Suggested export dimensions: width 6.66 in, height 6.01 in
+# export dimensions: width 6.66 in, height 6.01 in
 
 
 
