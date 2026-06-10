@@ -31,12 +31,16 @@ library(ggtext)
 reach_SWOT_PT_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT.csv") %>%
   rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5) %>%
+  # remove 1 km reach
+  filter(old_reach_id != 81260300061)
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_PT_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5) %>%
+  # remove 1 km reach
+  filter(reach_id != 81260300181)
 
 # --- GNSS ---------------------------------------------------------------------
 
@@ -44,12 +48,16 @@ reach_SWOT_PT_vD <- read_csv(
 reach_SWOT_GNSS_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_GNSS.csv") %>%
   rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5)  %>%
+  # remove 1 km reach
+  filter(old_reach_id != 81260300061)
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_GNSS_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5) %>%
+  # remove 1 km reach
+  filter(reach_id != 81260300181)
 
 
 # =============================================================================
@@ -113,6 +121,11 @@ all_reaches <- reach_SWOT_full_insitu %>%
 reach_SWOT_full_insitu <- reach_SWOT_full_insitu %>%
   left_join(all_reaches, by = "reach_id")
 
+# Create a separate PT and GNSS dataset
+reach_SWOT_PT   <- reach_SWOT_full_insitu %>% filter(insitu_type == "PT")
+reach_SWOT_GNSS <- reach_SWOT_full_insitu %>% filter(insitu_type == "GNSS")
+
+
 # Shared river factor levels and color palette used across all inter-river plots
 river_levels  <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
 river_labels  <- c("Coleen", "Sheenjek", "Chandalar", "Porcupine",
@@ -130,30 +143,15 @@ color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A34
 # -----------------------------------------------------------------------------
 
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n              = sum(!is.na(slope_residuals_nobias)),    # count of non-NA residuals
+    n_unique_reaches = n_distinct(reach_id),                  # count of unique reaches
     error_68ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
     error_50ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.50, na.rm = TRUE), 2),
     MAE            = round(mean(abs(slope_residuals_nobias) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals_nobias)),    # count of non-NA residuals
-    n_unique_reaches = n_distinct(reach_id)                  # count of unique reaches
+    RMSE          = round(sqrt(mean((slope_residuals_nobias * 100000)^2, na.rm = TRUE)), 2)
   )
-
-# Pearson correlation by source
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-# Join correlation columns to summary table
-table_relative_reach_slope <- table_relative_reach_slope %>%
-  left_join(cor_table, by = "source")
 
 # Relabel and reorder source factor for bar chart
 table_relative_reach_slope <- table_relative_reach_slope %>%
@@ -182,176 +180,65 @@ ggplot(table_relative_reach_slope, aes(x = source, y = n, fill = source)) +
 
 
 # -----------------------------------------------------------------------------
-# 3b. Relative reach slope: by in situ type (PT vs GNSS) and version
+# 3b. Relative reach slope: by river (D PT or GNSS only)
 # -----------------------------------------------------------------------------
 
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    error_68ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
-    error_50ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.50, na.rm = TRUE), 2),
-    MAE            = round(mean(abs(slope_residuals_nobias) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
-  )
-
-# Pearson correlation by source and in situ type
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_relative_reach_slope <- table_relative_reach_slope %>%
-  left_join(cor_table, by = c("source", "insitu_type"))
-
-
-# -----------------------------------------------------------------------------
-# 3c. Relative reach slope: by river (D PT or GNSS only)
-# -----------------------------------------------------------------------------
-
-table_relative_reach_slope <- reach_SWOT_full_insitu %>%
-  filter(source == "PGD0", insitu_type == "GNSS") %>%
+  filter(source == "PGD0") %>%
   mutate(river = case_when(
     river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
     TRUE ~ river
   )) %>%
-  group_by(river) %>%
+  group_by(insitu_type, river) %>%
   summarise(
+    n              = sum(!is.na(slope_residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
     error_50ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.50, na.rm = TRUE), 2),
     MAE            = round(mean(abs(slope_residuals_nobias) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
+    RMSE           = round(sqrt(mean((slope_residuals_nobias * 100000)^2, na.rm = TRUE)), 2)
   )
-
-# Pearson correlation by river (all sources/types)
-cor_table <- reach_SWOT_full_insitu %>%
-  filter(source == "PGD0", insitu_type == "GNSS") %>%
-  mutate(river = case_when(
-    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
-    TRUE ~ river
-  )) %>%
-  group_by(river) %>%
-  summarise(
-    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_relative_reach_slope <- table_relative_reach_slope %>%
-  left_join(cor_table, by = "river")
 
 
 # -----------------------------------------------------------------------------
-# 3d. Absolute reach slope: by version
+# 3c. Absolute reach slope: by version
 # -----------------------------------------------------------------------------
 
 table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n              = sum(!is.na(slope_residuals)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(slope_residuals) * 100000, 0.68, na.rm = TRUE), 2),
     error_50ile    = round(quantile(abs(slope_residuals) * 100000, 0.50, na.rm = TRUE), 2),
     MAE            = round(mean(abs(slope_residuals) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals)),
-    n_unique_reaches = n_distinct(reach_id)
+    RMSE           = round(sqrt(mean((slope_residuals * 100000)^2, na.rm = TRUE)), 2)
   )
-
-# Pearson correlation using absolute slope
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(slope_abs, insitu_slope_m_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(slope_abs, insitu_slope_m_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_reach_slope <- table_absolute_reach_slope %>%
-  left_join(cor_table, by = "source")
 
 
 # -----------------------------------------------------------------------------
-# 3e. Absolute reach slope: by in situ type and version
-# -----------------------------------------------------------------------------
-
-table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(source, insitu_type) %>%
-  summarise(
-    error_68ile    = round(quantile(abs(slope_residuals) * 100000, 0.68, na.rm = TRUE), 2),
-    error_50ile    = round(quantile(abs(slope_residuals) * 100000, 0.50, na.rm = TRUE), 2),
-    MAE            = round(mean(abs(slope_residuals) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals)),
-    n_unique_reaches = n_distinct(reach_id)
-  )
-
-# Pearson correlation by in situ type
-# ERROR HERE IF I KEEP THE CORR VALS
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(insitu_type) %>%
-  summarise(
-    r_value = round(cor(slope_abs, insitu_slope_m_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(slope_abs, insitu_slope_m_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
-table_absolute_reach_slope <- table_absolute_reach_slope %>%
-  left_join(cor_table, by = "insitu_type")
-
-
-# -----------------------------------------------------------------------------
-# 3f. Relative reach slope: by version inclusion (reaches unique to vC or vD)
+# 3d. Relative reach slope: by version inclusion (reaches unique to vC or vD)
 # -----------------------------------------------------------------------------
 
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
-  group_by(version_inclusion) %>%
+  group_by(insitu_type, version_inclusion) %>%
   summarise(
+    n              = sum(!is.na(slope_residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
     error_50ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.50, na.rm = TRUE), 2),
     MAE            = round(mean(abs(slope_residuals_nobias) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id)
+    RMSE           = round(sqrt(mean((slope_residuals_nobias * 100000)^2, na.rm = TRUE)), 2)
   )
-
-# Pearson correlation by version inclusion
-cor_table <- reach_SWOT_full_insitu %>%
-  group_by(version_inclusion) %>%
-  summarise(
-    n       = sum(complete.cases(slope_abs, insitu_slope_nobias_m_m)),
-    r_value = if (n > 1) {
-      round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4)
-    } else {
-      NA_real_},
-    p_value = if (n > 1) {
-      cor.test(slope_abs, insitu_slope_nobias_m_m, method = "pearson")$p.value
-    } else {
-      NA_real_},
-    .groups = "drop"
-  ) %>%
-  dplyr::select(-n)
 
 # Join; drop version_inclusion == 0 (reaches present in both versions)
 table_relative_reach_slope <- table_relative_reach_slope %>%
-  left_join(cor_table, by = "version_inclusion") %>%
   filter(version_inclusion != 0) %>%
   mutate(version_inclusion = factor(version_inclusion, labels = c("C", "D")))
 
 
 # -----------------------------------------------------------------------------
-# 3g. Relative reach slope: matched subset (same reaches present in both versions)
+# 3f. Relative reach slope: matched subset (same reaches present in both versions)
 # -----------------------------------------------------------------------------
 
 # Retain only reaches present in both vC and vD; drop rows where the paired
@@ -372,18 +259,6 @@ same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
   ungroup() %>%
   dplyr::select(-PIC0_resid_na, -PGD0_resid_na)
 
-# Pearson correlation for matched reach subset
-cor_table <- same_version_subset_reach_SWOT_insitu %>%
-  group_by(source) %>%
-  summarise(
-    r_value = round(cor(slope_abs, insitu_slope_nobias_m_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(
-      cor.test(slope_abs, insitu_slope_nobias_m_m)$p.value,
-      error = function(e) NA_real_
-    ),
-    .groups = "drop"
-  )
-
 # Summary stats for matched reach subset
 table_relative_reach_slope <- same_version_subset_reach_SWOT_insitu %>%
   group_by(source) %>%
@@ -396,9 +271,6 @@ table_relative_reach_slope <- same_version_subset_reach_SWOT_insitu %>%
     .groups = "drop"
   )
 
-table_relative_reach_slope <- table_relative_reach_slope %>%
-  left_join(cor_table, by = "source")
-
 
 # =============================================================================
 # REACH PLOTS — SUMMARY STATISTICS
@@ -410,7 +282,7 @@ table_relative_reach_slope <- table_relative_reach_slope %>%
 # -----------------------------------------------------------------------------
 
 # Observation counts for annotation
-n_relative_df <- reach_SWOT_full_insitu %>%
+n_relative_df <- reach_SWOT_GNSS %>%
   group_by(source) %>%
   summarise(
     n_unique_reaches = n_distinct(reach_id),
@@ -418,28 +290,28 @@ n_relative_df <- reach_SWOT_full_insitu %>%
     .groups = "drop"
   )
 
-ggplot(reach_SWOT_full_insitu,
+ggplot(reach_SWOT_GNSS,
        aes(x = abs(slope_residuals_nobias) * 100000, color = source, linetype = source)) +
   stat_ecdf(geom = "step", size = 1.2) +
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)"),
+    x     = expression("SWOT - GNSS Slope (cm km"^{-1}*")"),
     y     = "Cumulative Probability",
     title = "By SWOT version"
   ) +
   annotate("text", x = 3, y = 0.71, hjust = 0,
     label = paste("68% C:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PIC0", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
       "cm/km, D:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PGD0", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
       "cm/km"),
     color = "#222222", size = 8) +
   annotate("text", x = 3, y = 0.53, hjust = 0,
     label = paste("50% C:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PIC0", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PIC0", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
       "cm/km, D:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$source == "PGD0", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PGD0", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
       "cm/km"),
     color = "#222222", size = 8) +
   annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,
@@ -486,22 +358,22 @@ ggplot(reach_SWOT_PGD0_insitu,
   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
   labs(
-    x     = expression("|SWOT -" ~ italic("in situ") ~ "Slope| (cm/km)"),
+    x     = expression("SWOT -" ~ italic("in situ") ~ "Slope (cm km"^{-1}*")"),
     y     = "Cumulative Probability",
     title = expression("By" ~ italic("in situ") ~ "measurement type")
   ) +
   annotate("text", x = 3.1, y = 0.71, hjust = 0,
     label = paste("68% PT:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$insitu_type == "PT",  ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "PT",  ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
       " GNSS:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$insitu_type == "GNSS", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "GNSS", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
       "cm/km"),
     color = "#222222", size = 7.5) +
   annotate("text", x = 3.1, y = 0.53, hjust = 0,
     label = paste("50% PT:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$insitu_type == "PT",  ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "PT",  ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
       " GNSS:",
-      round(quantile(abs(reach_SWOT_full_insitu[reach_SWOT_full_insitu$insitu_type == "GNSS", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
+      round(quantile(abs(reach_SWOT_PGD0_insitu[reach_SWOT_PGD0_insitu$insitu_type == "GNSS", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
       "cm/km"),
     color = "#222222", size = 7.5) +
   annotate("text", x = Inf, y = 0.1, hjust = 1, vjust = 0,

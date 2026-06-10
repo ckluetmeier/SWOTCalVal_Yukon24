@@ -298,8 +298,8 @@ all_reaches <- reach_SWOT_full_insitu %>%
   distinct(reach_id, source) %>%
   group_by(reach_id) %>%
   summarise(
-    has_RiverSP   = any(source == "RiverSP"),
-    has_RiverTile = any(source == "RiverTile"),
+    has_RiverSP   = any(source == "PIC0"),
+    has_RiverTile = any(source == "PGD0"),
     .groups = "drop"
   ) %>%
   mutate(
@@ -332,7 +332,7 @@ all_YR_domain_reaches_sf_subset <- all_YR_domain_reaches_sf %>%
 
 st_write(
   all_YR_domain_reaches_sf_subset,
-  "/Users/camryn/Desktop/all_YR_domain_reaches_subset.shp",
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_reaches_subset.shp",
   delete_layer = TRUE
 )
 
@@ -359,10 +359,9 @@ sword_subset <- sword_sf %>%
   filter(reach_id %in% YR_domain$reach_id) %>%
   distinct(reach_id, .keep_all = TRUE)
 
-cat("Total km of river:", sum(sword_subset$reach_len) / 1000, "km\n")
+cat("Total km of river:", sum(sword_subset$reach_len) / 1000, "km")
 
-# Tag each reach with its river using the SWORD reach_id prefix.
-# Some reaches need manual assignment (SJ, BL).
+# Name each river
 sword_subset <- sword_subset %>%
   mutate(
     river_code = substr(reach_id, 1, 6),
@@ -437,7 +436,7 @@ reach_SWOT_PT_vC <- read_csv(
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5)
 reach_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_slope_SWOT_PT.csv") %>%
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
   filter(dark_frac < 0.5)
 
 # GNSS — Version C and Version D
@@ -446,7 +445,7 @@ reach_SWOT_GNSS_vC <- read_csv(
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5)
 reach_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_slope_SWOT_GNSS.csv") %>%
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
   filter(dark_frac < 0.5)
 
 
