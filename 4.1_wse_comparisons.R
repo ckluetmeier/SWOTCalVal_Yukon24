@@ -611,7 +611,7 @@ table_relative_reach_WSE <- same_version_subset_reach_SWOT_insitu %>%
 # -----------------------------------------------------------------------------
 
 table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
-  filter(source == "PGD0", insitu_type == "GNSS") %>%
+  filter(source == "PGD0", insitu_type == "PT") %>%
   mutate(river = case_when(
     river %in% c("lowerPR", "upperPR") ~ "PR",
     TRUE ~ river
@@ -907,6 +907,11 @@ ggplot(reach_SWOT_full_insitu,
 # export dimensions: width 9.44 in, height 6.01 in
 
 
+counts <- reach_SWOT_GNSS_vD %>%
+  group_by(river) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
 ggplot(reach_SWOT_GNSS_vD,
        aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
   geom_violin(alpha = 0.8, color = NA) +
@@ -926,6 +931,12 @@ ggplot(reach_SWOT_GNSS_vD,
   ) +
   coord_cartesian(ylim = c(-0.5, 7))
 # export dimensions: width 9.44 in, height 6.01 in
+
+
+counts <- reach_SWOT_PT_vD %>%
+  group_by(river) %>%
+  summarise(n = n()) %>%
+  ungroup()
 
 ggplot(reach_SWOT_PT_vD,
        aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +

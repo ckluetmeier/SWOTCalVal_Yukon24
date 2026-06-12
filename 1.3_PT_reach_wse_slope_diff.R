@@ -297,29 +297,49 @@ write.csv(
   row.names = FALSE
 )
 
-# # Bias-corrected scatter and CDF:
-# cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
-# r_value_nobias  <- cor_test_nobias$estimate
-# p_value_nobias  <- cor_test_nobias$p.value
-# 
-# ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_nobias_m, y = wse, color = factor(river))) +
-#   geom_point(size = 4) +
-#   scale_color_manual(values = color_palette) +
-#   geom_abline(linetype = "dashed", color = "gray") +
-#   xlab("PT WSE (bias-corrected, m)") +
-#   ylab("SWOT WSE (m)") +
-#   annotate("text",
-#     x     = min(time_space_matched_SWOT_PT$pt_wse_nobias_m, na.rm = TRUE),
-#     y     = max(time_space_matched_SWOT_PT$wse, na.rm = TRUE),
-#     label = paste0(
-#       "r = ", round(r_value_nobias, 4),
-#       "\np value = ", signif(p_value_nobias, 3),
-#       "\nn = ", nrow(time_space_matched_SWOT_PT)
-#     ),
-#     hjust = 0, vjust = 1, size = 8) +
-#   labs(color = "River") +
-#   theme_minimal(base_size = 30)
-# 
+# Bias-corrected scatter and CDF:
+cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
+r_value_nobias  <- cor_test_nobias$estimate
+p_value_nobias  <- cor_test_nobias$p.value
+
+ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_nobias_m, y = wse, color = factor(river))) +
+  geom_point(size = 4) +
+  scale_color_manual(values = color_palette) +
+  geom_abline(linetype = "dashed", color = "gray") +
+  xlab("PT WSE (bias-corrected, m)") +
+  ylab("SWOT WSE (m)") +
+  annotate("text",
+    x     = min(time_space_matched_SWOT_PT$pt_wse_nobias_m, na.rm = TRUE),
+    y     = max(time_space_matched_SWOT_PT$wse, na.rm = TRUE),
+    label = paste0(
+      "r = ", round(r_value_nobias, 4),
+      "\np value = ", signif(p_value_nobias, 3),
+      "\nn = ", nrow(time_space_matched_SWOT_PT)
+    ),
+    hjust = 0, vjust = 1, size = 8) +
+  labs(color = "River") +
+  theme_minimal(base_size = 30)
+
+# Shared river factor levels and color palette used across all inter-river plots
+river_levels  <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
+river_labels  <- c("Coleen", "Sheenjek", "Chandalar", "Porcupine",
+                   "Single-channel Yukon", "Braided Yukon")
+color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E")
+
+
+ggplot(time_space_matched_SWOT_PT,
+       aes(x = river, y = bias * 100, fill = river)) +
+  geom_violin(alpha = 0.8, color = NA) +
+  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+  geom_text(data = counts,
+            aes(x = river, y = -0.2, label = paste0("n=", n)),
+            inherit.aes = FALSE, vjust = 1, size = 6) +
+  xlab("River") +
+  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
+  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
+  scale_x_discrete(breaks = river_levels, labels = river_labels) +
+  theme_minimal(base_size = 25)
+
 # ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
 #   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
 #   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
