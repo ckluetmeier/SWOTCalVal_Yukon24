@@ -638,16 +638,16 @@ ggplot(node_SWOT_ortho_vD, aes(x = river, y = abs(percent_diff), fill = river)) 
 
 
 # -----------------------------------------------------------------------------
-# 10. Export: save node-level means for data visualisation
+# 10. Export: save node-level means for data visualization
 # -----------------------------------------------------------------------------
 
 node_means <- node_SWOT_ortho_vD %>%
   group_by(node_id) %>%
-  summarise(across(where(is.numeric), mean, na.rm = TRUE))
+  summarise(across(where(is.numeric), \(x) mean(x, na.rm = TRUE)))
 
 write.csv(
   node_means,
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverTile_v17b/node_avg_width_SWOT_Ortho.csv",
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width/node/RiverSP_v17b/node_avg_width_SWOT_Ortho.csv",
   row.names = FALSE
 )
 

@@ -144,8 +144,7 @@ table_relative_node_WSE <- node_SWOT_full_insitu %>%
     error_68ile   = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
-    bias          = round(median(bias, na.rm = TRUE) * 100, 1)
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1)
   )
 
 # Relabel and reorder source for bar chart
@@ -264,7 +263,8 @@ table_absolute_node_WSE <- node_SWOT_full_insitu %>%
     error_68ile   = round(quantile(abs(residuals) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile   = round(quantile(abs(residuals) * 100, 0.50, na.rm = TRUE), 1),
     MAE           = round(mean(abs(residuals) * 100, na.rm = TRUE), 1),
-    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1)
+    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1),
+    bias          = round(median(bias, na.rm = TRUE) * 100, 1)
   )
 
 
@@ -526,8 +526,7 @@ table_relative_reach_WSE <- reach_SWOT_full_insitu %>%
     error_68ile    = round(quantile(abs(residuals_nobias) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals_nobias) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals_nobias) * 100, na.rm = TRUE), 1),
-    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1),
-    bias           = round(median(bias, na.rm = TRUE) * 100, 1),
+    RMSE          = round(sqrt(mean((residuals_nobias * 100)^2, na.rm = TRUE)), 1)
   )
 
 # Relabel and reorder source for bar chart
@@ -648,7 +647,8 @@ table_absolute_reach_WSE <- reach_SWOT_full_insitu %>%
     error_68ile    = round(quantile(abs(residuals) * 100, 0.68, na.rm = TRUE), 1),
     error_50ile    = round(quantile(abs(residuals) * 100, 0.50, na.rm = TRUE), 1),
     MAE            = round(mean(abs(residuals) * 100, na.rm = TRUE), 1),
-    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1)
+    RMSE          = round(sqrt(mean((residuals * 100)^2, na.rm = TRUE)), 1),
+    bias           = round(median(bias, na.rm = TRUE) * 100, 1),
   )
 
 
