@@ -408,7 +408,9 @@ reach_SWOT_PT_vC <- read_csv(
   mutate(insitu_type = "PT") %>%
   mutate(source = "PIC0") %>%
   rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5) %>%
+  # remove reach_id shorter than 9km by id
+  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141))
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_PT_vD <- read_csv(
@@ -416,7 +418,9 @@ reach_SWOT_PT_vD <- read_csv(
 ) %>%
   mutate(insitu_type = "PT") %>%
   mutate(source = "PGD0") %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5)  %>%
+  # remove reach_id shorter than 9km by id
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
 
 # --- GNSS ---------------------------------------------------------------------
 
@@ -425,13 +429,17 @@ reach_SWOT_GNSS_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv") %>%
   rename(old_reach_id = reach_id) %>%
   mutate(source = "PIC0") %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5)  %>%
+  # remove reach_id shorter than 9km by id
+  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141))
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_GNSS_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverTile_v17b/reach_wse_SWOT_GNSS.csv") %>%
   mutate(source = "PGD0") %>%
-  filter(dark_frac < 0.5)
+  filter(dark_frac < 0.5) %>%
+  # remove reach_id shorter than 9km by id
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
 
 
 # -----------------------------------------------------------------------------
@@ -821,7 +829,6 @@ ggplot(node_SWOT_PT_vD, aes(x = river, y = abs(residuals_nobias) * 100, fill = r
 # 7b. Violin: node WSE bias by river (D PT)
 # -----------------------------------------------------------------------------
 
-
 # ggplot(node_SWOT_PT_vD, aes(x = river, y = bias * 100, fill = river)) +
 #   geom_violin(alpha = 0.8, color = NA) +
 #   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
@@ -957,112 +964,3 @@ ggplot(reach_SWOT_PT_vD,
   ) +
   coord_cartesian(ylim = c(-0.5, 7))
 # export dimensions: width 9.44 in, height 6.01 in
-
-
-
-
-
-
-
-# 
-# 
-# # =============================================================================
-# # JIRP PLOTS
-# # =============================================================================
-# 
-# node_SWOT_PT_vD <- node_SWOT_PT_vD %>%
-#   mutate(
-#     river_code = substr(reach_id, 1, 6),
-#     river = case_when(
-#       # Reach IDs are checked first so case_when does not overwrite SJ/BL labels
-#       # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
-#       # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
-#       reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
-#       reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
-#                       "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
-#       river_code == "812701" ~ "lowerYR",  # downstream to Circle bifurcation
-#       river_code == "812509" ~ "lowerYR",  # past the Porcupine confluence
-#       river_code == "812705" ~ "upperYR",  # Circle and above
-#       river_code == "812508" ~ "CD",
-#       river_code == "812603" ~ "PR",
-#       river_code == "812605" ~ "PR",
-#       river_code == "812604" ~ "CL",
-#       TRUE ~ NA_character_
-#     )
-#   ) %>%
-#   mutate(insitu_type = "PT") %>%
-#   mutate(source = "PGD0") 
-# 
-# # Re-order river factor with SJ last so Sheenjek nodes are plotted on top
-# node_SWOT_PT_vD$river <- factor(
-#   node_SWOT_PT_vD$river,
-#   levels = c("CL", "CD", "PR", "upperYR", "lowerYR", "SJ")
-# )
-# # Adjusted palette to match the new level order (SJ moved to end)
-# color_palette_scatter <- c("#F2C14E", "#3B6064", "#F4845F", "#DA627D", "#9A348E", "#8EAD7A")
-# 
-# # Overall Pearson correlation (SWOT vs ortho width)
-# cor_test <- cor.test(node_SWOT_PT_vD$wse, node_SWOT_PT_vD$pt_wse_nobias_m)
-# r_value  <- cor_test$estimate   # Pearson r
-# p_value  <- cor_test$p.value    # p < 0.001 is highly statistically significant
-# 
-# 
-# ggplot() +
-#   # Plot non-SJ rivers first, then SJ on top so Sheenjek points are visible
-#   geom_point(
-#     data = subset(node_SWOT_PT_vD, river != "SJ"),
-#     aes(x = pt_wse_nobias_m, y = wse, color = river), size = 2.5
-#   ) +
-#   geom_point(
-#     data = subset(node_SWOT_PT_vD, river == "SJ"),
-#     aes(x = pt_wse_nobias_m, y = wse, color = river), size = 2.5
-#   ) +
-#   geom_abline(linetype = "dashed", color = "gray") +
-#   scale_color_manual(values = color_palette_scatter) +
-#   xlab(expression("Pressure Transducer WSE (m)")) +
-#   ylab("SWOT WSE (m)") +
-#   # ylim(0, 2700) +
-#   # xlim(0, 2700) +
-#   annotate("text",
-#            x = min(node_SWOT_PT_vD$pt_wse_nobias_m, na.rm = TRUE),
-#            y = max(node_SWOT_PT_vD$wse, na.rm = TRUE),
-#            label = paste0(
-#              "r = ", round(r_value, 4),
-#              "\np value = ", round(signif(p_value, 3), 4),
-#              "\nn = ", nrow(node_SWOT_PT_vD)
-#            ),
-#            hjust = 0, vjust = 1, size = 8) +
-#   theme_minimal(base_size = 25) +
-#   theme(legend.position = "none")
-# # export dimensions: width 6.66 in, height 6.01 in
-# 
-# 
-# 
-# 
-# n_unique_nodes <- n_distinct(node_SWOT_PT_vD$node_id)
-# n_total <- sum(!is.na(node_SWOT_PT_vD$residuals_nobias))
-# 
-# q68 <- quantile(abs(node_SWOT_PT_vD$residuals_nobias) * 100, 0.68, na.rm = TRUE)
-# q50 <- quantile(abs(node_SWOT_PT_vD$residuals_nobias) * 100, 0.50, na.rm = TRUE)
-# 
-# ggplot(node_SWOT_PT_vD, aes(x = abs(residuals_nobias) * 100)) +
-#   stat_ecdf(geom = "step", color = "black", linewidth = 1.4) +
-#   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +
-#   geom_hline(yintercept = 0.50, linetype = "dashed", color = "grey") +
-#   annotate(
-#     "text", x = 20, y = 0.72, hjust = 0,
-#     label = paste0("68th percentile: ", round(q68, 1), " cm"),
-#     size = 8
-#   ) +
-#   annotate(
-#     "text", x = 20, y = 0.54, hjust = 0,
-#     label = paste0("50th percentile: ", round(q50, 1), " cm"),
-#     size = 8
-#   ) +
-#   labs(
-#     x = expression("SWOT - PT WSE (cm)"),
-#     y = "Cumulative Probability"
-#   ) +
-#   theme_minimal(base_size = 22) +
-#   theme(legend.position = "none") +
-#   coord_cartesian(xlim = c(0, 70))

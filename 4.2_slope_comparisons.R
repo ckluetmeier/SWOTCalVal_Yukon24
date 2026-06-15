@@ -32,15 +32,15 @@ reach_SWOT_PT_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT.csv") %>%
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5) %>%
-  # remove 1 km reach
-  filter(old_reach_id != 81260300061)
+  # remove reach_id shorter than 9km by id
+  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141))
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_PT_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
   filter(dark_frac < 0.5) %>%
-  # remove 1 km reach
-  filter(reach_id != 81260300181)
+  # remove reach_id shorter than 9km by id
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
 
 # --- GNSS ---------------------------------------------------------------------
 
@@ -48,16 +48,16 @@ reach_SWOT_PT_vD <- read_csv(
 reach_SWOT_GNSS_vC <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_GNSS.csv") %>%
   rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)  %>%
-  # remove 1 km reach
-  filter(old_reach_id != 81260300061)
+  filter(dark_frac < 0.5) %>%
+  # remove reach_id shorter than 9km by id
+  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141))
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_GNSS_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
-  filter(dark_frac < 0.5) %>%
-  # remove 1 km reach
-  filter(reach_id != 81260300181)
+  filter(dark_frac < 0.5)  %>%
+  # remove reach_id shorter than 9km by id
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
 
 
 # =============================================================================
