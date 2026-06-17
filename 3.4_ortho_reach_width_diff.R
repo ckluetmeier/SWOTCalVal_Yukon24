@@ -131,7 +131,7 @@ SWOT_reach_df_filtered <- SWOT_reach_df_noduplicates %>%
   filter(reach_q < 2) %>%
   filter(abs(xtrk_dist) >= 10000) %>%
   filter(abs(xtrk_dist) <= 60000) %>%
-  filter(dark_frac < 0.8) %>%
+  # filter(dark_frac < 0.8) %>%
   filter(partial_f == 0)
 
 # Convert TAI time to UTC
@@ -206,28 +206,29 @@ time_matched_SWOT_ortho$river <- factor(
 )
 
 color_palette <- c("#F2C14E", "#F4845F", "#DA627D", "#9A348E")  # full quality filters
-# color_palette <- c("#F2C14E", "#8EAD7A", "#F4845F", "#DA627D", "#9A348E") # no dark water filter
+color_palette <- c("#F2C14E", "#8EAD7A", "#F4845F", "#DA627D", "#9A348E") # no dark water filter
 # color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E") # no filters
 
 # Scatter: SWOT vs ortho reach width, colored by river
-ggplot(time_matched_SWOT_ortho, aes(x = ortho_width_m, y = width, color = factor(river))) +
-  geom_point(size = 2.5) +
+ggplot() +
+  geom_point(data = time_matched_SWOT_ortho, aes(x = ortho_width_m, y = width, color = river), size = 2.5
+  ) +
+  geom_abline(linetype = "dashed", color = "gray") +
   scale_color_manual(values = color_palette) +
-  geom_abline(linetype = "dashed", color = "gray") +  # 1:1 line
-  xlab("Ortho width (m)") +
-  ylab("SWOT width (m)") +
+  xlab(expression("Orthomosaic Width (m)")) +
+  ylab("SWOT Width (m)") +
   annotate("text",
-    x     = min(time_matched_SWOT_ortho$ortho_width_m, na.rm = TRUE),
-    y     = max(time_matched_SWOT_ortho$width, na.rm = TRUE),
-    label = paste0(
-      "r = ", round(r_value, 4),
-      "\np value = ", round(signif(p_value, 3), 4),
-      "\nn = ", nrow(time_matched_SWOT_ortho)
-    ),
-    hjust = 0, vjust = 1, size = 8) +
-  # theme(legend.position = "none") +  # comment out to show legend
-  labs(color = "River") +
-  theme_minimal(base_size = 30)
+           x = min(time_matched_SWOT_ortho$ortho_width_m, na.rm = TRUE),
+           y = max(time_matched_SWOT_ortho$width, na.rm = TRUE),
+           label = paste0(
+             "r = ", round(r_value, 4),
+             "\np value = ", round(signif(p_value, 3), 4),
+             "\nn = ", nrow(time_matched_SWOT_ortho)
+           ),
+           hjust = 0, vjust = 1, size = 8) +
+  theme_minimal(base_size = 25) +
+  theme(legend.position = "none")
+# export dimensions: width 6.66 in, height 6.01 in
 
 # CDF: absolute width difference
 ggplot(time_matched_SWOT_ortho, aes(x = abs(width - ortho_width_m))) +
@@ -274,27 +275,15 @@ table_absolute_reach_width <- time_matched_SWOT_ortho %>%
   st_drop_geometry() %>%
   group_by(river) %>%
   summarise(
+    n                   = sum(!is.na(residuals)),
+    n_unique_reaches    = n_distinct(reach_id),
     med_swot_wd         = round(median(width, na.rm = TRUE), 1),
     med_ortho_wd        = round(median(ortho_width_m, na.rm = TRUE), 1),
-    error_abs_68ile     = round(quantile(abs(residuals),    0.68, na.rm = TRUE), 1),
-    error_abs_50ile     = round(quantile(abs(residuals),    0.50, na.rm = TRUE), 1),
+    # error_abs_68ile     = round(quantile(abs(residuals),    0.68, na.rm = TRUE), 1),
+    # error_abs_50ile     = round(quantile(abs(residuals),    0.50, na.rm = TRUE), 1),
     MAE                 = round(mean(abs(residuals), na.rm = TRUE), 1),
-    error_perdiff_68ile = round(quantile(abs(percent_diff), 0.68, na.rm = TRUE), 2),
-    error_perdiff_50ile = round(quantile(percent_diff,      0.50, na.rm = TRUE), 2),
-    n                   = sum(!is.na(residuals)),
-    n_unique_reaches    = n_distinct(reach_id)
+    # RMSE                = round(sqrt(mean((residuals)^2, na.rm = TRUE)), 1),
+    # error_perdiff_68ile = round(quantile(abs(percent_diff), 0.68, na.rm = TRUE), 2),
+    # error_perdiff_50ile = round(quantile(percent_diff,      0.50, na.rm = TRUE), 2),
+    MAE_percent         = round(mean(abs(percent_diff), na.rm = TRUE), 1),
   )
-
-# Pearson r and p-value by river
-cor_table <- time_matched_SWOT_ortho %>%
-  st_drop_geometry() %>%
-  group_by(river) %>%
-  summarise(
-    r_value = round(cor(width, ortho_width_m, use = "complete.obs", method = "pearson"), 4),
-    p_value = tryCatch(cor.test(width, ortho_width_m)$p.value, error = function(e) NA_real_),
-    .groups = "drop"
-  )
-
-# Join correlation columns into summary table
-table_absolute_reach_width <- table_absolute_reach_width %>%
-  left_join(cor_table, by = "river")

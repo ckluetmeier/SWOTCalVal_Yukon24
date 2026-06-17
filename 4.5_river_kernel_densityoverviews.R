@@ -131,7 +131,7 @@ ggplot(trimmed_df, aes(x = width, fill = river, color = river)) +
     axis.text.x     = element_text(angle = 0, hjust = 0.5),
     panel.grid      = element_blank()
   )
-
+# export dimensions: width 11.05 in, height 2.22 in
 
 # =============================================================================
 # SLOPE KERNEL DENSITY BY RIVER
@@ -206,7 +206,7 @@ median_df <- trimmed_df %>%
 color_palette <- c("#3B6064", "#F2C14E", "#F4845F", "#9A348E", "#8EAD7A", "#DA627D")
 
 ggplot(trimmed_df, aes(x = slope * 100, fill = river, color = river)) +
-  geom_density(alpha = 0.5, size = 0.9, adjust = 1) +
+  geom_density(alpha = 0.2, size = 1.4, adjust = 1) +
   geom_vline(
     data = median_df,
     aes(xintercept = median_slope * 100, color = river),
@@ -228,7 +228,7 @@ ggplot(trimmed_df, aes(x = slope * 100, fill = river, color = river)) +
     axis.text.x     = element_text(angle = 0, hjust = 0.5),
     panel.grid      = element_blank()
   ) +
-  xlim(0, 160)
+  xlim(-10, 160)
 # export dimensions: width 11.05 in, height 2.22 in
 
 
