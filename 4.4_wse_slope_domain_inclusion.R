@@ -507,8 +507,8 @@ all_reaches <- reach_SWOT_full_insitu %>%
   distinct(reach_id, source) %>%
   group_by(reach_id) %>%
   summarise(
-    has_RiverSP   = any(source == "RiverSP"),
-    has_RiverTile = any(source == "RiverTile"),
+    has_RiverSP   = any(source == "PIC0"),
+    has_RiverTile = any(source == "PGD0"),
     .groups = "drop"
   ) %>%
   mutate(
@@ -540,7 +540,7 @@ all_YR_domain_reaches_sf_subset <- all_YR_domain_reaches_sf %>%
 
 st_write(
   all_YR_domain_reaches_sf_subset,
-  "/Users/camryn/Desktop/all_YR_domain_reaches_slope_subset.shp",
+  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_reaches_slope_subset.shp",
   delete_layer = TRUE
 )
 
