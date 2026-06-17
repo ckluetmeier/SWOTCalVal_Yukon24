@@ -180,7 +180,7 @@ ggplot(table_relative_reach_slope, aes(x = source, y = n, fill = source)) +
 
 
 # -----------------------------------------------------------------------------
-# 3b. Relative reach slope: by river (D PT or GNSS only)
+# 3b. Relative reach slope: by river (D PT/GNSS)
 # -----------------------------------------------------------------------------
 
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
@@ -217,7 +217,7 @@ table_absolute_reach_slope <- reach_SWOT_full_insitu %>%
 
 
 # -----------------------------------------------------------------------------
-# 3d. Relative reach slope: by version inclusion (reaches unique to vC or vD)
+# 3d. Relative reach slope: by version inclusion (reaches unique to C or D)
 # -----------------------------------------------------------------------------
 
 table_relative_reach_slope <- reach_SWOT_full_insitu %>%
@@ -261,14 +261,14 @@ same_version_subset_reach_SWOT_insitu <- reach_SWOT_full_insitu %>%
 
 # Summary stats for matched reach subset
 table_relative_reach_slope <- same_version_subset_reach_SWOT_insitu %>%
-  group_by(source) %>%
+  group_by(insitu_type, source) %>%
   summarise(
+    n              = sum(!is.na(slope_residuals_nobias)),
+    n_unique_reaches = n_distinct(reach_id),
     error_68ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
     error_50ile    = round(quantile(abs(slope_residuals_nobias) * 100000, 0.50, na.rm = TRUE), 2),
     MAE            = round(mean(abs(slope_residuals_nobias) * 100000, na.rm = TRUE), 2),
-    n              = sum(!is.na(slope_residuals_nobias)),
-    n_unique_reaches = n_distinct(reach_id),
-    .groups = "drop"
+    RMSE           = round(sqrt(mean((slope_residuals_nobias * 100000)^2, na.rm = TRUE)), 2)
   )
 
 
@@ -303,14 +303,14 @@ ggplot(reach_SWOT_GNSS,
   annotate("text", x = 3, y = 0.71, hjust = 0,
     label = paste("68% C:",
       round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PIC0", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
-      "cm/km, D:",
+      "D:",
       round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PGD0", ]$slope_residuals_nobias) * 100000, 0.68, na.rm = TRUE), 2),
       "cm/km"),
     color = "#222222", size = 8) +
   annotate("text", x = 3, y = 0.53, hjust = 0,
     label = paste("50% C:",
       round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PIC0", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
-      "cm/km, D:",
+      "D:",
       round(quantile(abs(reach_SWOT_GNSS[reach_SWOT_GNSS$source == "PGD0", ]$slope_residuals_nobias) * 100000, 0.5, na.rm = TRUE), 2),
       "cm/km"),
     color = "#222222", size = 8) +
