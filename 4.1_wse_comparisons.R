@@ -862,14 +862,18 @@ reach_SWOT_GNSS_vD <- read_csv(
   filter(dark_frac < 0.5) %>%
   mutate(river = case_when(
     river %in% c("lowerPR", "upperPR") ~ "PR",
-    TRUE ~ river))
+    TRUE ~ river)) %>%
+  # remove reach_id shorter than 9km by id
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
 
 reach_SWOT_PT_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
   filter(dark_frac < 0.5) %>%
   mutate(river = case_when(
     river %in% c("lowerPR", "upperPR") ~ "PR",
-    TRUE ~ river))
+    TRUE ~ river)) %>%
+  # remove reach_id shorter than 9km by id
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
 
 # Merge slope data frames; unify slope and time column names
 reach_SWOT_full_insitu <- bind_rows(reach_SWOT_PT_vD, reach_SWOT_GNSS_vD) %>%
@@ -893,51 +897,54 @@ counts <- reach_SWOT_PT_vD %>%
 # 8a. Violin: absolute slope residuals by river
 # -----------------------------------------------------------------------------
 
-ggplot(reach_SWOT_full_insitu,
-       aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
-  geom_violin(alpha = 0.8, color = NA) +
-  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
-  geom_text(data = counts,
-    aes(x = river, y = -0.2, label = paste0("n=", n)),
-    inherit.aes = FALSE, vjust = 1, size = 6) +
-  xlab("River") +
-  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
-  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
-  scale_x_discrete(breaks = river_levels, labels = river_labels) +
-  theme_minimal(base_size = 25) +
-  theme(
-    legend.position = "none",
-    axis.text.x  = element_text(angle = 20, hjust = 0.9),
-    plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
-  ) +
-  coord_cartesian(ylim = c(-0.5, 12))
-# export dimensions: width 9.44 in, height 6.01 in
+# ggplot(reach_SWOT_full_insitu,
+#        aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
+#   geom_violin(alpha = 0.8, color = NA) +
+#   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+#   geom_text(data = counts,
+#     aes(x = river, y = -0.2, label = paste0("n=", n)),
+#     inherit.aes = FALSE, vjust = 1, size = 6) +
+#   xlab("River") +
+#   ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
+#   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
+#   scale_x_discrete(breaks = river_levels, labels = river_labels) +
+#   theme_minimal(base_size = 25) +
+#   theme(
+#     legend.position = "none",
+#     axis.text.x  = element_text(angle = 20, hjust = 0.9),
+#     plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
+#   ) +
+#   coord_cartesian(ylim = c(-0.5, 12))
+# # export dimensions: width 9.44 in, height 6.01 in
 
 
-counts <- reach_SWOT_GNSS_vD %>%
-  group_by(river) %>%
-  summarise(n = n()) %>%
-  ungroup()
+# counts <- reach_SWOT_GNSS_vD %>%
+#   group_by(river) %>%
+#   summarise(n = n()) %>%
+#   ungroup()
+# 
+# ggplot(reach_SWOT_GNSS_vD,
+#        aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
+#   geom_violin(alpha = 0.8, color = NA) +
+#   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
+#   geom_text(data = counts,
+#             aes(x = river, y = -0.2, label = paste0("n=", n)),
+#             inherit.aes = FALSE, vjust = 1, size = 6) +
+#   xlab("River") +
+#   ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
+#   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
+#   scale_x_discrete(breaks = river_levels, labels = river_labels) +
+#   theme_minimal(base_size = 25) +
+#   theme(
+#     legend.position = "none",
+#     axis.text.x  = element_text(angle = 20, hjust = 0.9),
+#     plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
+#   ) +
+#   coord_cartesian(ylim = c(-0.5, 7))
+# # export dimensions: width 9.44 in, height 6.01 in
 
-ggplot(reach_SWOT_GNSS_vD,
-       aes(x = river, y = abs(slope_residuals_nobias) * 100000, fill = river)) +
-  geom_violin(alpha = 0.8, color = NA) +
-  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
-  geom_text(data = counts,
-            aes(x = river, y = -0.2, label = paste0("n=", n)),
-            inherit.aes = FALSE, vjust = 1, size = 6) +
-  xlab("River") +
-  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
-  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
-  scale_x_discrete(breaks = river_levels, labels = river_labels) +
-  theme_minimal(base_size = 25) +
-  theme(
-    legend.position = "none",
-    axis.text.x  = element_text(angle = 20, hjust = 0.9),
-    plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
-  ) +
-  coord_cartesian(ylim = c(-0.5, 7))
-# export dimensions: width 9.44 in, height 6.01 in
+# Set factor order
+reach_SWOT_PT_vD$river <- factor(reach_SWOT_PT_vD$river, levels = river_levels)
 
 
 counts <- reach_SWOT_PT_vD %>%
@@ -952,8 +959,9 @@ ggplot(reach_SWOT_PT_vD,
   geom_text(data = counts,
             aes(x = river, y = -0.2, label = paste0("n=", n)),
             inherit.aes = FALSE, vjust = 1, size = 6) +
-  xlab("River") +
-  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
+  labs(
+    x     = "River",
+    y     = expression("SWOT - PT Slope (cm km"^{-1}*")"),) +
   scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
   scale_x_discrete(breaks = river_levels, labels = river_labels) +
   theme_minimal(base_size = 25) +
@@ -962,5 +970,5 @@ ggplot(reach_SWOT_PT_vD,
     axis.text.x  = element_text(angle = 20, hjust = 0.9),
     plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
   ) +
-  coord_cartesian(ylim = c(-0.5, 7))
+  coord_cartesian(ylim = c(-0.5, 16))
 # export dimensions: width 9.44 in, height 6.01 in

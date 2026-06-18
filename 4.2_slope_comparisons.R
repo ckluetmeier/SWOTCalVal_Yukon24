@@ -33,14 +33,20 @@ reach_SWOT_PT_vC <- read_csv(
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5) %>%
   # remove reach_id shorter than 9km by id
-  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141))
+  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141)) %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
+    TRUE ~ river))
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_PT_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
   filter(dark_frac < 0.5) %>%
   # remove reach_id shorter than 9km by id
-  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031)) %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
+    TRUE ~ river))
 
 # --- GNSS ---------------------------------------------------------------------
 
@@ -50,14 +56,20 @@ reach_SWOT_GNSS_vC <- read_csv(
   rename(old_reach_id = reach_id) %>%
   filter(dark_frac < 0.5) %>%
   # remove reach_id shorter than 9km by id
-  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141))
+  filter(!old_reach_id %in% c(81260300061, 81270500131,81270500141)) %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
+    TRUE ~ river))
 
 # Version D (SWORD v17b / RiverSP PGD0)
 reach_SWOT_GNSS_vD <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
   filter(dark_frac < 0.5)  %>%
   # remove reach_id shorter than 9km by id
-  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031))
+  filter(!reach_id  %in% c(81260300181, 81270500021, 81270500031)) %>%
+  mutate(river = case_when(
+    river %in% c("lowerPR", "upperPR") ~ "PR",  # merge lower & upper Porcupine
+    TRUE ~ river))
 
 
 # =============================================================================
@@ -119,7 +131,7 @@ all_reaches <- reach_SWOT_full_insitu %>%
 
 # Join version inclusion to full dataset
 reach_SWOT_full_insitu <- reach_SWOT_full_insitu %>%
-  left_join(all_reaches, by = "reach_id")
+  left_join(all_reaches, by = "reach_id") 
 
 # Create a separate PT and GNSS dataset
 reach_SWOT_PT   <- reach_SWOT_full_insitu %>% filter(insitu_type == "PT")
@@ -415,7 +427,7 @@ problems <- reach_SWOT_PT_vD %>%
   filter(slope_residuals_nobias * 100000 > 3)
 
 # Violin plot of slope residuals per reach
-ggplot(problems, aes(x = factor(reach_id), y = slope_residuals_nobias * 100000)) +
+ggplot(problems, aes(x = factor(reach_id), y = abs(slope_residuals_nobias * 100000))) +
   geom_violin(alpha = 0.8) +
   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
   theme_minimal(base_size = 25)
@@ -481,14 +493,14 @@ ggplot(reach_SWOT_GNSS_vD, aes(x = layovr_val, y = abs(slope_residuals_nobias) *
   theme_minimal(base_size = 30)
 
 # abs(xtrk_dist) vs slope error
-ggplot(reach_SWOT_PT_vD, aes(x = abs(xtrk_dist), y = abs(slope_residuals_nobias) * 100000, color = factor(river))) +
+ggplot(reach_SWOT_PT_vD, aes(x = abs(xtrk_dist)/1000, y = abs(slope_residuals_nobias) * 100000, color = factor(river))) +
   geom_point(size = 4) +
   scale_color_manual(values = color_palette) +
   xlab("abs(xtrk_dist)") + ylab("Slope error (cm/km)") +
   labs(color = "River") +
   theme_minimal(base_size = 30)
 
-ggplot(reach_SWOT_GNSS_vD, aes(x = abs(xtrk_dist), y = abs(slope_residuals_nobias) * 100000, color = factor(river))) +
+ggplot(reach_SWOT_GNSS_vD, aes(x = abs(xtrk_dist)/1000, y = abs(slope_residuals_nobias) * 100000, color = factor(river))) +
   geom_point(size = 4) +
   scale_color_manual(values = color_palette) +
   xlab("abs(xtrk_dist)") + ylab("Slope error (cm/km)") +
