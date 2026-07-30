@@ -395,6 +395,11 @@ river_stats <- sword_subset %>%
 # 10. GNSS per-river drift count
 # -----------------------------------------------------------------------------
 
+# To get node counts
+# GNSS_df <- GNSS_df %>%
+#   mutate(node_id = as.character(node_id),
+#          reach_id = paste0(substr(node_id, 1, 10), substr(node_id, 14, 14)))
+
 # Tag each GNSS reach with its river (same case_when as above)
 GNSS_df <- GNSS_df %>%
   mutate(
