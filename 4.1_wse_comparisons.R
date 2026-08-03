@@ -6,9 +6,39 @@
 #   - Version C / PIC0 (SWORD v16,  RiverSP)
 #   - Version D / PGD0 (SWORD v17b, RiverSP)
 # SWOT and in situ measurements are matched in time/space in scripts 1.2 - 2.2
-# and harmonized to SWORD v17b node/reach IDs here.
+# and harmonised to SWORD v17b node/reach IDs here.
 #
 # Produces: Tables 2, 3, S6, S7;  Figures 4a-f, 6a
+#
+# WHAT CHANGED IN THIS REWRITE (see 4.0_comparison_helpers.R for detail)
+#   1. Translator joins no longer fan out rows. The old left_join() inflated
+#      every version-C count (+36 GNSS node obs, +9 PT node obs) because the
+#      translator holds one row per v17 id and 25 Yukon v16 nodes split in two.
+#   2. Version partitioning is now exhaustive. The old code flagged nodes as
+#      "in both versions" but then built the "same" subset by matching on the
+#      in situ TIMESTAMP, which is not stable across SWORD versions. 2,009 of
+#      6,596 D0 GNSS node observations fell into neither the Same nor the
+#      Unique rows of Table S6. Pairing is now on the SWOT overpass identity.
+#   3. The matched subset is now SYMMETRIC. See the note below.
+#   4. version_inclusion is computed WITHIN in situ type (every table is
+#      stratified by in situ type; the old flag pooled PT and GNSS).
+#   5. n_distinct() no longer counts untranslatable v16 ids as a single NA
+#      pseudo-node (39 v16 nodes / 53 GNSS observations were affected).
+#   6. Figure annotation counts now come from the same summary used for the
+#      tables, so they cannot drift apart.
+#   7. No object is reused for two different datasets (the old script
+#      overwrote reach_SWOT_*_vD and reach_SWOT_full_insitu with slope data).
+#
+# THE "unmappable" BUCKET
+#   39 v16 nodes (53 GNSS observations) have no v17b counterpart in the
+#   translator. They cannot pair with D0 for a reason that has nothing to do
+#   with quality filtering -- SWORD v17b re-noded those reaches, and for 32 of
+#   the 39 the physically-nearest v17b node IS in the D0 dataset. Counting them
+#   as C0_only would use them as evidence that D0's filter rejected those
+#   locations, which is not what happened. They are now a separate bucket:
+#   still inside the C0 total (Table 2 reconciles unchanged at 6,048), but
+#   excluded from the C0_only statistic, which moves 33.7 -> 33.0 cm.
+#   Only node GNSS C0 is affected; no reach and no PT observation is unmappable.
 # =============================================================================
 
 library(tidyverse)
@@ -28,7 +58,7 @@ DARK_FRAC_MAX <- 0.5   # upstream scripts 1.2-2.2 only filter at <= 0.8,
 # p_length is not carried through the upstream scripts. Manually confirmed.
 SHORT_REACHES_V16  <- c(81260300061, 81270500131, 81270500141)
 SHORT_REACHES_V17B <- c(81260300181, 81270500021, 81270500031)
-APPLY_SHORT_REACH_EXCLUSION <- TRUE   # set false to retain shorter reaches
+APPLY_SHORT_REACH_EXCLUSION <- TRUE   
 
 node_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.csv"),
                             show_col_types = FALSE)
@@ -44,7 +74,7 @@ reach_lut <- build_id_lut(reach_translator, "v16_reach_id", "v17_reach_id", "rea
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# 1. Read, filter, harmonize
+# 1. Read, filter, harmonise
 # -----------------------------------------------------------------------------
 
 read_node <- function(path, insitu, version) {
@@ -66,15 +96,23 @@ node_GNSS_vD <- read_node(file.path(BASE, "node/RiverSP_v17b/node_SWOT_GNSS_3mdi
 # 2. Partition each in situ type on its own version-independent key
 # -----------------------------------------------------------------------------
 # PT and GNSS need different keys, so they are partitioned separately and then
-# bound. The node-level PT file carries no cycle_id/pass_id, but pt_serial is at
-# a fixed location and is version-independent, so (pt_serial, pt_time_UTC) works.
+# bound. Both keys start with id_harmonised so that the two members of a matched
+# pair always refer to the same node and n_unique is symmetric.
+#
+# The node-level PT file carries no cycle_id/pass_id. pt_serial identifies the
+# physical sensor and is version-independent, so (node, sensor, reading time)
+# pins down the observation.
+
+NODE_VALUE <- "residuals_nobias"   # the metric the partition is defined against
 
 node_PT <- bind_rows(node_PT_vC, node_PT_vD) %>%
-  partition_versions(key_cols = c("pt_serial", "pt_time_UTC"))
+  partition_versions(key_cols  = c("id_harmonised", "pt_serial", "pt_time_UTC"),
+                     value_col = NODE_VALUE)
 
 node_GNSS <- bind_rows(node_GNSS_vC, node_GNSS_vD) %>%
   mutate(drift_file = basename(drift_id)) %>%   # strip version-specific path prefix
-  partition_versions(key_cols = c("id_harmonised", "cycle_id", "pass_id", "drift_file"))
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = NODE_VALUE)
 
 node_all <- bind_rows(node_PT, node_GNSS) %>%
   mutate(
@@ -82,6 +120,8 @@ node_all <- bind_rows(node_PT, node_GNSS) %>%
     insitu_wse_nobias_m = coalesce(pt_wse_nobias_m, mean_node_drift_wse_no_bias_m),
     insitu_time_utc     = coalesce(pt_time_UTC,     time_UTC)   # kept for reference only
   )
+# bind_rows() drops attributes, so restore the partition tag for partition_table()
+attr(node_all, "partition_value_col") <- NODE_VALUE
 
 
 # =============================================================================
@@ -90,26 +130,30 @@ node_all <- bind_rows(node_PT, node_GNSS) %>%
 
 # --- Table 2, node rows: relative node WSE by version -------------------------
 table2_node <- node_all %>%
-  summarise_errors("residuals_nobias", by = c("insitu_type", "source"),
+  summarise_errors(NODE_VALUE, by = c("insitu_type", "source"),
                    scale = 100, digits = 1)
 print(table2_node)
 
-# --- Table S6, node section ---------------------------------------------------
-# Replaces the old "Same" / "Unique" pair of blocks. The total row is always
-# the sum of the three buckets; partition_table() stops if it is not.
+# --- Table S6, node section: the exhaustive partition -------------------------
 tableS6_node <- node_all %>%
-  partition_table("residuals_nobias", by = c("insitu_type", "source"),
+  partition_table(NODE_VALUE, by = c("insitu_type", "source"),
                   scale = 100, digits = 1)
 print(tableS6_node, n = Inf)
 
 # Node-level (rather than observation-level) version membership, for the
 # "how many unique nodes are unique to each version" statement in the text.
+# Note the `unmappable` row: those nodes are C0-only as a SWORD re-noding
+# artefact, not because D0's quality filter rejected them.
 tableS6_node_ids <- node_all %>%
-  filter(!is.na(residuals_nobias)) %>%
+  filter(!is.na(id_bucket)) %>%
   summarise(n_nodes = n_distinct(id_harmonised), .by = c(insitu_type, id_bucket))
 print(tableS6_node_ids)
 
 # --- Table S7, node rows: absolute node WSE -----------------------------------
+# Not partitioned: `residuals` has a different missingness pattern from
+# `residuals_nobias`, so the buckets above do not apply to it. If you ever want
+# a partitioned version of S7, re-run partition_versions() with
+# value_col = "residuals".
 tableS7_node <- node_all %>%
   summarise_errors("residuals", by = c("insitu_type", "source"),
                    scale = 100, digits = 1)
@@ -119,11 +163,11 @@ print(tableS7_node)
 table3_node <- node_all %>%
   filter(source == VERSION_D, insitu_type == "PT") %>%
   merge_porcupine() %>%
-  summarise_errors("residuals_nobias", by = "river", scale = 100, digits = 1)
+  summarise_errors(NODE_VALUE, by = "river", scale = 100, digits = 1)
 print(table3_node)
 
 # --- Percent-change claims in section 3.1 -------------------------------------
-node_change <- node_all %>% version_change("residuals_nobias")
+node_change <- node_all %>% version_change(NODE_VALUE)
 print(node_change)
 
 
@@ -132,6 +176,7 @@ print(node_change)
 # =============================================================================
 
 # Annotation counts are taken from table2_node so figures and tables cannot
+# disagree (the old script recomputed them with a different expression).
 lab_version <- function(tbl, src, unit = "nodes") {
   r <- tbl %>% filter(source == src)
   sprintf("Version %s: %d unique, %d total",
@@ -146,7 +191,7 @@ lab_insitu <- function(tbl, type, unit = "nodes") {
 t2_node_pt <- table2_node %>% filter(insitu_type == "PT")
 
 ggplot(filter(node_all, insitu_type == "PT"),
-       aes(x = abs(residuals_nobias) * 100, colour = source)) +
+       aes(x = abs(.data[[NODE_VALUE]]) * 100, colour = source)) +
   stat_ecdf(geom = "step", linewidth = 1.2) +
   geom_hline(yintercept = c(0.50, 0.68), linetype = "dashed", colour = "grey") +
   labs(x = "SWOT - PT WSE (cm)", y = "Cumulative Probability", title = "By SWOT version") +
@@ -172,7 +217,7 @@ ggplot(filter(node_all, insitu_type == "PT"),
 t2_node_d <- table2_node %>% filter(source == VERSION_D)
 
 ggplot(filter(node_all, source == VERSION_D),
-       aes(x = abs(residuals_nobias) * 100, colour = insitu_type)) +
+       aes(x = abs(.data[[NODE_VALUE]]) * 100, colour = insitu_type)) +
   stat_ecdf(geom = "step", linewidth = 1.2) +
   geom_hline(yintercept = c(0.50, 0.68), linetype = "dashed", colour = "grey") +
   labs(x = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
@@ -224,17 +269,21 @@ read_reach <- function(path, insitu, version) {
                 label = paste("reach", insitu, version))
 }
 
+# NOTE: the version-D reach WSE files were previously read from a
+# "RiverTile_v17b" directory. Corrected to RiverSP_v17b.
 reach_PT_vC   <- read_reach(file.path(BASE, "reach/RiverSP_v16/reach_wse_SWOT_PT.csv"),    "PT",   "C")
 reach_PT_vD   <- read_reach(file.path(BASE, "reach/RiverSP_v17b/reach_wse_SWOT_PT.csv"),   "PT",   "D")
 reach_GNSS_vC <- read_reach(file.path(BASE, "reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv"),  "GNSS", "C")
 reach_GNSS_vD <- read_reach(file.path(BASE, "reach/RiverSP_v17b/reach_wse_SWOT_GNSS.csv"), "GNSS", "D")
 
 reach_PT <- bind_rows(reach_PT_vC, reach_PT_vD) %>%
-  partition_versions(key_cols = c("id_harmonised", "cycle_id", "pass_id", "pt_time_UTC"))
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "pt_time_UTC"),
+                     value_col = NODE_VALUE)
 
 reach_GNSS <- bind_rows(reach_GNSS_vC, reach_GNSS_vD) %>%
   mutate(drift_file = basename(drift_id)) %>%
-  partition_versions(key_cols = c("id_harmonised", "cycle_id", "pass_id", "drift_file"))
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = NODE_VALUE)
 
 reach_all <- bind_rows(reach_PT, reach_GNSS) %>%
   mutate(
@@ -242,6 +291,7 @@ reach_all <- bind_rows(reach_PT, reach_GNSS) %>%
     insitu_wse_nobias_m = coalesce(pt_wse_nobias_m,     mean_reach_drift_wse_no_bias_m),
     insitu_time_utc     = coalesce(pt_time_UTC,         wse_drift_midpoint_UTC)
   )
+attr(reach_all, "partition_value_col") <- NODE_VALUE
 
 
 # =============================================================================
@@ -249,17 +299,17 @@ reach_all <- bind_rows(reach_PT, reach_GNSS) %>%
 # =============================================================================
 
 table2_reach <- reach_all %>%
-  summarise_errors("residuals_nobias", by = c("insitu_type", "source"),
+  summarise_errors(NODE_VALUE, by = c("insitu_type", "source"),
                    scale = 100, digits = 1)
 print(table2_reach)
 
 tableS6_reach <- reach_all %>%
-  partition_table("residuals_nobias", by = c("insitu_type", "source"),
+  partition_table(NODE_VALUE, by = c("insitu_type", "source"),
                   scale = 100, digits = 1)
 print(tableS6_reach, n = Inf)
 
 tableS6_reach_ids <- reach_all %>%
-  filter(!is.na(residuals_nobias)) %>%
+  filter(!is.na(id_bucket)) %>%
   summarise(n_reaches = n_distinct(id_harmonised), .by = c(insitu_type, id_bucket))
 print(tableS6_reach_ids)
 
@@ -271,10 +321,10 @@ print(tableS7_reach)
 table3_reach <- reach_all %>%
   filter(source == VERSION_D, insitu_type == "PT") %>%
   merge_porcupine() %>%
-  summarise_errors("residuals_nobias", by = "river", scale = 100, digits = 1)
+  summarise_errors(NODE_VALUE, by = "river", scale = 100, digits = 1)
 print(table3_reach)
 
-reach_change <- reach_all %>% version_change("residuals_nobias")
+reach_change <- reach_all %>% version_change(NODE_VALUE)
 print(reach_change)
 
 
@@ -286,7 +336,7 @@ print(reach_change)
 t2_reach_pt <- table2_reach %>% filter(insitu_type == "PT")
 
 ggplot(filter(reach_all, insitu_type == "PT"),
-       aes(x = abs(residuals_nobias) * 100, colour = source)) +
+       aes(x = abs(.data[[NODE_VALUE]]) * 100, colour = source)) +
   stat_ecdf(geom = "step", linewidth = 1.2) +
   geom_hline(yintercept = c(0.50, 0.68), linetype = "dashed", colour = "grey") +
   labs(x = "SWOT - PT WSE (cm)", y = "Cumulative Probability", title = "By SWOT version") +
@@ -314,7 +364,7 @@ ggplot(filter(reach_all, insitu_type == "PT"),
 t2_reach_d <- table2_reach %>% filter(source == VERSION_D)
 
 ggplot(filter(reach_all, source == VERSION_D),
-       aes(x = abs(residuals_nobias) * 100, colour = insitu_type)) +
+       aes(x = abs(.data[[NODE_VALUE]]) * 100, colour = insitu_type)) +
   stat_ecdf(geom = "step", linewidth = 1.2) +
   geom_hline(yintercept = c(0.50, 0.68), linetype = "dashed", colour = "grey") +
   labs(x = expression("SWOT -" ~ italic("in situ") ~ "WSE (cm)"),
@@ -358,14 +408,16 @@ ggplot(table2_reach %>% mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D"
 # =============================================================================
 
 # --- Figure 6a: node WSE residuals by river (D0, PT) --------------------------
+# Counts use the same non-missing filter as Table 3 (the old script used n(),
+# which counted rows with missing residuals and so disagreed with the table).
 fig6a_data <- node_all %>%
-  filter(source == VERSION_D, insitu_type == "PT", !is.na(residuals_nobias)) %>%
+  filter(source == VERSION_D, insitu_type == "PT", !is.na(.data[[NODE_VALUE]])) %>%
   merge_porcupine() %>%
   mutate(river = factor(river, levels = river_levels))
 
 fig6a_counts <- fig6a_data %>% summarise(n = n(), .by = river)
 
-ggplot(fig6a_data, aes(x = river, y = abs(residuals_nobias) * 100, fill = river)) +
+ggplot(fig6a_data, aes(x = river, y = abs(.data[[NODE_VALUE]]) * 100, fill = river)) +
   geom_violin(alpha = 0.8, colour = NA) +
   geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, linewidth = 1) +
   geom_text(data = fig6a_counts, aes(x = river, y = -1, label = paste0("n=", n)),
@@ -382,7 +434,7 @@ ggplot(fig6a_data, aes(x = river, y = abs(residuals_nobias) * 100, fill = river)
 
 
 # =============================================================================
-# EXPORT TABLES
+# EXPORT TABLES  (write them out rather than transcribing by hand)
 # =============================================================================
 OUT <- file.path(BASE, "tables")
 dir.create(OUT, showWarnings = FALSE, recursive = TRUE)

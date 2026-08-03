@@ -7,6 +7,33 @@
 # Outliers with |residuals| >= 1500 m are excluded from both versions.
 #
 # Produces: Tables 6, 7, S10, S11;  Figures 7a-b, 8a-d
+# (The original header numbered these 7, 8, S5 -- renumbered to match
+#  YR_CalVal_D7.)
+#
+# !! NOT YET VERIFIED AGAINST DATA !!
+# The two node_width_SWOT_Ortho.csv files were not available when this was
+# written, so unlike 4.1 and 4.2 the numbers here have not been reproduced.
+# Three things need checking on first run -- all three will announce
+# themselves, see the CHECK blocks below.
+#
+# WHAT CHANGED IN THIS REWRITE
+#   1. Exhaustive version partitioning. Table 6 vs Table S10 currently loses 23
+#      D0 and 9 C0 observations. Note that the width UNIQUE NODE counts already
+#      reconcile exactly (655 + 34 = 689; 655 + 84 = 739) because 4.3 was the
+#      only script keying on (node_id, cycle_id, pass_id) rather than on the in
+#      situ timestamp -- that was the right instinct, it just needed the
+#      orthomosaic identity added and the leftover observations bucketed.
+#   2. The matched subset is now symmetric by construction: id_harmonised leads
+#      the key, and partition_versions() buckets only rows that already carry a
+#      usable residual, so a node-overpass where one version is NA becomes
+#      version-unique rather than "same".
+#   3. Translator join no longer fans out rows.
+#   4. Metric columns are now internally consistent. In the old 3c/3d blocks
+#      the MAE was computed from residuals_nobias while the 68%ile, 50%ile and
+#      RMSE in the same row were computed from residuals, so Table S10's MAE
+#      column was not comparable to Table 6's.
+#   5. `n` is now defined the same way in every block (the old 3a used
+#      residuals, 3c used residuals_nobias, 3d used residuals).
 # =============================================================================
 
 library(tidyverse)
@@ -21,7 +48,8 @@ BASE <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_da
 TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
 
 DARK_FRAC_MAX   <- 0.5
-WIDTH_RESID_MAX <- 1500   # m
+WIDTH_RESID_MAX <- 1500      # m
+WIDTH_VALUE     <- "residuals"   # metric the partition is defined against
 
 # CHECK 1 --------------------------------------------------------------------
 # The observation key needs whatever identifies WHICH orthomosaic a node was
@@ -65,20 +93,34 @@ if (!is.null(ORTHO_ID_COL)) {
     count(n_masks) %>% print()
 }
 
+# id_harmonised leads the key so that both members of a matched pair refer to
+# the same node and n_unique_nodes is symmetric between versions.
 width_key <- c("id_harmonised", "cycle_id", "pass_id",
                if (!is.null(ORTHO_ID_COL)) ORTHO_ID_COL)
 
 width_all <- bind_rows(width_vC, width_vD) %>%
-  partition_versions(key_cols = width_key, strata = "insitu_type")
+  partition_versions(key_cols  = width_key,
+                     value_col = WIDTH_VALUE,
+                     strata    = "insitu_type")
 
 
 # =============================================================================
-# 2. Width-specific summarizer
+# 2. Width-specific summariser
 # =============================================================================
+# Width tables report both metric (m) and percent columns, so summarise_errors()
+# from the helper file is extended here rather than reused directly. Every
+# statistic in a row is computed from the same set of rows: those with a
+# non-missing `residuals`.
+#
+# NOTE: the old code reported error_perdiff_50ile from the SIGNED percent_diff
+# while error_perdiff_68ile used abs(percent_diff), so the two percentiles in
+# the same row were not on the same scale. Both are absolute here. If the
+# signed median was intentional, it belongs in the `bias` column, not next to
+# an absolute 68th percentile.
 
 summarise_width <- function(df, by) {
   df %>%
-    filter(!is.na(residuals)) %>%
+    filter(!is.na(.data[[WIDTH_VALUE]])) %>%
     summarise(
       n                   = n(),
       n_unique_nodes      = n_distinct(id_harmonised),
@@ -106,27 +148,41 @@ table6 <- width_all %>% summarise_width(by = "source")
 print(table6)
 
 # --- Table S10: exhaustive partition ------------------------------------------
+# BUCKET_LEVELS comes from the helper and includes "unmappable" -- version-C
+# nodes with no v17b counterpart, which cannot pair with D0 for reasons
+# unrelated to quality filtering. None of the node WSE PT or reach data has
+# any; whether the width data does will show up here.
 tableS10 <- bind_rows(
-  width_all %>% summarise_width(by = "source")               %>% mutate(bucket = "total",  .before = 1),
-  width_all %>% summarise_width(by = c("source", "obs_bucket")) %>% rename(bucket = obs_bucket)
+  width_all %>% summarise_width(by = "source") %>% mutate(bucket = "total", .before = 1),
+  width_all %>% filter(!is.na(obs_bucket)) %>%
+    summarise_width(by = c("source", "obs_bucket")) %>% rename(bucket = obs_bucket)
 ) %>%
-  mutate(bucket = factor(bucket, levels = c("total", "same", "C0_only", "D0_only"))) %>%
+  mutate(bucket = factor(bucket, levels = BUCKET_LEVELS)) %>%
   arrange(source, bucket)
+stopifnot(!any(is.na(tableS10$bucket)))   # guards against a new bucket label
 print(tableS10, n = Inf)
 
 # CHECK 3 --------------------------------------------------------------------
-# Hard reconciliation. If this stops, the observation key is still wrong --
-# almost certainly ORTHO_ID_COL.
+# The same two assertions partition_table() makes in 4.1 and 4.2, applied here
+# to the width-specific summary. If either stops, the observation key is wrong
+# -- almost certainly ORTHO_ID_COL.
 recon <- tableS10 %>%
   summarise(total = sum(n[bucket == "total"]),
             parts = sum(n[bucket != "total"]), .by = source)
 print(recon)
 stopifnot(all(recon$total == recon$parts))
-message("[4.3] reconciliation OK: same + C0_only + D0_only == total")
+
+same_rows <- tableS10 %>% filter(bucket == "same")
+if (n_distinct(same_rows$n) > 1 || n_distinct(same_rows$n_unique_nodes) > 1) {
+  print(same_rows)
+  stop("The 'same' bucket is not symmetric between versions. Check width_key ",
+       "(id_harmonised must be included) and ORTHO_ID_COL.")
+}
+message("[4.3] OK: buckets reconcile, and the matched subset is symmetric")
 
 # Node-level membership, for the "N% fewer unique nodes in D0" statement
 tableS10_ids <- width_all %>%
-  filter(!is.na(residuals)) %>%
+  filter(!is.na(id_bucket)) %>%
   summarise(n_nodes = n_distinct(id_harmonised), .by = id_bucket)
 print(tableS10_ids)
 
@@ -140,14 +196,22 @@ print(table7)
 # Yukon, but that number is the all-rivers C0-only value from Table S10. This
 # gives the river breakdown that claim actually needs.
 tableS10_by_river <- width_all %>%
-  filter(obs_bucket != "same") %>%
+  filter(!is.na(obs_bucket), obs_bucket != "same") %>%
   summarise_width(by = c("source", "obs_bucket", "river"))
 print(tableS10_by_river, n = Inf)
+
+# Untranslatable v16 nodes, if the width data has any (the node WSE GNSS file
+# has 39). Report them, do not let them sit inside the C0_only claim.
+width_unmappable <- width_all %>%
+  filter(obs_bucket == "unmappable") %>%
+  summarise(n_obs = n(), n_nodes = n_distinct(id_harmonised), .by = river)
+if (nrow(width_unmappable)) print(width_unmappable) else
+  message("[4.3] no untranslatable v16 nodes in the width data")
 
 # --- Percent-change claim in section 3.3 --------------------------------------
 # Manuscript: "5.1% fewer nodes and 7.0% fewer unique nodes in version D0".
 # From the published Table 6 those are 5.0% and 6.8%.
-width_change <- width_all %>% version_change("residuals")
+width_change <- width_all %>% version_change(WIDTH_VALUE)
 print(width_change)
 
 
