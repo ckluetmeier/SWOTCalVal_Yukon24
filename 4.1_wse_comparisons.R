@@ -29,6 +29,19 @@
 #   7. No object is reused for two different datasets (the old script
 #      overwrote reach_SWOT_*_vD and reach_SWOT_full_insitu with slope data).
 #
+# SYMMETRY OF THE MATCHED SUBSET
+#   A matched subset must contain the same number of observations on both
+#   sides. An earlier draft of this script produced 269/57 for PGD0 against
+#   263/52 for PIC0 in the node PT "same" row. Two causes, both PT-only:
+#     a) 6 pairs had a usable residual in one version and NA in the other.
+#        partition_versions() now buckets only rows carrying a usable value,
+#        so those keys become version-unique instead of "same".
+#     b) 10 of 270 PT pairs had the two versions disagreeing on the harmonised
+#        node id, because the node PT key did not mention the node. The key is
+#        now id_harmonised + pt_serial + pt_time_UTC.
+#   Node PT "same" is now 253 / 51 on both sides. partition_table() asserts
+#   symmetry and stops if it is ever violated again.
+#
 # THE "unmappable" BUCKET
 #   39 v16 nodes (53 GNSS observations) have no v17b counterpart in the
 #   translator. They cannot pair with D0 for a reason that has nothing to do
@@ -39,6 +52,16 @@
 #   still inside the C0 total (Table 2 reconciles unchanged at 6,048), but
 #   excluded from the C0_only statistic, which moves 33.7 -> 33.0 cm.
 #   Only node GNSS C0 is affected; no reach and no PT observation is unmappable.
+#
+# CHECK BEFORE PUBLISHING -- one substantive change to the reach WSE numbers:
+#   The published Table 2 / S6 / S7 reach rows were generated WITHOUT the
+#   <9 km reach exclusion, while Table 4 / S8 / S9 (slope) were generated WITH
+#   it. Reach 81260300061 (v16) / 81260300181 (v17b) is the only one affected;
+#   it contributes 7 PT and 1 GNSS WSE observations per version. This script
+#   applies the exclusion to WSE as well, so the reach WSE counts drop:
+#       PT   D0 124 -> 117,  C0 97 -> 90
+#       GNSS D0  55 ->  54,  C0 38 -> 37
+#   Set APPLY_SHORT_REACH_EXCLUSION <- FALSE to reproduce the published values.
 # =============================================================================
 
 library(tidyverse)
@@ -53,12 +76,13 @@ BASE <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_da
 TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
 
 DARK_FRAC_MAX <- 0.5   # upstream scripts 1.2-2.2 only filter at <= 0.8,
+                       # so this filter is NOT redundant and does remove rows
 
 # Reaches shorter than 9 km, listed by ID in each SWORD version because
 # p_length is not carried through the upstream scripts. Manually confirmed.
 SHORT_REACHES_V16  <- c(81260300061, 81270500131, 81270500141)
 SHORT_REACHES_V17B <- c(81260300181, 81270500021, 81270500031)
-APPLY_SHORT_REACH_EXCLUSION <- TRUE   
+APPLY_SHORT_REACH_EXCLUSION <- TRUE   # see header note
 
 node_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.csv"),
                             show_col_types = FALSE)
@@ -135,6 +159,9 @@ table2_node <- node_all %>%
 print(table2_node)
 
 # --- Table S6, node section: the exhaustive partition -------------------------
+# Replaces the old "Same" / "Unique" pair of blocks. partition_table() stops if
+# the buckets do not sum to the total, or if the "same" row is not identical
+# between the two versions.
 tableS6_node <- node_all %>%
   partition_table(NODE_VALUE, by = c("insitu_type", "source"),
                   scale = 100, digits = 1)
@@ -242,16 +269,30 @@ ggplot(filter(node_all, source == VERSION_D),
 # export: 7.17 x 6.35 in
 
 # --- Figure 4c: node observation count by version -----------------------------
-ggplot(table2_node %>% mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D", "C"))),
-       aes(x = v, y = n, fill = v)) +
+# table2_node has one row per (insitu_type, source), so plotting it directly
+# gives a bar stacked by in situ type and geom_text labels each SEGMENT.
+# Aggregate to one row per version first, then the bar carries a single total.
+fig4c_data <- table2_node %>%
+  summarise(n = sum(n), .by = source) %>%
+  mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D0", "C0")))
+
+ggplot(fig4c_data, aes(x = v, y = n, fill = v)) +
   geom_col(width = 0.9) +
   geom_text(aes(label = n), vjust = -0.5, size = 8) +
   ylab("Count") +
-  scale_fill_manual(values = c(C = version_colours[[VERSION_C]], D = version_colours[[VERSION_D]])) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +  # headroom for the label
+  scale_fill_manual(values = c(C0 = version_colours[[VERSION_C]],
+                               D0 = version_colours[[VERSION_D]])) +
   theme_classic(base_size = 34) +
   theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(),
         axis.text.y = element_blank(), legend.position = "none")
 # export: 3.16 x 6.54 in
+#
+# If you want UNIQUE NODES on this bar instead of observations, do NOT sum
+# n_unique across in situ types -- a node observed by both PT and GNSS would be
+# counted twice. Recompute from the data:
+#   fig4c_data <- node_all %>% filter(!is.na(.data[[NODE_VALUE]])) %>%
+#     summarise(n = n_distinct(id_harmonised), .by = source) %>% ...
 
 
 # =============================================================================
@@ -391,12 +432,18 @@ ggplot(filter(reach_all, source == VERSION_D),
 # export: 7.17 x 6.35 in
 
 # --- Figure 4f: reach observation count by version ----------------------------
-ggplot(table2_reach %>% mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D", "C"))),
-       aes(x = v, y = n, fill = v)) +
+# Same aggregation as Figure 4c -- one row per version, one label per bar.
+fig4f_data <- table2_reach %>%
+  summarise(n = sum(n), .by = source) %>%
+  mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D0", "C0")))
+
+ggplot(fig4f_data, aes(x = v, y = n, fill = v)) +
   geom_col(width = 0.9) +
   geom_text(aes(label = n), vjust = -0.5, size = 8) +
   ylab("Count") +
-  scale_fill_manual(values = c(C = version_colours[[VERSION_C]], D = version_colours[[VERSION_D]])) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  scale_fill_manual(values = c(C0 = version_colours[[VERSION_C]],
+                               D0 = version_colours[[VERSION_D]])) +
   theme_classic(base_size = 34) +
   theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(),
         axis.text.y = element_blank(), legend.position = "none")

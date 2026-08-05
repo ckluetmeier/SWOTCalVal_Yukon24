@@ -233,12 +233,19 @@ ggplot(filter(slope_all, source == VERSION_D),
 # export: 7.17 x 6.35 in
 
 # --- Figure 5c: observation count by version ----------------------------------
-ggplot(table4 %>% mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D", "C"))),
-       aes(x = v, y = n, fill = v)) +
+# table4 has one row per (insitu_type, source), so plotting it directly gives a
+# bar stacked by in situ type with a label on each SEGMENT. Aggregate first.
+fig5c_data <- table4 %>%
+  summarise(n = sum(n), .by = source) %>%
+  mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D0", "C0")))
+
+ggplot(fig5c_data, aes(x = v, y = n, fill = v)) +
   geom_col(width = 0.9) +
   geom_text(aes(label = n), vjust = -0.5, size = 8) +
   ylab("Count") +
-  scale_fill_manual(values = c(C = version_colours[[VERSION_C]], D = version_colours[[VERSION_D]])) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  scale_fill_manual(values = c(C0 = version_colours[[VERSION_C]],
+                               D0 = version_colours[[VERSION_D]])) +
   theme_classic(base_size = 34) +
   theme(axis.title.x = element_blank(), axis.ticks.y = element_blank(),
         axis.text.y = element_blank(), legend.position = "none")
