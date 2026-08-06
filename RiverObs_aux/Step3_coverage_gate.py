@@ -17,7 +17,23 @@ manuscript already describes for the GNSS comparison (section 3.3.3): a
 rectangle centred on each SWORD node, node_length long in the flow direction
 and scaled from SWORD max_width across it.
  
-A node passes if its polygon is fully contained in the orthomosaic footprint.
+A node passes if its test rectangle is fully contained in the orthomosaic
+footprint.
+ 
+*** THE RECTANGLES ARE NOT NODE POLYGONS ***
+The rectangle exists to answer one binary question: was this node's
+neighbourhood fully inside the survey? It is a deliberate simplification and it
+is intentionally a little more generous than RiverObs's real search corridor
+(cross_frac 0.5 of max_width, versus RiverObs's max_width/3), so the gate errs
+toward rejecting marginal nodes.
+ 
+RiverObs does not use polygons at all. Each water cell goes to the node nearest
+in along-track distance, in curvilinear (along-reach, cross-reach) coordinates
+on a spline through the SWORD nodes. The region a node's area was actually
+summed over is a curvilinear cell whose lateral edges follow the water mask.
+To draw that -- for a figure, or to check attribution -- use
+step3b_true_node_polygons.py, which dissolves the run's own PIXCVec node_id
+assignment.
  
 Output: a CSV of node_id plus `fully_imaged` (bool) and `imaged_frac` (the
 fraction of the node polygon inside the footprint), to left-join onto the
@@ -27,7 +43,7 @@ Requires: geopandas, shapely, numpy, pandas
 =============================================================================
 """
  
-SCRIPT_VERSION = 'v3 2026-08-05 -- accepts an ortho .tif as the footprint; max-based water-mask guard'
+SCRIPT_VERSION = 'v4 2026-08-05 -- ortho .tif footprint; max-based guard; rectangles flagged as QC-only'
  
  
 import argparse
@@ -158,7 +174,10 @@ def main():
                    help='imaged_frac at or above which a node counts as fully '
                         'imaged (default 0.99)')
     p.add_argument('--write-polygons', default=None,
-                   help='optional shapefile of the node polygons, for QGIS QC')
+                   help='optional shapefile of the coverage-test RECTANGLES, '
+                        'for QGIS QC only. These are NOT the node footprints '
+                        'RiverObs uses and must not be shown as such -- see '
+                        'step3b_true_node_polygons.py for the real ones.')
     args = p.parse_args()
     print('# {} {}'.format(os.path.basename(__file__), SCRIPT_VERSION))
  
