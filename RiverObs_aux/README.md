@@ -119,12 +119,30 @@ in which every polygon is known-good river water, it is a loss, not a filter** â
 anabranches and braidplain threads that sit outside the prior channel are
 excluded, and the node width comes out too narrow.
 
-Two environment variables widen both gates together:
+Both gates widen together, set either on the command line of the step that runs
+RiverObs:
+
+```bash
+python step2_run_riverobs.py ... --wth-coef-factor 3.0 --ext-dist-coef-factor 3.0
+python run_calval2rivertile.py ... --wth-coef-factor 3.0 --ext-dist-coef-factor 3.0
+```
+
+or through the environment, which the flags override:
 
 ```bash
 export RIVEROBS_WTH_COEF_FACTOR=3.0
 export RIVEROBS_EXT_DIST_COEF_FACTOR=3.0
 ```
+
+> **They belong to step 2 and nowhere else.** The corridor decides which cells
+> get a `node_id` at all, and that happens during the RiverObs run. Step 3b only
+> dissolves the mask by the `node_id` the PIXCVec already carries, so it has no
+> corridor knobs and passing it one is an error with an explanation. To change
+> the corridor, re-run step 2 and then re-run step 3b on the **new** PIXCVec.
+> Whatever factors were used are written onto the RiverTile and PIXCVec as the
+> global attributes `riverobs_wth_coef_factor` and
+> `riverobs_ext_dist_coef_factor`, and step 3b reports them back along with the
+> fraction of the mask that reached a node.
 
 They multiply the prior coefficients, which are corridor knobs only and are not
 written to any output product. `1.0` is stock RiverObs. The shim logs the

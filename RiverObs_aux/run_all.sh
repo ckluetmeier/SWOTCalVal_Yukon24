@@ -9,6 +9,8 @@
 #   bash run_all.sh 2 3b             # steps 2 and 3b only
 #   bash run_all.sh 3c               # just re-apply the exclusion layer
 #
+# Written for bash 3.2, which is what /bin/bash is on macOS -- no associative
+# arrays, no mapfile.
 #
 # Step 3c is spatial and version-independent: one exclusion layer is applied to
 # every survey and every SWORD version. Re-run `bash run_all.sh 3c` on its own
@@ -55,7 +57,8 @@ LOG_LEVEL=info
 #
 # Confirm the value you pick with util_assignment_audit.py (command echoed at
 # the end of this script): raise until the assigned fraction plateaus near 100%,
-# then stop.
+# then stop. A wider corridor than you need lets adjacent reaches claim the same
+# water, which the audit reports as double counting.
 export RIVEROBS_WTH_COEF_FACTOR=1.0
 export RIVEROBS_EXT_DIST_COEF_FACTOR=1.0
 
@@ -116,6 +119,8 @@ python step2_run_riverobs.py \
     --res "$RES" \
     --versions $VERSIONS \
     --keep-going \
+    --wth-coef-factor "$RIVEROBS_WTH_COEF_FACTOR" \
+    --ext-dist-coef-factor "$RIVEROBS_EXT_DIST_COEF_FACTOR" \
     --log-level "$LOG_LEVEL"
 STEP2_RC=$?
 [ $STEP2_RC -ne 0 ] && FAILED="$FAILED step2(rc=$STEP2_RC)"

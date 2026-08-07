@@ -34,11 +34,31 @@ Two uses:
   2. Figures. These are the regions the reported areas and widths were summed
      over, so a panel drawn from them is a faithful depiction of the method.
  
+THE SEARCH CORRIDOR IS NOT SET HERE
+This script has no corridor knobs and cannot have any. It does not run RiverObs
+-- it reads the `node_id` that RiverObs already wrote into the PIXCVec, one per
+water cell, and dissolves the mask by it. The corridor decided which cells got a
+node_id at all, and that decision was made and frozen back in step 2. Adding
+--wth-coef-factor here would change nothing about which water is in the output
+polygons.
+ 
+To widen the corridor, re-run step 2:
+ 
+    python run_calval2rivertile.py <water.tif> airborne_watermask \\
+        <rivertile.nc> <pixcvec.nc> <rdf> <pixc.nc> \\
+        --riverobs-root /path/to/RiverObs \\
+        --wth-coef-factor 3.0 --ext-dist-coef-factor 3.0
+ 
+then re-run this script on the NEW pixcvec. This script reports the factors that
+produced the file it was given (from the global attributes run_calval2rivertile
+stamps on it) along with how much of the mask never reached a node, so you can
+tell at a glance whether a re-run is called for.
+ 
 Requires: rasterio, geopandas, shapely, numpy, netCDF4, pandas
 =============================================================================
 """
  
-PIPELINE_VERSION = '1.0.0'
+PIPELINE_VERSION = '1.1.0'
  
 import argparse
 import os
@@ -103,7 +123,40 @@ def build(water_tif, pixcvec_nc, key='node_id'):
         # Edited in QGIS. 1 = keep, 0 = drop. Read by step3c.
         'keep': [1] * len(out_id),
     }, geometry=out_geom, crs=crs)
-    return gdf.sort_values(key).reset_index(drop=True)
+    n_assigned = int((label > 0).sum())
+    return gdf.sort_values(key).reset_index(drop=True), n_assigned
+ 
+ 
+def report_corridor(pixcvec_nc, water_tif, n_assigned_cells):
+    """What corridor produced this PIXCVec, and what did it leave behind?"""
+    with netCDF4.Dataset(pixcvec_nc, 'r') as ds:
+        wth = getattr(ds, 'riverobs_wth_coef_factor', None)
+        ext = getattr(ds, 'riverobs_ext_dist_coef_factor', None)
+ 
+    if wth is None and ext is None:
+        print('  corridor factors: not recorded on this PIXCVec (written before '
+              'run_calval2rivertile 1.1.0, or by calval2rivertile directly)')
+    else:
+        stock = (wth in (None, 1.0)) and (ext in (None, 1.0))
+        print('  corridor factors: wth_coef x{}, ext_dist_coef x{}{}'.format(
+            wth, ext, '  (stock RiverObs)' if stock else ''))
+ 
+    with rasterio.open(water_tif) as src:
+        n_water = int((src.read(1) == 1).sum())
+        cell_area = abs(src.transform[0] * src.transform[4])
+    if not n_water:
+        return
+    pct = 100.0 * n_assigned_cells / n_water
+    print('  mask cells assigned to a node: {:,} of {:,}  ({:.2f}%)'.format(
+        n_assigned_cells, n_water, pct))
+    if pct < 99.0:
+        print('  {:,.0f} m2 of digitized water never reached a node. If that '
+              'water is real river,'.format((n_water - n_assigned_cells) * cell_area))
+        print('  the corridor is too tight -- re-run step 2 with larger '
+              '--wth-coef-factor /')
+        print('  --ext-dist-coef-factor, then re-run this script on the new '
+              'pixcvec.')
+        print('  util_assignment_audit.py --unassigned-shp shows you WHERE it is.')
  
  
 def join_rivertile(gdf, rivertile_nc):
@@ -138,10 +191,31 @@ def main():
                         'the layer by width during manual review.')
     p.add_argument('--reaches', action='store_true',
                    help='also write a reach-level dissolve alongside')
+    # Accepted only so the mistake gets an explanation instead of argparse's
+    # 'unrecognized arguments'. The corridor is set in step 2; see the header.
+    p.add_argument('--wth-coef-factor', '--ext-dist-coef-factor',
+                   dest='corridor_attempt', default=None,
+                   help=argparse.SUPPRESS)
     args = p.parse_args()
+    if args.corridor_attempt is not None:
+        raise SystemExit(
+            'The search corridor is not set here.\n'
+            'This script does not run RiverObs -- it reads the node_id that '
+            'RiverObs already\nwrote into the PIXCVec and dissolves the mask by '
+            'it. The corridor decided which\ncells got a node_id at all, back in '
+            'step 2, and that is frozen in the file.\n\n'
+            'Set the factors where the assignment happens, then re-run this '
+            'script on the\nNEW pixcvec:\n\n'
+            '    python run_calval2rivertile.py <water.tif> airborne_watermask '
+            '\\\n'
+            '        <rivertile.nc> <pixcvec.nc> <rdf> <pixc.nc> \\\n'
+            '        --riverobs-root /path/to/RiverObs \\\n'
+            '        --wth-coef-factor 3.0 --ext-dist-coef-factor 3.0\n\n'
+            'or, for the survey batch:  step2_run_riverobs.py '
+            '--wth-coef-factor 3.0 ...')
     print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
-    gdf = build(args.water_tif, args.pixcvec_nc, 'node_id')
+    gdf, n_assigned = build(args.water_tif, args.pixcvec_nc, 'node_id')
     if args.rivertile:
         gdf = join_rivertile(gdf, args.rivertile)
     gdf.to_file(args.out_shp)
@@ -149,9 +223,10 @@ def main():
     print('  total assigned area: {:,.0f} m2'.format(gdf.area_m2.sum()))
     print('  per-node area: min {:,.0f}  median {:,.0f}  max {:,.0f} m2'.format(
         gdf.area_m2.min(), gdf.area_m2.median(), gdf.area_m2.max()))
+    report_corridor(args.pixcvec_nc, args.water_tif, n_assigned)
  
     if args.reaches:
-        rgdf = build(args.water_tif, args.pixcvec_nc, 'reach_id')
+        rgdf, _ = build(args.water_tif, args.pixcvec_nc, 'reach_id')
         rpath = args.out_shp.replace('.shp', '_reaches.shp')
         rgdf.to_file(rpath)
         print('wrote {} reach polygons to {}'.format(len(rgdf), rpath))

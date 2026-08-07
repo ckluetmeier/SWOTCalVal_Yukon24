@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 """
 =============================================================================
@@ -37,7 +36,8 @@ import pandas as pd
 # hand-edited constant.
 # -----------------------------------------------------------------------------
 SURVEYS = [
-    {'name': 'CD_071024',        'date': '2024-07-11'},
+    {'name': 'YR_AOI',        'date': 'AOI'},
+    # {'name': 'CD_071024',        'date': '2024-07-11'},
     # {'name': 'upperPR_CL_071024', 'date': '2024-07-10'},
     # {'name': 'upperPR_CL_071624', 'date': '2024-07-16'},
     # {'name': 'lowerPR_SJ_072624', 'date': '2024-07-26'},
@@ -113,6 +113,12 @@ def run_one(survey, version, rdf, args):
         '--riverobs-root', args.riverobs_root,
         '--log-level', args.log_level,
     ]
+    # Corridor factors, if given, are forwarded rather than relied on through
+    # the environment, so the exact command printed below is reproducible.
+    if args.wth_coef_factor is not None:
+        cmd += ['--wth-coef-factor', repr(args.wth_coef_factor)]
+    if args.ext_dist_coef_factor is not None:
+        cmd += ['--ext-dist-coef-factor', repr(args.ext_dist_coef_factor)]
     print('\n=== {} / SWORD {} ==='.format(name, version))
     print(' '.join(cmd))
     subprocess.run(cmd, check=True)
@@ -157,6 +163,14 @@ def main():
                         'for the ones that worked. Failures are listed at the '
                         'end and the exit status is non-zero.')
     p.add_argument('--log-level', default='info')
+    p.add_argument('--wth-coef-factor', type=float, default=None,
+                   help='multiply the prior wth_coef, widening BOTH search-'
+                        'corridor gates. 1.0 = stock RiverObs. Overrides '
+                        'RIVEROBS_WTH_COEF_FACTOR. Tune with '
+                        'util_assignment_audit.py.')
+    p.add_argument('--ext-dist-coef-factor', type=float, default=None,
+                   help='multiply the prior ext_dist_coef (gate 2). 1.0 = stock '
+                        'RiverObs. Overrides RIVEROBS_EXT_DIST_COEF_FACTOR.')
     args = p.parse_args()
     print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
