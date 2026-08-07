@@ -38,11 +38,11 @@ import pandas as pd
 # -----------------------------------------------------------------------------
 SURVEYS = [
     {'name': 'CD_071024',        'date': '2024-07-11'},
-    {'name': 'upperPR_CL_071024', 'date': '2024-07-10'},
-    {'name': 'upperPR_CL_071624', 'date': '2024-07-16'},
-    {'name': 'lowerPR_SJ_072624', 'date': '2024-07-26'},
-    {'name': 'lowerYR_071624',   'date': '2024-07-16'},
-    {'name': 'upperYR_071024',   'date': '2024-07-10'},
+    # {'name': 'upperPR_CL_071024', 'date': '2024-07-10'},
+    # {'name': 'upperPR_CL_071624', 'date': '2024-07-16'},
+    # {'name': 'lowerPR_SJ_072624', 'date': '2024-07-26'},
+    # {'name': 'lowerYR_071624',   'date': '2024-07-16'},
+    # {'name': 'upperYR_071024',   'date': '2024-07-10'},
 ]
  
 SWORD_VERSIONS = {

@@ -13,7 +13,7 @@ differs from the SWOT product **only in the input pixel cloud** — not in how
 water is attributed to nodes, not in how area is aggregated, and not in how area
 is converted to width.
 
-- **Pipeline version:** 1.0.0
+- **Pipeline version:** 1.1.0
 - **Tested against RiverObs commit:** `dc0c7fd` (2026-07-29)
 - **Tested prior databases:** SWORD v16, v17b (North America)
 
@@ -102,7 +102,58 @@ whose lateral edges follow the water mask — not a rectangle, and not expressib
 as a simple polygon. [Step 3b](#step-3b--node-footprints) recovers the actual
 assigned regions from the processor's own output.
 
-### 2.3 Pipeline
+### 2.3 The search corridor
+
+RiverObs only sums water inside a cross-channel corridor sized from the **prior
+database's** channel width. Two gates apply, both scaled by the per-node
+`wth_coef` and `ext_dist_coef`:
+
+| Gate | Where | Half-corridor |
+|---|---|---|
+| 1 | `assign_reaches` → `RiverObs.get_ext_dist_threshold` | `(2 × prior_width × wth_coef) / 3` |
+| 2 | `assign_reaches_ext_dist_coef` | `ext_dist_coef × max(node_spacing, max(prior_max_width, prior_width) × wth_coef)` |
+
+The tighter of the two binds. For a SWOT pixel cloud this is a sensible filter:
+it keeps distant lakes and unrelated water out. For a **digitized reference mask
+in which every polygon is known-good river water, it is a loss, not a filter** —
+anabranches and braidplain threads that sit outside the prior channel are
+excluded, and the node width comes out too narrow.
+
+Two environment variables widen both gates together:
+
+```bash
+export RIVEROBS_WTH_COEF_FACTOR=3.0
+export RIVEROBS_EXT_DIST_COEF_FACTOR=3.0
+```
+
+They multiply the prior coefficients, which are corridor knobs only and are not
+written to any output product. `1.0` is stock RiverObs. The shim logs the
+resulting half-corridor in metres per reach, so the effect is explicit:
+
+```
+shim: corridor reach 0 -- prior width 120 m, half-corridor gate1 480 m,
+      gate2 21600 m (binding: 480 m)
+```
+
+**Tune, don't guess.** `util_assignment_audit.py` reports the fraction of each
+mask that reached a node. Raise the factors until that plateaus at ~100%, then
+stop — an over-wide corridor lets adjacent reaches claim the same water, which
+the audit reports as double counting. Worked example on a synthetic braidplain
+(120 m main channel plus anabranches at ±320 m and ±380 m):
+
+| Factor | Assigned | Median node width | Double counting |
+|---|---|---|---|
+| 1.0 (stock) | 41.38% | 119.9 m | none |
+| 2.0 | 62.27% | — | none |
+| **3.0** | **100.00%** | **289.7 m** | none |
+| 4.0 | 100.00% | — | none |
+
+The true mask area over the 8 km reach corresponds to a mean width of 290.0 m,
+so the relaxed run recovers it to 0.1%. The stock run recovers only the main
+channel — which is exactly the visual signature of an over-tight corridor: node
+polygons that trace the main thread and stop at the edge of the digitized water.
+
+### 2.4 Pipeline
 
 ```
    digitized water mask (.shp)
@@ -127,14 +178,14 @@ assigned regions from the processor's own output.
               │
               ▼
       ╔═══════════════════╗
-      ║  MANUAL: QGIS     ║  mark cloud / survey-edge nodes to exclude
-      ╚═══════════════════╝
+      ║  MANUAL: QGIS     ║  digitize cloud / ragged survey edges into ONE
+      ╚═══════════════════╝  exclusion layer covering every survey
               │
               ▼
    ┌─────────────────────┐
-   │ step3c              │  → node_qc_all.csv  (survey, node_id, keep)
-   │ exclusion list      │
-   └─────────────────────┘
+   │ step3c --batch      │  one call, every survey x every version
+   │ exclusion list      │  → node_qc_all.csv
+   └─────────────────────┘     (survey, sword_version, node_id, keep, excl_frac)
 ```
 
 Everything before the manual step is scripted and deterministic. No node is
@@ -147,15 +198,16 @@ excluded automatically — see [§12.2](#122-why-there-is-no-automated-coverage-
 | File | Purpose |
 |---|---|
 | `apply_riverobs_patches.py` | Applies the four source edits to a RiverObs checkout. Idempotent, with `--status` and `--revert`. |
-| `riverobs_shim.py` | Four runtime patches applied by import. Touches no source files. |
+| `riverobs_shim.py` | Five runtime patches applied by import (four guards plus the opt-in corridor relaxation). Touches no source files. |
 | `run_calval2rivertile.py` | Wrapper around RiverObs's `calval2rivertile.py` that loads the shim first. |
 | `step0_check_sword_nc.py` | Verifies a prior-database netCDF is usable, and that width-critical variables are present. |
 | `step1_rasterize_watermask.py` | Burns a water-mask shapefile to a regular grid. |
 | `step2_run_riverobs.py` | Runs every survey × prior-database version; flattens outputs to CSV. |
 | `step3b_true_node_polygons.py` | Recovers the actual per-node water footprints from the PIXCVec assignment. |
-| `step3c_manual_node_qc.py` | Converts a QGIS review into a node exclusion list. |
+| `step3c_manual_node_qc.py` | Converts a QGIS review into a node exclusion list. `--batch` applies one exclusion layer to every survey and version in a single call. |
+| `util_assignment_audit.py` | Reports what fraction of each mask reached a node, exports the unassigned water, and detects cross-reach double counting. |
 | `util_watermask_feature_audit.py` | Audits water-mask shapefiles for the multi-feature undercount. |
-| `run_all.sh` | Batch driver for steps 1, 2 and 3b. Sources `config.sh` if present. |
+| `run_all.sh` | Batch driver for steps 1, 2, 3b and 3c. Sources `config.sh` if present. |
 | `config.example.sh` | Site paths and the survey manifest. Copy to `config.sh`, which is gitignored. |
 | `riverobs_ortho.template.rdf` | Annotated RiverObs configuration template. Copy to `riverobs_ortho_<version>.rdf` per prior-database version; the copies are gitignored. |
 | `environment.yml` | Verified minimal conda environment. |
@@ -294,14 +346,18 @@ python step0_check_sword_nc.py /path/to/na_sword_v17b.nc --verify
 cp config.example.sh config.sh && $EDITOR config.sh
 cp riverobs_ortho.template.rdf riverobs_ortho_v17b.rdf && $EDITOR riverobs_ortho_v17b.rdf
 
-# batch
-bash run_all.sh                 # steps 1, 2 and 3b for every survey
+# batch: steps 1, 2 and 3b produce the node polygons; nothing is excluded yet
+bash run_all.sh 1 2 3b
 bash run_all.sh 1               # a single step
-bash run_all.sh 2 3b
 
-# then: manual QGIS review, followed by
-python step3c_manual_node_qc.py --nodes ... --exclude-shp ... --out ...
-python step3c_manual_node_qc.py --merge 'node_qc/node_qc_*.csv' --out node_qc/node_qc_all.csv
+# manual QGIS review: digitize cloud / ragged edges into ONE exclusion layer
+# covering every survey, at the EXCLUDE_SHP path set in config.sh
+
+# step 3c applies it to every survey and version at once
+bash run_all.sh 3c              # re-run this alone after any edit to the layer
+
+# or the whole thing, once the exclusion layer exists
+bash run_all.sh
 ```
 
 ---
@@ -449,34 +505,67 @@ neighbours.
 
 ### Step 3c — exclusion list
 
-**Route A — exclusion polygon (recommended).** Digitize one polygon layer per
-survey covering areas you do not trust:
+**Route A — exclusion polygon (recommended).** Digitize a polygon layer covering
+the areas you do not trust. **One layer holding polygons for every survey is
+fine** — the test is spatial, so a polygon only affects nodes it overlaps.
+
+Batch, every survey and every version in one call (this is what `run_all.sh 3c`
+runs):
+
+```bash
+python step3c_manual_node_qc.py --batch \
+    --nodes-dir   node_qc \
+    --exclude-shp digitizing/bad_ends_watermasks.shp \
+    --versions v17b v16 \
+    --out-dir node_qc \
+    --out node_qc/node_qc_all.csv
+```
+
+It discovers every `true_node_polygons_<survey>_<version>.shp` under
+`--nodes-dir`, writes one CSV per survey/version plus the merged `--out`, and
+prints a kept/dropped table. A survey that fails is reported and skipped rather
+than taking the rest of the run down.
+
+Single survey/version:
 
 ```bash
 python step3c_manual_node_qc.py \
     --nodes  node_qc/true_node_polygons_<survey>_<version>.shp \
-    --exclude-shp node_qc/badareas_<survey>.shp \
+    --exclude-shp digitizing/bad_ends_watermasks.shp \
     --survey <survey> --sword-version <version> \
     --out node_qc/node_qc_<survey>_<version>.csv
 ```
 
 Nodes overlapping the exclusion area by more than `--max-overlap` (default 5%)
 are dropped; near-misses are listed. Because the exclusion is spatial, one act
-of judgement per survey filters **every** prior-database version consistently —
-different versions place nodes differently, but the cloud is in the same place
-on the ground. It is also the reproducible artefact: a reader sees which ground
-area was excluded rather than an unexplained list of identifiers.
+of judgement filters **every** prior-database version consistently — different
+versions place nodes differently, but the cloud is in the same place on the
+ground. It is also the reproducible artefact: a reader sees which ground area
+was excluded rather than an unexplained list of identifiers.
+
+> **If two surveys overlap on the ground.** The whole layer is applied to every
+> survey. That is right when the polygons mark ground that is bad in all of
+> them, and wrong when two surveys cover the same reach on different dates with
+> different bad areas — a polygon drawn for one date would also clip the other.
+> In that case add a text field naming the survey each polygon belongs to and
+> pass `--exclude-field <name>`. Polygons whose field is empty or `all` still
+> apply everywhere. The script prints the layer's field names on startup.
 
 **Route B — `keep` field.** Set `keep = 0` in QGIS and omit `--exclude-shp`.
 Deleting rows works too, with `--original` pointing at an untouched copy.
-`--exclude-ids` accepts a comma-separated list.
+`--exclude-ids` accepts a comma-separated list. This route is per-layer by
+nature and has no batch form.
 
-**Merge:**
+**Merge existing CSVs:**
 
 ```bash
 python step3c_manual_node_qc.py --merge 'node_qc/node_qc_*.csv' \
     --out node_qc/node_qc_all.csv
 ```
+
+Step 3c reads nothing but the step 3b shapefiles and the exclusion layer, so
+after any edit to that layer in QGIS, `bash run_all.sh 3c` alone refreshes
+`node_qc_all.csv` in seconds — nothing upstream is repeated.
 
 ---
 
@@ -635,7 +724,16 @@ bit-identical RiverTile to an equivalent set of source edits.
   instrument rather than the hydrography — but it means neither dataset is free
   of it, and the comparison is like-for-like rather than absolute.
 - **Braided and anabranching channels** exercise the segmentation and
-  cross-channel corridor logic hardest; inspect step 3b output in those settings.
+  cross-channel corridor logic hardest. Stock RiverObs will exclude threads that
+  lie outside the prior channel. Always run `util_assignment_audit.py` in these
+  settings and tune the corridor factors ([§2.3](#23-the-search-corridor)) before
+  trusting a width.
+- **The corridor factors are a global multiplier**, applied to every reach in a
+  run. A survey containing both a single-thread reach and a wide braidplain is
+  tuned to the braidplain; the single-thread reach then carries a wider corridor
+  than it needs. This is only a risk where non-river water is present, which by
+  assumption it is not in a hand-digitized river mask — but it is the reason to
+  use the smallest factor that reaches ~100% rather than a large one.
 - **Not tested at sub-metre grid spacing.** See [§8, step 1](#step-1--rasterize-the-water-mask).
 - **Reaches dropped mid-run** (ghost reaches, single-node reaches) are lightly
   exercised.
@@ -695,3 +793,5 @@ patches, check compatibility with the RiverObs license (Caltech / JPL).
 | `MemoryError` | Grid too large. Increase `--res` or reduce `--pad`. |
 | `IndexError` in the discharge model | Prior database `fit_coeffs` has fewer than 3 regions — a database problem, not a pipeline one. |
 | Step 3b: `PIXCVec indices exceed the raster shape` | The water `.tif` and PIXCVec came from different runs. |
+| Node polygons clip water that is plainly in the mask; `util_assignment_audit.py` reports well under 100% assigned | The cross-channel search corridor is sized from the *prior* channel width, so water outside the prior channel is never offered to a node. Widen it with `RIVEROBS_WTH_COEF_FACTOR` / `RIVEROBS_EXT_DIST_COEF_FACTOR` and re-run step 2. See [§2.3](#23-the-search-corridor). |
+| Audit reports `DOUBLE COUNTING` | The corridor factors are wide enough that neighbouring reaches claim the same water. Each reach is processed against the full pixel cloud independently. Lower the factors to the smallest value that still plateaus at ~100% assigned. |

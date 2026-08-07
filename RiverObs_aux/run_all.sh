@@ -1,20 +1,19 @@
-
 #!/usr/bin/env bash
 # =============================================================================
-# run_all.sh -- steps 1, 2 and 3b for all six orthomosaics
+# run_all.sh -- steps 1, 2, 3b and 3c for all six orthomosaics
 # -----------------------------------------------------------------------------
 #   conda activate RiverObs
 #   cd .../YR2024_scripts/SWOTCalVal_Yukon24/RiverObs_aux
 #   bash run_all.sh                  # everything
 #   bash run_all.sh 1                # step 1 only
 #   bash run_all.sh 2 3b             # steps 2 and 3b only
+#   bash run_all.sh 3c               # just re-apply the exclusion layer
 #
-# Written for bash 3.2, which is what /bin/bash is on macOS -- no associative
-# arrays, no mapfile.
 #
-# After this finishes, go to step 5.4 in the protocol: open the node polygons in
-# QGIS over each orthomosaic and mark what to drop. Nothing here excludes any
-# node.
+# Step 3c is spatial and version-independent: one exclusion layer is applied to
+# every survey and every SWORD version. Re-run `bash run_all.sh 3c` on its own
+# after any edit to that layer in QGIS -- it takes seconds and nothing upstream
+# needs repeating.
 # =============================================================================
  
 set -uo pipefail
@@ -30,9 +29,37 @@ RASTER_DIR=$BASE/Orthomosaics/width_validation/rasterized_water_masks
 OUT_DIR=$BASE/Orthomosaics/width_validation/RiverObs_output
 QC_DIR=$BASE/Orthomosaics/width_validation/RiverObs_output/node_qc
  
+# Hand-digitized polygons over cloud, haze and ragged survey edges. One layer
+# covering all six orthos. The test is spatial, so it is valid for v16 and v17b
+# alike -- node ids differ between SWORD versions, the ground does not.
+EXCLUDE_SHP=$BASE/Orthomosaics/width_validation/digitizing/bad_ends_watermasks.shp
+ 
+# If a polygon in EXCLUDE_SHP should apply to only ONE survey (two surveys
+# covering the same reach on different dates, with different bad areas), add a
+# text field to the layer naming the survey and set EXCLUDE_FIELD to its name.
+# Leave empty to apply every polygon to every survey.
+EXCLUDE_FIELD=""
+ 
+MAX_OVERLAP=0.05      # fraction of a node polygon inside the exclusion area
+                      # that is tolerated before the node is dropped
+ 
 RES=3
-VERSIONS="v17b v16"          # e.g. "v17b v16" once you are ready for both
+VERSIONS="v17b v16"
 LOG_LEVEL=info
+ 
+# --- search-corridor relaxation ----------------------------------------------
+# RiverObs sizes its cross-channel search corridor from the PRIOR channel
+# width, so water lying well outside the prior channel -- anabranches, braidplain
+# threads, wide side channels -- is excluded even when it is unambiguously river.
+# These factors widen the corridor. 1.0 is stock RiverObs.
+#
+# Confirm the value you pick with util_assignment_audit.py (command echoed at
+# the end of this script): raise until the assigned fraction plateaus near 100%,
+# then stop.
+export RIVEROBS_WTH_COEF_FACTOR=1.0
+export RIVEROBS_EXT_DIST_COEF_FACTOR=1.0
+
+# CD = 8, upperYR = 3, upperPR_CL = 3
  
 # --------------------------------------------------- survey definitions -----
 # name | water mask basename | orthomosaic basename
@@ -46,7 +73,7 @@ lowerYR_071624|yukonDS_240716_ortho_25cm_watermask|yukonDS_240716_ortho_3m_epsg3
 upperYR_071024|yukonUS_240710_ortho_25cm_watermask|yukonUS_240710_ortho_3m_epsg32606
 "
  
-STEPS="${*:-1 2 3b}"
+STEPS="${*:-1 2 3b 3c}"
 want () { case " $STEPS " in *" $1 "*) return 0;; *) return 1;; esac; }
  
 mkdir -p "$RASTER_DIR" "$OUT_DIR" "$QC_DIR"
@@ -123,6 +150,36 @@ done
 fi
  
 # =============================================================================
+# STEP 3c -- apply the hand-drawn exclusion layer to every survey and version
+# -----------------------------------------------------------------------------
+# One call. step3c discovers every true_node_polygons_<survey>_<version>.shp in
+# QC_DIR itself, so nothing here has to list the six surveys again.
+# =============================================================================
+if want 3c; then
+echo
+echo "################ STEP 3c: apply exclusion layer ################"
+if [ ! -f "$EXCLUDE_SHP" ]; then
+  echo "SKIPPED: no exclusion layer at"
+  echo "  $EXCLUDE_SHP"
+  echo "Digitize one in QGIS over the orthomosaics, then re-run: bash run_all.sh 3c"
+  FAILED="$FAILED step3c(no-exclusion-layer)"
+else
+  FIELD_ARG=""
+  [ -n "$EXCLUDE_FIELD" ] && FIELD_ARG="--exclude-field $EXCLUDE_FIELD"
+  python step3c_manual_node_qc.py --batch \
+      --nodes-dir "$QC_DIR" \
+      --exclude-shp "$EXCLUDE_SHP" \
+      --versions $VERSIONS \
+      --max-overlap "$MAX_OVERLAP" \
+      --out-dir "$QC_DIR" \
+      --out "$QC_DIR/node_qc_all.csv" \
+      $FIELD_ARG
+  STEP3C_RC=$?
+  [ $STEP3C_RC -ne 0 ] && FAILED="$FAILED step3c(rc=$STEP3C_RC)"
+fi
+fi
+ 
+# =============================================================================
 echo
 echo "############################################################"
 if [ -n "$FAILED" ]; then
@@ -136,9 +193,18 @@ echo "Outputs:"
 echo "  water rasters   $RASTER_DIR"
 echo "  RiverObs        $OUT_DIR"
 echo "     combined CSVs: ortho_riverobs_nodes_all.csv, ortho_riverobs_reaches_all.csv"
-echo "  node polygons   $QC_DIR"
+echo "  node polygons   $QC_DIR/true_node_polygons_<survey>_<version>.shp"
+echo "  node QC         $QC_DIR/node_qc_all.csv   <- join downstream analysis on this"
 echo
-echo "NEXT (step 5.4, manual): open each true_node_polygons_*.shp in QGIS over"
-echo "its orthomosaic, style graduated on 'width', and mark the nodes to drop."
-echo "Then run step3c_manual_node_qc.py. Nothing above excludes any node."
+echo "Corridor factors in effect: wth_coef x$RIVEROBS_WTH_COEF_FACTOR,"
+echo "                            ext_dist_coef x$RIVEROBS_EXT_DIST_COEF_FACTOR"
+echo "Check how much of each mask reached a node (run once per version):"
+for V in $VERSIONS; do
+echo "  python util_assignment_audit.py --batch \\"
+echo "      --water-dir $RASTER_DIR --riverobs-dir $OUT_DIR/$V \\"
+echo "      --version $V --out-csv $QC_DIR/assignment_audit_$V.csv"
+done
+echo
+echo "Edited the exclusion layer in QGIS? Re-run step 3c alone:"
+echo "  bash run_all.sh 3c"
 echo "############################################################"

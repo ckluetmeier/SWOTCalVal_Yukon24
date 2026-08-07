@@ -3,7 +3,7 @@
 riverobs_shim.py -- runtime fixes for the RiverObs CalVal path
 -----------------------------------------------------------------------------
 `import riverobs_shim` (or let run_calval2rivertile.py do it) BEFORE running a
-cal/val job. It monkey-patches three things at import time and touches no
+cal/val job. It monkey-patches five things at import time and touches no
 source files.
  
 WHY A SHIM AND NOT SOURCE EDITS
@@ -13,7 +13,8 @@ that matches one checkout can fail on another. Patching behaviour at runtime is
 revision-independent: it keys on class and function names, which are stable.
  
 WHAT IT CHANGES, AND WHAT IT DELIBERATELY DOES NOT
-All four are guards and plumbing. None of them touch pixel-to-node assignment,
+Four of the five are guards and plumbing; the fifth (corridor relaxation) is
+opt-in and off by default. None of them touch pixel-to-node assignment,
 area aggregation, or the area-to-width conversion, so a RiverTile produced with
 this shim loaded has the same node areas and widths as one produced without it
 -- the difference is that without it, the run crashes.
@@ -29,8 +30,17 @@ this shim loaded has the same node areas and widths as one produced without it
      Under height_agg_method='orig', wse_s_u is a scalar constant rather than a
      per-node array, and the output packing loop raises
        ValueError: zero-dimensional arrays cannot be concatenated
-     The shim broadcasts any 0-d numpy attribute to the reach's node count.
-     Only genuinely 0-d arrays are touched; real per-node arrays are untouched.
+     A single-node reach hits the same wall from the other side, with a
+     different message:
+       ValueError: all the input arrays must have same number of dimensions,
+       but the array at index 0 has 1 dimension(s) and the array at index N
+       has 0 dimension(s)
+     Estimate.py treats every RiverReach attribute except ds/metadata as a NODE
+     variable and feeds it to np.concatenate, which rejects anything 0-d no
+     matter how many nodes the reach has. The shim broadcasts any scalar
+     attribute -- 0-d ndarray, np.float64 and friends, or a plain Python number
+     -- to the reach's node count, including when that count is 1. Real
+     per-node arrays and string attributes are untouched.
  
   3. ReachExtractor.__init__
      SWORD reaches have different numbers of centerline points. The output
@@ -44,7 +54,36 @@ this shim loaded has the same node areas and widths as one produced without it
      product's own fill value. rivertile.py already filters the padding out
      when it builds the reach LineString -- `is_valid = np.abs(lats) < 90`.
  
-  4. RiverObs.get_node_stat
+  4. ReachExtractor.__init__ -- corridor relaxation (OPT-IN, default off)
+     RiverObs sizes its cross-channel search corridor from the prior database's
+     channel width. Two gates apply, both scaled by the per-node wth_coef and
+     ext_dist_coef:
+ 
+       gate 1  SWOTRiverEstimator.assign_reaches sets
+                   search_width = 2 * prior_width * wth_coef
+               and RiverObs.get_ext_dist_threshold takes
+                   half-corridor = search_width / 3
+                                 = 0.667 * prior_width * wth_coef
+ 
+       gate 2  SWOTRiverEstimator.assign_reaches_ext_dist_coef re-masks with
+                   extreme_dist = ext_dist_coef
+                                  * max(node_spacing,
+                                        max(prior_max_width, prior_width)
+                                        * wth_coef)
+ 
+     The effective corridor is the tighter of the two. Because both are keyed
+     to the PRIOR channel width, water that lies well outside the prior channel
+     -- anabranches, secondary threads of a braidplain, wide side channels -- is
+     excluded even when it is unambiguously part of the river. For a reference
+     dataset where every digitized polygon is known-good river water, that
+     exclusion is a loss, not a filter.
+ 
+     Setting RIVEROBS_WTH_COEF_FACTOR / RIVEROBS_EXT_DIST_COEF_FACTOR (or
+     calling set_corridor_factors()) multiplies those two coefficients, which
+     widens both gates together. Nothing else is touched: the coefficients are
+     corridor knobs only and are not written to any output product.
+ 
+  5. RiverObs.get_node_stat
      time_from_prev_xover / time_to_next_xover are per-line PIXC variables a
      water mask does not have. SWOTRiverEstimator skips loading them, then asks
      for their node means anyway, raising
@@ -56,10 +95,11 @@ this shim loaded has the same node areas and widths as one produced without it
 =============================================================================
 """
  
-PIPELINE_VERSION = '1.0.0'
+PIPELINE_VERSION = '1.0.1'
  
  
 import logging
+import os
  
 import numpy as np
  
@@ -74,6 +114,29 @@ _ABSENT_REPORTED = set()
 # change what lands in the output product.
 SUBSTITUTABLE = ('time_from_prev_xover', 'time_to_next_xover')
  
+# Corridor relaxation. 1.0 = stock RiverObs behaviour. Set with the environment
+# variables below, or by calling set_corridor_factors() before processing.
+#
+#   RIVEROBS_WTH_COEF_FACTOR       multiplies wth_coef      (both gates)
+#   RIVEROBS_EXT_DIST_COEF_FACTOR  multiplies ext_dist_coef (gate 2, and the
+#                                  dominant-label extension in gate 1)
+#
+# Raising these admits more water per node. Verify the result with
+# util_assignment_audit.py -- it reports the fraction of the input mask that
+# reached a node, and detects cross-reach double counting, which is the failure
+# mode a very wide corridor can introduce.
+WTH_COEF_FACTOR = float(os.environ.get('RIVEROBS_WTH_COEF_FACTOR', 1.0))
+EXT_DIST_COEF_FACTOR = float(os.environ.get('RIVEROBS_EXT_DIST_COEF_FACTOR', 1.0))
+ 
+ 
+def set_corridor_factors(wth=None, ext_dist=None):
+    """Override the corridor factors programmatically. Call before processing."""
+    global WTH_COEF_FACTOR, EXT_DIST_COEF_FACTOR
+    if wth is not None:
+        WTH_COEF_FACTOR = float(wth)
+    if ext_dist is not None:
+        EXT_DIST_COEF_FACTOR = float(ext_dist)
+ 
  
 # The RiverTile product's declared fill for centerline_lat/lon. Chosen so that
 # rivertile.py's own `np.abs(lats) < 90` test drops the padding.
@@ -81,12 +144,12 @@ MISSING_VALUE_FLT = -999999999999.0
  
  
 def install():
-    """Apply all four patches. Idempotent."""
+    """Apply all patches. Idempotent."""
     _patch_estimator_init()
     _patch_river_reach()
     _patch_reach_extractor()
     _patch_get_node_stat()
-    LOGGER.info('riverobs_shim %s installed (4 runtime patches)',
+    LOGGER.info('riverobs_shim %s installed (5 runtime patches)',
                 PIPELINE_VERSION)
  
  
@@ -103,6 +166,9 @@ def _patch_reach_extractor():
     def __init__(self, *args, **kwargs):
         original(self, *args, **kwargs)
         reaches = getattr(self, 'reach', None) or []
+ 
+        _apply_corridor_factors(reaches)
+ 
         lengths = [len(np.atleast_1d(r.metadata[k]))
                    for r in reaches for k in KEYS if k in r.metadata]
         if not lengths or len(set(lengths)) == 1:
@@ -159,16 +225,25 @@ def _patch_river_reach():
         if lat is None:
             return
         n_nodes = len(np.atleast_1d(lat))
-        if n_nodes <= 1:
+        if n_nodes < 1:
             return
         for key, value in list(self.__dict__.items()):
             if key in ('ds', 'metadata'):
                 continue
-            # wse_s_u is np.float64, which is np.generic and NOT np.ndarray --
-            # an ndarray-only test misses it.
+            # Every attribute except ds/metadata is treated by Estimate.py as a
+            # NODE variable and fed to np.concatenate, which rejects anything
+            # 0-dimensional -- including a single-node reach. Three shapes have
+            # to be caught:
+            #   * a 0-d ndarray
+            #   * np.float64 and friends, which are np.generic, NOT np.ndarray
+            #   * a plain Python float/int
+            # Strings and bytes are excluded: broadcasting one would be wrong,
+            # and a string attribute would fail further downstream anyway.
             is_zero_d = (
                 (isinstance(value, np.ndarray) and value.ndim == 0) or
-                isinstance(value, np.generic))
+                (isinstance(value, np.generic)
+                 and not isinstance(value, (np.str_, np.bytes_))) or
+                isinstance(value, (float, int, bool)))
             if is_zero_d:
                 setattr(self, key, np.repeat(np.asarray(value)[np.newaxis],
                                              n_nodes))
@@ -203,6 +278,46 @@ def _patch_get_node_stat():
  
     get_node_stat._shimmed = True
     RiverObs.get_node_stat = get_node_stat
+ 
+ 
+def _apply_corridor_factors(reaches):
+    """
+    Multiply the per-node corridor coefficients, and report the resulting
+    cross-channel half-corridor in metres so the effect is visible rather than
+    implicit.
+    """
+    if WTH_COEF_FACTOR == 1.0 and EXT_DIST_COEF_FACTOR == 1.0:
+        return
+    for r in reaches:
+        for attr, factor in (('wth_coef', WTH_COEF_FACTOR),
+                             ('ext_dist_coef', EXT_DIST_COEF_FACTOR)):
+            v = getattr(r, attr, None)
+            if v is None:
+                continue
+            setattr(r, attr, np.asarray(v, dtype='f8') * factor)
+ 
+    # Report what this means on the ground, for the first few reaches.
+    for r in reaches[:5]:
+        try:
+            width = np.ma.filled(np.asarray(r.width, dtype='f8'), np.nan)
+            maxw = np.ma.filled(np.asarray(r.max_width, dtype='f8'), np.nan)
+            wth = np.asarray(r.wth_coef, dtype='f8')
+            ext = np.asarray(r.ext_dist_coef, dtype='f8')
+            node_len = np.asarray(r.node_length, dtype='f8')
+            gate1 = np.nanmedian(2.0 * width * wth / 3.0)
+            gate2 = np.nanmedian(ext * np.maximum(
+                node_len, np.fmax(maxw, width) * wth))
+            LOGGER.info('shim: corridor reach %s -- prior width %.0f m, '
+                        'half-corridor gate1 %.0f m, gate2 %.0f m '
+                        '(binding: %.0f m)',
+                        getattr(r, 'reach_index', '?'), np.nanmedian(width),
+                        gate1, gate2, min(gate1, gate2))
+        except Exception:
+            pass
+    LOGGER.warning('shim: corridor relaxed -- wth_coef x%.2f, ext_dist_coef '
+                   'x%.2f. Run util_assignment_audit.py to confirm how much of '
+                   'the mask reached a node and to check for cross-reach '
+                   'double counting.', WTH_COEF_FACTOR, EXT_DIST_COEF_FACTOR)
  
  
 def absent_variables():
