@@ -3,9 +3,6 @@
 =============================================================================
 STEP 3b -- Real node footprints, from RiverObs's own pixel assignment
 -----------------------------------------------------------------------------
-`--write-polygons` in step3_coverage_gate.py produces rectangles. Those are a
-QC aid for the coverage gate and NOTHING ELSE.
- 
 This script produces the real thing. `calval2rivertile.py` writes a PIXCVec
 file alongside the RiverTile, and it carries a `node_id` for every water cell
 in your mask -- RiverObs's actual assignment. Dissolving the water cells by
@@ -28,15 +25,20 @@ equivalent region is a curvilinear cell, not a rectangle, and its lateral edges
 follow the water mask rather than any geometric boundary. The only faithful way
 to draw it is to draw what was actually assigned -- which is what this does.
  
-These polygons are also the right basis for a redraw of Figures 9 and S1: same
-idea as your current PIXCVec-points-over-node-polygons panels, but now the
-polygons are the orthomosaic's own node footprints rather than Thiessen cells.
+Two uses:
+ 
+  1. Manual QC. Style the layer by `width` over the orthomosaic and nodes
+     truncated by cloud or by the survey edge read as anomalously narrow
+     against their neighbours. Mark them, then run step3c.
+ 
+  2. Figures. These are the regions the reported areas and widths were summed
+     over, so a panel drawn from them is a faithful depiction of the method.
  
 Requires: rasterio, geopandas, shapely, numpy, netCDF4, pandas
 =============================================================================
 """
  
-SCRIPT_VERSION = 'v1 2026-08-05 -- dissolves ortho water cells by RiverObs node_id'
+PIPELINE_VERSION = '1.0.0'
  
 import argparse
 import os
@@ -87,9 +89,42 @@ def build(water_tif, pixcvec_nc, key='node_id'):
         out_id.append(int(uniq[v - 1]))
         out_area.append(merged.area)
  
-    gdf = gpd.GeoDataFrame({key: out_id, 'area_m2': out_area},
-                           geometry=out_geom, crs=crs)
+    counts = {int(uniq[v - 1]): int((inverse == (v - 1)).sum())
+              for v in np.unique(values)}
+ 
+    gdf = gpd.GeoDataFrame({
+        key: out_id,
+        # String copy: shapefile DBF numeric fields are the usual place a
+        # 14-digit id gets mangled. Round-trips fine in testing, but if the
+        # numeric column ever looks wrong, this one is authoritative.
+        key.replace('_id', '_str'): [str(i) for i in out_id],
+        'n_cells': [counts.get(i, 0) for i in out_id],
+        'area_m2': out_area,
+        # Edited in QGIS. 1 = keep, 0 = drop. Read by step3c.
+        'keep': [1] * len(out_id),
+    }, geometry=out_geom, crs=crs)
     return gdf.sort_values(key).reset_index(drop=True)
+ 
+ 
+def join_rivertile(gdf, rivertile_nc):
+    """
+    Attach width, p_length and p_dist_out from the RiverTile so the QGIS layer
+    is directly judgeable: style by `width` and a node truncated by cloud or by
+    the survey edge stands out as anomalously narrow against its neighbours.
+    """
+    import pandas as pd
+    with netCDF4.Dataset(rivertile_nc, 'r') as ds:
+        n = ds.groups['nodes']
+        get = lambda k: np.ma.filled(n[k][:].astype('f8'), np.nan)
+        rt = pd.DataFrame({
+            'node_id': get('node_id').astype('int64'),
+            'width': get('width'),
+            'p_length': get('p_length'),
+            'p_dist_out': get('p_dist_out'),
+            'n_good_pix': get('n_good_pix'),
+        })
+    merged = gdf.merge(rt, on='node_id', how='left')
+    return gpd.GeoDataFrame(merged, geometry=gdf.geometry.values, crs=gdf.crs)
  
  
 def main():
@@ -97,12 +132,18 @@ def main():
     p.add_argument('water_tif', help='the water raster from step 1')
     p.add_argument('pixcvec_nc', help='the *_pixcvec.nc from the same run')
     p.add_argument('out_shp')
+    p.add_argument('--rivertile', default=None,
+                   help='the RiverTile .nc from the same run. Recommended: '
+                        'adds width / p_length / p_dist_out so you can style '
+                        'the layer by width during manual review.')
     p.add_argument('--reaches', action='store_true',
                    help='also write a reach-level dissolve alongside')
     args = p.parse_args()
-    print('# {} {}'.format(os.path.basename(__file__), SCRIPT_VERSION))
+    print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
     gdf = build(args.water_tif, args.pixcvec_nc, 'node_id')
+    if args.rivertile:
+        gdf = join_rivertile(gdf, args.rivertile)
     gdf.to_file(args.out_shp)
     print('wrote {} node polygons to {}'.format(len(gdf), args.out_shp))
     print('  total assigned area: {:,.0f} m2'.format(gdf.area_m2.sum()))
@@ -115,8 +156,21 @@ def main():
         rgdf.to_file(rpath)
         print('wrote {} reach polygons to {}'.format(len(rgdf), rpath))
  
-    print('\nThese are the regions RiverObs actually summed to get node area '
-          'and width.\nSafe to put in a figure. The step3 rectangles are not.')
+    if 'width' in gdf.columns:
+        w = gdf['width'].dropna()
+        if len(w):
+            print('  width: min {:.1f}  median {:.1f}  max {:.1f} m'.format(
+                w.min(), w.median(), w.max()))
+            narrow = gdf[gdf['width'] < 0.6 * w.median()]
+            if len(narrow):
+                print('  {} node(s) narrower than 60% of the median -- worth a '
+                      'look first in QGIS:'.format(len(narrow)))
+                for _, r in narrow.sort_values('width').head(10).iterrows():
+                    print('     {}  width {:.1f} m'.format(
+                        int(r['node_id']), r['width']))
+ 
+    print('\nNEXT: open in QGIS over the orthomosaic, set `keep` = 0 on nodes to')
+    print('drop (cloud, survey edge), save, then run step3c_manual_node_qc.py.')
  
  
 if __name__ == '__main__':

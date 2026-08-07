@@ -7,14 +7,13 @@ cal/val job. It monkey-patches three things at import time and touches no
 source files.
  
 WHY A SHIM AND NOT SOURCE EDITS
-These three bugs live in SWOTRiverEstimator.py and Estimate.py, and the exact
-surrounding text varies between RiverObs revisions -- a text patch that matches
-one clone fails on another. Patching the behaviour at runtime is revision-
-independent: it keys on function and class names, which are stable, instead of
-on whitespace.
+These defects live in SWOTRiverEstimator.py, Estimate.py and ReachDatabase.py,
+whose surrounding source text varies between RiverObs revisions -- a text patch
+that matches one checkout can fail on another. Patching behaviour at runtime is
+revision-independent: it keys on class and function names, which are stable.
  
 WHAT IT CHANGES, AND WHAT IT DELIBERATELY DOES NOT
-All three are guards and plumbing. None of them touch pixel-to-node assignment,
+All four are guards and plumbing. None of them touch pixel-to-node assignment,
 area aggregation, or the area-to-width conversion, so a RiverTile produced with
 this shim loaded has the same node areas and widths as one produced without it
 -- the difference is that without it, the run crashes.
@@ -33,7 +32,19 @@ this shim loaded has the same node areas and widths as one produced without it
      The shim broadcasts any 0-d numpy attribute to the reach's node count.
      Only genuinely 0-d arrays are touched; real per-node arrays are untouched.
  
-  3. RiverObs.get_node_stat
+  3. ReachExtractor.__init__
+     SWORD reaches have different numbers of centerline points. The output
+     packing loop does np.array([reach.metadata[k] for reach in ...]) over
+     centerline_lon / centerline_lat, and since numpy 1.24 a ragged list raises
+       ValueError: setting an array element with a sequence. The requested
+       array has an inhomogeneous shape after 1 dimensions.
+     The RiverTile product declares centerline_lat/lon as 2-D
+     (reaches, centerlines), so a rectangular array is what it needs anyway.
+     The shim pads every reach's centerline arrays to the longest one using the
+     product's own fill value. rivertile.py already filters the padding out
+     when it builds the reach LineString -- `is_valid = np.abs(lats) < 90`.
+ 
+  4. RiverObs.get_node_stat
      time_from_prev_xover / time_to_next_xover are per-line PIXC variables a
      water mask does not have. SWOTRiverEstimator skips loading them, then asks
      for their node means anyway, raising
@@ -44,6 +55,9 @@ this shim loaded has the same node areas and widths as one produced without it
      upstream wrote them.
 =============================================================================
 """
+ 
+PIPELINE_VERSION = '1.0.0'
+ 
  
 import logging
  
@@ -61,12 +75,57 @@ _ABSENT_REPORTED = set()
 SUBSTITUTABLE = ('time_from_prev_xover', 'time_to_next_xover')
  
  
+# The RiverTile product's declared fill for centerline_lat/lon. Chosen so that
+# rivertile.py's own `np.abs(lats) < 90` test drops the padding.
+MISSING_VALUE_FLT = -999999999999.0
+ 
+ 
 def install():
-    """Apply all three patches. Idempotent."""
+    """Apply all four patches. Idempotent."""
     _patch_estimator_init()
     _patch_river_reach()
+    _patch_reach_extractor()
     _patch_get_node_stat()
-    LOGGER.info('riverobs_shim installed (3 runtime patches)')
+    LOGGER.info('riverobs_shim %s installed (4 runtime patches)',
+                PIPELINE_VERSION)
+ 
+ 
+# -- 3 -------------------------------------------------------------------------
+def _patch_reach_extractor():
+    from RiverObs import ReachDatabase as _RD
+    klass = _RD.ReachExtractor
+    if getattr(klass.__init__, '_shimmed', False):
+        return
+    original = klass.__init__
+ 
+    KEYS = ('centerline_lon', 'centerline_lat')
+ 
+    def __init__(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        reaches = getattr(self, 'reach', None) or []
+        lengths = [len(np.atleast_1d(r.metadata[k]))
+                   for r in reaches for k in KEYS if k in r.metadata]
+        if not lengths or len(set(lengths)) == 1:
+            return                      # already rectangular, nothing to do
+        n_max = max(lengths)
+        for r in reaches:
+            for k in KEYS:
+                if k not in r.metadata:
+                    continue
+                v = np.atleast_1d(r.metadata[k])
+                v = np.ma.filled(np.ma.masked_invalid(
+                    np.asarray(v, dtype='f8')), MISSING_VALUE_FLT)
+                if len(v) < n_max:
+                    v = np.concatenate(
+                        [v, np.full(n_max - len(v), MISSING_VALUE_FLT)])
+                r.metadata[k] = v
+        LOGGER.info('shim: padded centerline_lon/lat across %d reaches to %d '
+                    'points (was %d-%d) so the reach output packs to a '
+                    'rectangular array', len(reaches), n_max,
+                    min(lengths), max(lengths))
+ 
+    __init__._shimmed = True
+    klass.__init__ = __init__
  
  
 # -- 1 -------------------------------------------------------------------------
@@ -120,7 +179,7 @@ def _patch_river_reach():
     RiverReach.__init__ = __init__
  
  
-# -- 3 -------------------------------------------------------------------------
+# -- 4 -------------------------------------------------------------------------
 def _patch_get_node_stat():
     from RiverObs.RiverObs import RiverObs
     if getattr(RiverObs.get_node_stat, '_shimmed', False):
@@ -152,4 +211,3 @@ def absent_variables():
  
  
 install()
- 

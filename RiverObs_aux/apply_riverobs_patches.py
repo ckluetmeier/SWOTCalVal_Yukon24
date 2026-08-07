@@ -1,33 +1,32 @@
 #!/usr/bin/env python
 """
 =============================================================================
-Apply the RiverObs fork edits  (v2 -- two files only)
+Apply the RiverObs source patches
 -----------------------------------------------------------------------------
     python apply_riverobs_patches.py \\
-        --riverobs-root "/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts/RiverObs"
+        --riverobs-root /path/to/RiverObs
  
-WHAT CHANGED FROM v1
-v1 tried to edit four files. Two of them -- SWOTRiverEstimator.py and
-Estimate.py -- differ between RiverObs revisions, so exact-text patching failed
-on Camryn's clone even though it worked on mine. Those two fixes now live in
-riverobs_shim.py, which patches the same behaviour at runtime by function and
-class name instead of by whitespace. Verified: the shim route produces a
-bit-identical RiverTile to the source-patched route.
+WHAT IT PATCHES
+Two files, four edits. Everything else the pipeline needs is applied at runtime
+by riverobs_shim.py, which keys on class and function names rather than source
+text and is therefore robust across RiverObs revisions.
  
-So this script now touches only:
+This script touches only:
  
     src/SWOTRiver/products/calval.py     implement from_airborne_imagery,
                                          declare the three quality flags
     src/bin/calval2rivertile.py          register the format + dispatch branch
  
-It is safe to run on a clone that v1 partially patched: the from_airborne_imagery
-edit replaces the whole method whatever its current contents, and every other
-edit is skipped if already present.
+Idempotent. The from_airborne_imagery edit replaces the whole method whatever
+its current contents, and every other edit is skipped if already present.
  
     --revert     restore the .orig_backup copies
     --status     report what is and isn't applied, and change nothing
 =============================================================================
 """
+ 
+PIPELINE_VERSION = '1.0.0'
+ 
  
 import argparse
 import os
@@ -286,6 +285,7 @@ def main():
     p.add_argument('--revert', action='store_true')
     p.add_argument('--status', action='store_true')
     args = p.parse_args()
+    print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
     root = os.path.expanduser(args.riverobs_root)
     if not os.path.isdir(os.path.join(root, 'src')):
@@ -319,15 +319,16 @@ def main():
         sum(1 for _, s, _ in results if s == 'skip'), n_fail))
  
     if n_fail:
-        print('\nSend me the FAIL lines plus the output of:')
+        print('\nIf an edit failed, your RiverObs revision differs from the')
+        print('tested one. Record it with:')
         print('  cd "{}" && git log -1 --format=%H'.format(root))
         sys.exit(1)
  
     print('\nVerify with:')
     print('  python "{}/src/bin/calval2rivertile.py" --help'.format(root))
     print('  ...the format list should end with ",airborne_watermask}"')
-    print('\nThe other two fixes are runtime, in riverobs_shim.py -- you do not')
-    print('patch them. Run jobs through run_calval2rivertile.py, which loads it.')
+    print('\nThe remaining fixes are applied at runtime by riverobs_shim.py.')
+    print('Run jobs through run_calval2rivertile.py, which loads it.')
  
  
 if __name__ == '__main__':

@@ -17,6 +17,9 @@ Keep this file in the same folder as riverobs_shim.py.
 =============================================================================
 """
  
+PIPELINE_VERSION = '1.0.0'
+ 
+ 
 import os
 import sys
  
@@ -78,4 +81,3 @@ if __name__ == '__main__':
               .format(', '.join(absent)))
         print('(time_from_prev_xover / time_to_next_xover are expected; '
               'anything else is worth a look)')
- 

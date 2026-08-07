@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 """
 =============================================================================
@@ -6,37 +5,31 @@ STEP 0 -- Check a SWORD netCDF is usable by RiverObs
 -----------------------------------------------------------------------------
     python step0_check_sword_nc.py /path/na_sword_v17b.nc --verify
  
-Run once per SWORD version. It reads only -- it no longer writes a padded copy,
-because padding turned out to be unnecessary.
+Run once per SWORD version. Read-only; it modifies nothing.
  
-*** CORRECTION TO EARLIER VERSIONS OF THIS SCRIPT ***
-v1 and v2 said a SWORD file missing variables that RiverObs declares would
-raise AttributeError, and offered to pad it. That was wrong. I inferred it from
-reading ReachDatabaseReaches.__call__()'s getattr loop without testing that
-Product.__getattr__ intercepts first. It does:
+NO PADDING IS REQUIRED
+RiverObs declares many more SWORD variables than the public SWORD releases
+carry (105 reach and 69 node variables at the tested revision). This is not an
+error. Product.__getattr__ in SWOTWater/products/product.py returns a
+fully-masked array of the correct shape for any declared-but-absent variable:
  
-    src/SWOTWater/products/product.py, Product.__getattr__
-        if key in self.VARIABLES:
-            ...
-            return np.ma.masked_array(..., mask=np.ones(shape))
+    if key in self.VARIABLES:
+        ...
+        return np.ma.masked_array(..., mask=np.ones(shape))
  
-Any variable RiverObs declares but your file lacks comes back as a fully-masked
-array of the right shape. The shape comes from RiverObs's own DIMENSIONS table,
-so your file's dimension names are irrelevant too. Nothing raises.
+The shape is taken from RiverObs's own DIMENSIONS table, so the dimension names
+used inside the SWORD file are irrelevant. Nothing raises, and no modified copy
+of the database is needed. Use the release file as distributed.
  
-Verified by running the complete pipeline against a SWORD file missing the same
-35 node and 63 reach variables yours is, unpadded: node widths identical to the
-padded run, reach_type correct.
- 
-/reaches/type self-heals the same way. Missing -> masked -> RiverObs's own
-documented fallback fires, at ReachDatabase.py line 228:
+/reaches/type is a special case worth knowing: it IS read (ghost reaches, type
+6, are skipped), and the public releases do not carry it. RiverObs supplies its
+own fallback, at ReachDatabase.py line 228:
  
     reach_type = this_reach['reaches']['type'][0]
     if reach_type is np.ma.masked:
         reach_type = reach_idx % 10       # last digit of the SWORD reach_id
  
-So: use your ORIGINAL SWORD netCDFs. Delete any *_riverobs.nc padded copies.
-No methods caveat needed.
+The last digit of a SWORD reach_id is the type code, so the fallback is exact.
  
 *** WHY THIS SCRIPT STILL MATTERS ***
 Because missing variables are silently masked rather than loudly fatal, a SWORD
@@ -53,6 +46,11 @@ node_length carries real values.
 Requires: netCDF4, numpy, plus RiverObs on PYTHONPATH
 =============================================================================
 """
+ 
+PIPELINE_VERSION = '1.0.0'
+ 
+import os
+ 
  
 import argparse
 import sys
@@ -171,7 +169,6 @@ def verify(path):
             this = db(rid)
         except Exception as exc:
             print('  FAILED: {}: {}'.format(type(exc).__name__, exc))
-            print('  Send me this output.')
             return False
  
         raw_type = this['reaches']['type'][0]
@@ -201,6 +198,7 @@ def main():
                    help='load the file through RiverObs and call one reach')
     p.add_argument('--write-padded', default=None, help=argparse.SUPPRESS)
     args = p.parse_args()
+    print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
     if args.write_padded:
         print('NOTE: --write-padded has been removed. Padding is unnecessary '

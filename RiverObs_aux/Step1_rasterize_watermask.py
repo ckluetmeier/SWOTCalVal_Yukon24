@@ -1,26 +1,29 @@
+
 #!/usr/bin/env python
 """
 =============================================================================
 STEP 1 -- Rasterize the digitized water mask (and the orthomosaic footprint)
 -----------------------------------------------------------------------------
-Replaces script 3.2 (ortho_PIXCVec_node_polygon_widths.ipynb).
- 
 RiverObs's CalVal path wants a pixel cloud, and the cleanest way to make one
 from a digitized polygon is to burn the polygon onto a regular grid and hand
 every water cell to the processor. That is what this script does. It writes
-two rasters per orthomosaic, on the SAME grid:
+one raster per orthomosaic:
  
   <name>_water_<res>m.tif      1 = water, 0 = not water   -> the pixel cloud
-  <name>_footprint_<res>m.tif  1 = imaged, 0 = not imaged -> the coverage gate
  
-The footprint raster is not fed to RiverObs. It exists because RiverObs has no
-concept of "the reference dataset did not see this node": a SWORD node that
-your orthomosaic only half covers will come back with a real-looking but low
-water area, which reads downstream as SWOT overestimating width. Step 4 uses
-the footprint to drop those nodes. Your current workflow handles this
-implicitly (the AOI clip plus the hand-curated `viable_reaches` list in script
-3.4); making it explicit is one of the things that gets better in the move to
-RiverObs, not worse.
+That is the only file step 2 needs.
+ 
+Optionally, pass --ortho-tif and it will ALSO write
+ 
+  <name>_footprint_<res>m.tif  1 = imaged, 0 = not imaged
+ 
+and cross-check the two. That raster is QC only -- nothing downstream reads it.
+The cross-check is still worth having once per survey: it tells you whether any
+of your digitized water lies outside the area the survey actually imaged, which
+is a digitizing error worth knowing about before you review nodes by hand.
+ 
+It does NOT substitute for the manual node review in step 3c. A nodata-derived
+footprint cannot see cloud, because cloud is valid data.
  
 WHY 3 m AND NOT 25 cm
   Node area is sum(cell area) over assigned cells, so the grid spacing only
@@ -29,13 +32,14 @@ WHY 3 m AND NOT 25 cm
   digitization and SWORD-centerline error you already accept. Going to 25 cm
   multiplies the pixel cloud by 144x and makes SWOTRiverEstimator's
   connected-component segmentation allocate an image the size of the full
-  orthomosaic grid, which will not fit in memory for a 30 km survey. 3 m also
-  keeps the new numbers directly comparable to your published ones, since
-  script 3.2 already counted 3 m resampled ortho pixels.
+  orthomosaic grid, which will not fit in memory for a survey tens of km long.
  
 Requires: geopandas, rasterio, numpy, shapely
 =============================================================================
 """
+ 
+PIPELINE_VERSION = '1.0.0'
+ 
  
 import argparse
 import os
@@ -115,12 +119,18 @@ def main():
                    help='metres of padding around the water mask (default 2000). '
                         'Must exceed the widest SWORD max_width in the AOI so '
                         'RiverObs can see the full search corridor.')
-    p.add_argument('--footprint-shp', default=None,
-                   help='orthomosaic footprint polygon (preferred)')
     p.add_argument('--ortho-tif', default=None,
-                   help='orthomosaic, used to derive the footprint if '
-                        '--footprint-shp is not given')
+                   help='OPTIONAL. The orthomosaic for this survey. If given, '
+                        'a footprint raster is written alongside the water '
+                        'raster and the two are compared as a sanity check. '
+                        'Nothing downstream reads the footprint raster; it is '
+                        'a one-off check that your digitizing stayed inside '
+                        'the imaged area.')
+    p.add_argument('--footprint-shp', default=None,
+                   help='OPTIONAL alternative to --ortho-tif, if you have a '
+                        'footprint polygon (e.g. a Metashape mosaic outline).')
     args = p.parse_args()
+    print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
     os.makedirs(args.out_dir, exist_ok=True)
  
@@ -128,12 +138,17 @@ def main():
     if water.empty:
         raise SystemExit('water mask is empty: ' + args.water_shp)
  
+    foot = None
     if args.footprint_shp:
         foot = gpd.read_file(args.footprint_shp).to_crs(args.crs)
     elif args.ortho_tif:
         foot = footprint_from_ortho(args.ortho_tif, args.crs)
     else:
-        raise SystemExit('give --footprint-shp or --ortho-tif')
+        print('no --ortho-tif or --footprint-shp given: writing the water '
+              'raster only.')
+        print('  That is fine -- nothing downstream reads the footprint '
+              'raster. The orthomosaic is opened directly in QGIS for the '
+              'manual node review.')
  
     # One grid for both rasters, snapped so cell area is exactly res^2.
     xmin, ymin, xmax, ymax = snap_bounds(water.total_bounds, args.res, args.pad)
@@ -154,16 +169,25 @@ def main():
         args.out_dir, '{}_footprint_{}m.tif'.format(args.name, res_tag))
  
     n_water = burn(water, transform, (nrow, ncol), args.crs, water_tif)
-    n_foot = burn(foot, transform, (nrow, ncol), args.crs, foot_tif)
- 
     cell_area = args.res ** 2
     print('water cells : {:>12,}  ({:,.0f} m2)'.format(n_water, n_water * cell_area))
-    print('imaged cells: {:>12,}  ({:,.0f} m2)'.format(n_foot, n_foot * cell_area))
-    if n_water > n_foot:
-        print('WARNING: more water cells than imaged cells -- check that the '
-              'footprint really covers the water mask')
-    print('wrote', water_tif)
-    print('wrote', foot_tif)
+    print('wrote', water_tif, '  <-- this is the file step 2 needs')
+ 
+    if foot is not None:
+        n_foot = burn(foot, transform, (nrow, ncol), args.crs, foot_tif)
+        print('imaged cells: {:>12,}  ({:,.0f} m2)'.format(
+            n_foot, n_foot * cell_area))
+        if n_water > n_foot:
+            print('WARNING: more water cells than imaged cells -- the water '
+                  'mask extends beyond the footprint. Check both.')
+        outside = int(((rasterio.open(water_tif).read(1) == 1) &
+                       (rasterio.open(foot_tif).read(1) == 0)).sum())
+        if outside:
+            print('WARNING: {:,} water cells ({:.2f}% of the mask) fall '
+                  'OUTSIDE the imaged footprint. Either the footprint is '
+                  'wrong or the mask was digitized past the survey edge.'
+                  .format(outside, 100.0 * outside / max(n_water, 1)))
+        print('wrote', foot_tif, '  <-- QC only, not read downstream')
  
  
 if __name__ == '__main__':

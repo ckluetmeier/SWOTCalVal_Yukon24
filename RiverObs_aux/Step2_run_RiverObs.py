@@ -1,15 +1,12 @@
+
 #!/usr/bin/env python
 """
 =============================================================================
 STEP 2 -- Run every orthomosaic water mask through RiverObs, both SWORD versions
 -----------------------------------------------------------------------------
-Replaces script 3.1 (PIXCVec Thiessen polygons) entirely, and the summary-stats
-half of script 3.2.
- 
-For each (water mask, SWORD version) pair this calls your forked
+For each (water mask, SWORD version) pair this calls the patched
 calval2rivertile.py, then flattens the resulting RiverTile netCDF into two
-CSVs -- one node-level, one reach-level -- that script 3.3 and 3.4 can read
-with almost no change.
+CSVs -- one node-level, one reach-level -- ready for downstream analysis.
  
 Run it from inside the RiverObs conda environment. Keep it in the same folder
 as run_calval2rivertile.py and riverobs_shim.py.
@@ -19,6 +16,9 @@ as run_calval2rivertile.py and riverobs_shim.py.
 Requires: netCDF4, pandas, numpy (all already in the RiverObs environment)
 =============================================================================
 """
+ 
+PIPELINE_VERSION = '1.0.0'
+ 
  
 import argparse
 import os
@@ -32,9 +32,9 @@ import pandas as pd
  
 # -----------------------------------------------------------------------------
 # EDIT THIS BLOCK -- one entry per orthomosaic, mirroring the commented file
-# lists in your scripts 3.2 and 3.3. `date` is the matching SWOT overpass date
-# and is carried straight through to the output CSV so script 3.3 no longer
-# needs the hand-maintained str_starts(time_str, ...) filter.
+# `date` is the matching SWOT overpass date (UTC) and is carried through to the
+# output CSV so the downstream temporal match is a join condition rather than a
+# hand-edited constant.
 # -----------------------------------------------------------------------------
 SURVEYS = [
     {'name': 'CD_071024',        'date': '2024-07-11'},
@@ -61,9 +61,8 @@ NODE_FIELDS = [
  
 # Reach fields. `width` here is sum(node area) / sum(node p_length) over the
 # observed nodes -- a length-weighted mean, not the unweighted mean of node
-# widths that script 3.4 currently computes. `obs_frac_n` is the fraction of
-# the reach's SWORD nodes that got data, which replaces the hand-curated
-# `viable_reaches` list.
+# widths. `obs_frac_n` is the fraction of the reach's SWORD nodes that received
+# data, and is the defensible basis for a reach-completeness threshold.
 REACH_FIELDS = [
     'reach_id', 'width', 'width_u', 'area_total', 'area_detct',
     'obs_frac_n', 'partial_f', 'n_good_nod', 'p_length', 'p_width',
@@ -92,7 +91,10 @@ def run_one(survey, version, rdf, args):
     water_tif = os.path.join(
         args.raster_dir, '{}_water_{}m.tif'.format(name, res_tag))
     if not os.path.exists(water_tif):
-        raise SystemExit('missing water raster: ' + water_tif)
+        # FileNotFoundError, not SystemExit -- SystemExit does not inherit from
+        # Exception, so --keep-going could not catch it and the whole batch died
+        # on the first missing raster without writing any CSV.
+        raise FileNotFoundError('missing water raster: ' + water_tif)
  
     out_dir = os.path.join(args.out_dir, version)
     os.makedirs(out_dir, exist_ok=True)
@@ -123,8 +125,8 @@ def run_one(survey, version, rdf, args):
         df.insert(1, 'SWOT_date', survey['date'])
         df.insert(2, 'sword_version', version)
  
-    # RiverObs writes 'width' for the ortho run; rename so the downstream R
-    # scripts never confuse it with the SWOT width column.
+    # RiverObs writes 'width'; rename so downstream code cannot confuse the
+    # reference width with the SWOT width column.
     nodes = nodes.rename(columns={
         'width': 'ortho_width_m', 'width_u': 'ortho_width_u_m',
         'area_total': 'ortho_area_total_m2', 'area_detct': 'ortho_area_detct_m2'})
@@ -148,16 +150,44 @@ def main():
     p.add_argument('--res', type=float, default=3.0,
                    help='must match the --res used in step 1')
     p.add_argument('--versions', nargs='+', default=['v16', 'v17b'])
+    p.add_argument('--survey', nargs='+', default=None,
+                   help='run only these survey names (default: all in SURVEYS)')
+    p.add_argument('--keep-going', action='store_true',
+                   help='carry on if a survey fails, and still write the CSVs '
+                        'for the ones that worked. Failures are listed at the '
+                        'end and the exit status is non-zero.')
     p.add_argument('--log-level', default='info')
     args = p.parse_args()
+    print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
  
-    all_nodes, all_reaches = [], []
+    surveys = SURVEYS
+    if args.survey:
+        wanted = set(args.survey)
+        surveys = [s for s in SURVEYS if s['name'] in wanted]
+        missing = wanted - {s['name'] for s in surveys}
+        if missing:
+            raise SystemExit('unknown survey name(s): {}. Known: {}'.format(
+                ', '.join(sorted(missing)),
+                ', '.join(s['name'] for s in SURVEYS)))
+ 
+    all_nodes, all_reaches, failures = [], [], []
     for version in args.versions:
         rdf = os.path.join(args.rdf_dir, SWORD_VERSIONS[version])
-        for survey in SURVEYS:
-            nodes, reaches = run_one(survey, version, rdf, args)
+        for survey in surveys:
+            try:
+                nodes, reaches = run_one(survey, version, rdf, args)
+            except (Exception, SystemExit) as exc:
+                if not args.keep_going:
+                    raise
+                failures.append((survey['name'], version, str(exc).split(chr(10))[0]))
+                print('    FAILED: {} / {} -- {}'.format(
+                    survey['name'], version, type(exc).__name__))
+                continue
             all_nodes.append(nodes)
             all_reaches.append(reaches)
+ 
+    if not all_nodes:
+        raise SystemExit('\nevery run failed -- nothing to write')
  
     os.makedirs(args.out_dir, exist_ok=True)
     node_csv = os.path.join(args.out_dir, 'ortho_riverobs_nodes_all.csv')
@@ -166,6 +196,14 @@ def main():
     pd.concat(all_reaches, ignore_index=True).to_csv(reach_csv, index=False)
     print('\nwrote', node_csv)
     print('wrote', reach_csv)
+ 
+    if failures:
+        print('\n{} run(s) FAILED and are absent from those CSVs:'.format(
+            len(failures)))
+        for name, version, msg in failures:
+            print('   {} / {}'.format(name, version))
+        print('Re-run just those with --survey <name> once fixed.')
+        sys.exit(1)
  
  
 if __name__ == '__main__':
