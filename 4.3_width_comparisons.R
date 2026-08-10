@@ -11,10 +11,19 @@
 #  YR_CalVal_D7.)
 #
 # !! NOT YET VERIFIED AGAINST DATA !!
-# The two node_width_SWOT_Ortho.csv files were not available when this was
-# written, so unlike 4.1 and 4.2 the numbers here have not been reproduced.
-# Three things need checking on first run -- all three will announce
-# themselves, see the CHECK blocks below.
+# Unlike 4.1 and 4.2 the numbers here have not been reproduced against the
+# published tables. The CHECK blocks below announce the things to confirm.
+#
+# UPDATED FOR THE RIVEROBS PIPELINE (script 3.3)
+#   * 3.3 now writes ONE node_width_SWOT_Ortho.csv covering every survey and
+#     both prior-database versions, with a `sword_version` column, instead of
+#     one file per version in RiverSP_v16/ and RiverSP_v17b/. This script reads
+#     that file and splits it.
+#   * CHECK 1 is answered: the column identifying WHICH orthomosaic a node was
+#     compared against is `survey`. That is what disambiguates the two Coleen
+#     acquisitions, so ORTHO_ID_COL is set to it rather than left NULL.
+#   * A preflight check names any missing column, or a version present in
+#     SWORD_VERSIONS but absent from the data, before any analysis runs.
 #
 # WHAT CHANGED IN THIS REWRITE
 #   1. Exhaustive version partitioning. Table 6 vs Table S10 currently loses 23
@@ -37,7 +46,7 @@
 # =============================================================================
 
 library(tidyverse)
-source("4.0_comparison_helpers.R")
+source("/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts/SWOTCalVal_Yukon24/4.0_comparison_helpers.R")
 
 
 # =============================================================================
@@ -47,50 +56,147 @@ source("4.0_comparison_helpers.R")
 BASE <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width"
 TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
 
+# One combined file from 3.3, both versions inside it.
+WIDTH_CSV <- file.path(BASE, "node/node_width_SWOT_Ortho.csv")
+
+# Which sword_version value is which manuscript version. Version C is the
+# SWORD v16 / RiverSP PIC0 product, version D is SWORD v17b / PGD0.
+SWORD_VERSIONS <- c(C = "v16", D = "v17b")
+
 DARK_FRAC_MAX   <- 0.5
 WIDTH_RESID_MAX <- 1500      # m
 WIDTH_VALUE     <- "residuals"   # metric the partition is defined against
 
-# CHECK 1 --------------------------------------------------------------------
+# CHECK 1 -- answered by the 3.3 rewrite --------------------------------------
 # The observation key needs whatever identifies WHICH orthomosaic a node was
 # compared against. Most clusters have one water mask, but the upper Porcupine
-# and Coleen have two (both acquisition days), so (node, cycle, pass) alone may
-# not be unique. Set this to the column that names the mask / acquisition
-# (e.g. "ortho_id", "ortho_date", "mask_file"), or to NULL if there is exactly
-# one mask per node. partition_versions() warns if the key is not unique.
-ORTHO_ID_COL <- "ortho_id"
+# and Coleen have two (both acquisition days), so (node, cycle, pass) alone is
+# NOT unique for those. 3.3 carries `survey` -- the acquisition name, e.g.
+# upperPR_CL_071024 vs upperPR_CL_071624 -- so that is the column.
+# Set to NULL only if you are certain there is one mask per node.
+ORTHO_ID_COL <- "survey"
+
+# Node ids are handled as TEXT from here on, because a 14-digit id read as a
+# double is one digit away from as.character() returning scientific notation and
+# silently breaking every join. sprintf("%.0f") is exact for integers up to
+# 2^53, which as.character() is not guaranteed to be.
+as_id_chr <- function(x) {
+  if (is.numeric(x)) ifelse(is.na(x), NA_character_, sprintf("%.0f", x))
+  else               ifelse(is.na(x), NA_character_, trimws(as.character(x)))
+}
 
 node_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.csv"),
                             show_col_types = FALSE)
+
+# IMPORTANT: build the lookup from the translator's NATIVE types, then convert.
+# build_id_lut() resolves a v16 id that split into several v17 ids by taking the
+# lowest v17 id, via arrange(). On text that ordering is lexicographic, which
+# differs from numeric ordering the moment two ids have different digit counts.
+# Converting first would make 4.3 pick a different child than 4.1 and 4.2 do,
+# for the same v16 node.
 node_lut <- build_id_lut(node_translator, "v16_node_id", "v17_node_id", "node translator")
+node_ambiguous <- attr(node_lut, "ambiguous_from_ids")
+node_lut <- node_lut %>% mutate(from_id = as_id_chr(from_id),
+                                to_id   = as_id_chr(to_id))
+attr(node_lut, "ambiguous_from_ids") <- as_id_chr(node_ambiguous)
 
 
 # =============================================================================
 # 1. Read, filter, harmonise
 # =============================================================================
 
-read_width <- function(path, version) {
-  read_csv(path, show_col_types = FALSE) %>%
+# Identifiers are read as text so a 14-digit node_id cannot be turned into a
+# double and then into scientific notation, which would silently break the
+# translator join.
+width_raw <- read_csv(WIDTH_CSV,
+                      col_types = cols(node_id  = col_character(),
+                                       reach_id = col_character()),
+                      show_col_types = FALSE)
+
+# --- preflight: fail here, naming the problem, not ten lines down ------------
+NEEDED <- c("sword_version", "node_id", "river", "residuals", "percent_diff",
+            "width", "ortho_width_m", "bias", "dark_frac", "cycle_id",
+            "pass_id", ORTHO_ID_COL)
+missing_cols <- setdiff(NEEDED, names(width_raw))
+if (length(missing_cols)) {
+  stop(basename(WIDTH_CSV), " is missing column(s): ",
+       paste(missing_cols, collapse = ", "),
+       ".\nIt should be the combined output of 3.3_ortho_node_width_diff.R. ",
+       "Columns present: ", paste(names(width_raw), collapse = ", "))
+}
+missing_ver <- setdiff(unname(SWORD_VERSIONS), unique(width_raw$sword_version))
+if (length(missing_ver)) {
+  stop("sword_version value(s) not in the data: ",
+       paste(missing_ver, collapse = ", "),
+       ". Present: ", paste(sort(unique(width_raw$sword_version)), collapse = ", "),
+       ".\nRe-run 3.3 with both versions in VERSIONS_TO_RUN, or drop the ",
+       "missing one from SWORD_VERSIONS here.")
+}
+message(sprintf("[4.3] read %d rows: %s",
+                nrow(width_raw),
+                paste(sprintf("%s=%d", names(table(width_raw$sword_version)),
+                              as.integer(table(width_raw$sword_version))),
+                      collapse = ", ")))
+
+read_width <- function(df, version) {
+  out <- df %>%
+    filter(sword_version == SWORD_VERSIONS[[version]]) %>%
     mutate(insitu_type = "Ortho",
            source      = if (version == "C") VERSION_C else VERSION_D) %>%
     filter(abs(residuals) < WIDTH_RESID_MAX, dark_frac < DARK_FRAC_MAX) %>%
     merge_porcupine() %>%
     harmonise_ids("node_id", node_lut, version, label = paste("width", version))
+
+  # harmonise_ids() does not return NA for an unmatched id -- it builds a
+  # surrogate "v16_<id>" so the node still counts as its own feature -- so a
+  # total translator failure looks like every row being xlate_missing, not like
+  # a column of NAs. Every such row lands in the "unmappable" bucket, which
+  # would quietly empty C0_only and every version comparison built on it.
+  if (version == "C" && nrow(out) > 0 && all(out$xlate_missing)) {
+    stop("no node_id in the version-C data matched the translator, so every ",
+         "row would be bucketed 'unmappable'.\n",
+         "  data node_id  e.g. ", paste(utils::head(out$node_id, 2), collapse = ", "),
+         "\n  translator    e.g. ", paste(utils::head(node_lut$from_id, 2), collapse = ", "),
+         "\nCheck that both are the same kind of SWORD v16 node id.")
+  }
+  out
 }
 
-width_vC <- read_width(file.path(BASE, "node/RiverSP_v16/node_width_SWOT_Ortho.csv"),  "C")
-width_vD <- read_width(file.path(BASE, "node/RiverSP_v17b/node_width_SWOT_Ortho.csv"), "D")
+width_vC <- read_width(width_raw, "C")
+width_vD <- read_width(width_raw, "D")
 
 # CHECK 2 --------------------------------------------------------------------
-# Confirm the ortho id column exists and see how many masks each node has.
+# How many orthomosaics does each node appear in? A count above 1 is expected
+# for the upper Porcupine and Coleen nodes covered on both acquisition days,
+# and is exactly why ORTHO_ID_COL belongs in the observation key.
 if (!is.null(ORTHO_ID_COL)) {
-  if (!ORTHO_ID_COL %in% names(width_vD)) {
-    stop("ORTHO_ID_COL '", ORTHO_ID_COL, "' not found. Columns are: ",
-         paste(names(width_vD), collapse = ", "))
-  }
+  message("[4.3] orthomosaics per node (version D):")
   width_vD %>%
     summarise(n_masks = n_distinct(.data[[ORTHO_ID_COL]]), .by = id_harmonised) %>%
-    count(n_masks) %>% print()
+    count(n_masks, name = "n_nodes") %>% print()
+  message("[4.3] surveys present: ",
+          paste(sort(unique(width_vD[[ORTHO_ID_COL]])), collapse = ", "))
+}
+
+# CHECK 4 --------------------------------------------------------------------
+# 3.3 labels rivers from the reach_id prefix and can emit labels that
+# river_levels in 4.0_comparison_helpers.R does not list -- "BL" (Black River)
+# is one. Figure 8 factors `river` on river_levels, so an unlisted label becomes
+# NA and those rows vanish from the figure while still counting in the tables.
+unlisted_rivers <- setdiff(unique(c(width_vC$river, width_vD$river)), river_levels)
+if (length(unlisted_rivers)) {
+  warning("river label(s) not in river_levels: ",
+          paste(unlisted_rivers, collapse = ", "),
+          ". They appear in the TABLES but are dropped from figure 8. Add them ",
+          "to river_levels / river_labels / river_palette in ",
+          "4.0_comparison_helpers.R, or fold them into an existing river in 3.3.")
+  print(bind_rows(width_vC, width_vD) %>%
+          filter(river %in% unlisted_rivers) %>%
+          summarise(n = n(), .by = c(source, river)))
+}
+if (any(is.na(c(width_vC$river, width_vD$river)))) {
+  warning(sum(is.na(c(width_vC$river, width_vD$river))),
+          " row(s) have river = NA. Check the river_code mapping in 3.3.")
 }
 
 # id_harmonised leads the key so that both members of a matched pair refer to

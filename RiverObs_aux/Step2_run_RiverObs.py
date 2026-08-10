@@ -20,6 +20,7 @@ PIPELINE_VERSION = '1.0.0'
  
  
 import argparse
+import datetime
 import os
 import subprocess
 import sys
@@ -35,9 +36,12 @@ import pandas as pd
 # output CSV so the downstream temporal match is a join condition rather than a
 # hand-edited constant.
 # -----------------------------------------------------------------------------
+# 'date' is the SWOT OVERPASS date, not the flight date, and MUST be ISO
+# YYYY-MM-DD. It is copied verbatim into the SWOT_date column of the combined
+# CSVs, where downstream code parses it as a date -- '07-10-24' parses in R as
+# the year 7 and silently matches nothing. Validated at startup below.
 SURVEYS = [
-    {'name': 'YR_AOI',        'date': 'AOI'},
-    # {'name': 'CD_071024',        'date': '2024-07-11'},
+    {'name': 'CD_071024',        'date': '2024-07-11'},   # flown 7/10
     # {'name': 'upperPR_CL_071024', 'date': '2024-07-10'},
     # {'name': 'upperPR_CL_071624', 'date': '2024-07-16'},
     # {'name': 'lowerPR_SJ_072624', 'date': '2024-07-26'},
@@ -173,6 +177,19 @@ def main():
                         'RiverObs. Overrides RIVEROBS_EXT_DIST_COEF_FACTOR.')
     args = p.parse_args()
     print('# {} {}'.format(os.path.basename(__file__), PIPELINE_VERSION))
+ 
+    # Catch a malformed overpass date here, where it is one line to fix, rather
+    # than downstream where it turns into an empty join with no error.
+    bad = []
+    for sv in SURVEYS:
+        try:
+            datetime.datetime.strptime(sv['date'], '%Y-%m-%d')
+        except (ValueError, TypeError):
+            bad.append('{}: {!r}'.format(sv['name'], sv.get('date')))
+    if bad:
+        raise SystemExit(
+            'SURVEYS dates must be ISO YYYY-MM-DD (the SWOT overpass date).\n  '
+            + '\n  '.join(bad))
  
     surveys = SURVEYS
     if args.survey:

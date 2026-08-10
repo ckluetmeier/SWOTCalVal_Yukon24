@@ -59,8 +59,8 @@ LOG_LEVEL=info
 # the end of this script): raise until the assigned fraction plateaus near 100%,
 # then stop. A wider corridor than you need lets adjacent reaches claim the same
 # water, which the audit reports as double counting.
-export RIVEROBS_WTH_COEF_FACTOR=1.0
-export RIVEROBS_EXT_DIST_COEF_FACTOR=1.0
+export RIVEROBS_WTH_COEF_FACTOR=8.0
+export RIVEROBS_EXT_DIST_COEF_FACTOR=8.0
 
 # CD = 8, upperYR = 3, upperPR_CL = 3
  
