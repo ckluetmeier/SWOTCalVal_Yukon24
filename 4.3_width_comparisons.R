@@ -315,8 +315,6 @@ if (nrow(width_unmappable)) print(width_unmappable) else
   message("[4.3] no untranslatable v16 nodes in the width data")
 
 # --- Percent-change claim in section 3.3 --------------------------------------
-# Manuscript: "5.1% fewer nodes and 7.0% fewer unique nodes in version D0".
-# From the published Table 6 those are 5.0% and 6.8%.
 width_change <- width_all %>% version_change(WIDTH_VALUE)
 print(width_change)
 
@@ -402,8 +400,62 @@ print(violin_by_river(fig8_data, fig8_counts, abs(percent_diff),
                       expression(atop("SWOT - Orthomosaic", " Width (% difference)")),
                       c(-5, 150), -2))
 print(violin_by_river(fig8_data, fig8_counts, abs(residuals),
-                      "SWOT - Orthomosaic Width (m)", c(-20, 900), -10))
+                      expression(atop("SWOT - Orthomosaic", " Width (m)")),
+                      c(-20, 800), -10))
 # export: 9.44 x 6.01 in each
+
+# =============================================================================
+# SCATTER PLOTS AND CORRELATION (D)
+# =============================================================================
+
+# Re-order river factor with SJ last so Sheenjek nodes are plotted on top
+fig8_data$river <- factor(
+  fig8_data$river,
+  levels = c("CL", "CD", "PR", "upperYR", "lowerYR", "SJ")
+)
+# Adjusted palette to match the new level order (SJ moved to end)
+color_palette_scatter <- c("#F2C14E", "#3B6064", "#F4845F", "#DA627D", "#9A348E", "#8EAD7A")
+
+# Overall Pearson correlation (SWOT vs ortho width)
+cor_test <- cor.test(fig8_data$width, fig8_data$ortho_width_m)
+r_value  <- cor_test$estimate   # Pearson r
+p_value  <- cor_test$p.value    # p < 0.001 is highly statistically significant
+
+
+# -----------------------------------------------------------------------------
+# 6a. Scatter: SWOT width vs ortho width (D, colored by river)
+# -----------------------------------------------------------------------------
+
+ggplot() +
+  # Plot non-SJ rivers first, then SJ on top so Sheenjek points are visible
+  geom_point(
+    data = subset(fig8_data, river != "SJ"),
+    aes(x = ortho_width_m, y = width, color = river), size = 2.5
+  ) +
+  geom_point(
+    data = subset(fig8_data, river == "SJ"),
+    aes(x = ortho_width_m, y = width, color = river), size = 2.5
+  ) +
+  geom_abline(linetype = "dashed", color = "gray") +
+  scale_color_manual(values = color_palette_scatter) +
+  xlab(expression("Orthomosaic Width (m)")) +
+  ylab("SWOT Width (m)") +
+  ylim(0, 2700) +
+  xlim(0, 2700) +
+  annotate("text",
+           x = min(fig8_data$ortho_width_m, na.rm = TRUE),
+           y = 2700,
+           label = paste0(
+             "r = ", round(r_value, 4),
+             "\np value = ", round(signif(p_value, 3), 4),
+             "\nn = ", nrow(fig8_data)
+           ),
+           hjust = 0, vjust = 1, size = 8) +
+  theme_minimal(base_size = 25) +
+  theme(legend.position = "none")
+# export dimensions: width 6.66 in, height 6.01 in
+
+
 
 
 # =============================================================================
