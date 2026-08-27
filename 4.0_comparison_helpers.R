@@ -324,7 +324,7 @@ version_change <- function(df, value_col, id_col = "id_harmonised") {
 
 
 # -----------------------------------------------------------------------------
-# Plot constants, shared by all three scripts
+# Plot constants
 # -----------------------------------------------------------------------------
 river_levels  <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
 river_labels  <- c("Coleen", "Sheenjek", "Chandalar", "Porcupine",
