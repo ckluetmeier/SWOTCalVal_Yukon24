@@ -7,42 +7,6 @@
 # Outliers with |residuals| >= 1500 m are excluded from both versions.
 #
 # Produces: Tables 6, 7, S10, S11;  Figures 7a-b, 8a-d
-# (The original header numbered these 7, 8, S5 -- renumbered to match
-#  YR_CalVal_D7.)
-#
-# !! NOT YET VERIFIED AGAINST DATA !!
-# Unlike 4.1 and 4.2 the numbers here have not been reproduced against the
-# published tables. The CHECK blocks below announce the things to confirm.
-#
-# UPDATED FOR THE RIVEROBS PIPELINE (script 3.3)
-#   * 3.3 now writes ONE node_width_SWOT_Ortho.csv covering every survey and
-#     both prior-database versions, with a `sword_version` column, instead of
-#     one file per version in RiverSP_v16/ and RiverSP_v17b/. This script reads
-#     that file and splits it.
-#   * CHECK 1 is answered: the column identifying WHICH orthomosaic a node was
-#     compared against is `survey`. That is what disambiguates the two Coleen
-#     acquisitions, so ORTHO_ID_COL is set to it rather than left NULL.
-#   * A preflight check names any missing column, or a version present in
-#     SWORD_VERSIONS but absent from the data, before any analysis runs.
-#
-# WHAT CHANGED IN THIS REWRITE
-#   1. Exhaustive version partitioning. Table 6 vs Table S10 currently loses 23
-#      D0 and 9 C0 observations. Note that the width UNIQUE NODE counts already
-#      reconcile exactly (655 + 34 = 689; 655 + 84 = 739) because 4.3 was the
-#      only script keying on (node_id, cycle_id, pass_id) rather than on the in
-#      situ timestamp -- that was the right instinct, it just needed the
-#      orthomosaic identity added and the leftover observations bucketed.
-#   2. The matched subset is now symmetric by construction: id_harmonised leads
-#      the key, and partition_versions() buckets only rows that already carry a
-#      usable residual, so a node-overpass where one version is NA becomes
-#      version-unique rather than "same".
-#   3. Translator join no longer fans out rows.
-#   4. Metric columns are now internally consistent. In the old 3c/3d blocks
-#      the MAE was computed from residuals_nobias while the 68%ile, 50%ile and
-#      RMSE in the same row were computed from residuals, so Table S10's MAE
-#      column was not comparable to Table 6's.
-#   5. `n` is now defined the same way in every block (the old 3a used
-#      residuals, 3c used residuals_nobias, 3d used residuals).
 # =============================================================================
 
 library(tidyverse)
@@ -56,30 +20,16 @@ source("/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts
 BASE <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/width"
 TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
 
-# One combined file from 3.3, both versions inside it.
 WIDTH_CSV <- file.path(BASE, "node/node_width_SWOT_Ortho.csv")
 
-# Which sword_version value is which manuscript version. Version C is the
-# SWORD v16 / RiverSP PIC0 product, version D is SWORD v17b / PGD0.
 SWORD_VERSIONS <- c(C = "v16", D = "v17b")
 
 DARK_FRAC_MAX   <- 0.5
 WIDTH_RESID_MAX <- 1500      # m
 WIDTH_VALUE     <- "residuals"   # metric the partition is defined against
 
-# CHECK 1 -- answered by the 3.3 rewrite --------------------------------------
-# The observation key needs whatever identifies WHICH orthomosaic a node was
-# compared against. Most clusters have one water mask, but the upper Porcupine
-# and Coleen have two (both acquisition days), so (node, cycle, pass) alone is
-# NOT unique for those. 3.3 carries `survey` -- the acquisition name, e.g.
-# upperPR_CL_071024 vs upperPR_CL_071624 -- so that is the column.
-# Set to NULL only if you are certain there is one mask per node.
 ORTHO_ID_COL <- "survey"
 
-# Node ids are handled as TEXT from here on, because a 14-digit id read as a
-# double is one digit away from as.character() returning scientific notation and
-# silently breaking every join. sprintf("%.0f") is exact for integers up to
-# 2^53, which as.character() is not guaranteed to be.
 as_id_chr <- function(x) {
   if (is.numeric(x)) ifelse(is.na(x), NA_character_, sprintf("%.0f", x))
   else               ifelse(is.na(x), NA_character_, trimws(as.character(x)))
@@ -88,12 +38,6 @@ as_id_chr <- function(x) {
 node_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.csv"),
                             show_col_types = FALSE)
 
-# IMPORTANT: build the lookup from the translator's NATIVE types, then convert.
-# build_id_lut() resolves a v16 id that split into several v17 ids by taking the
-# lowest v17 id, via arrange(). On text that ordering is lexicographic, which
-# differs from numeric ordering the moment two ids have different digit counts.
-# Converting first would make 4.3 pick a different child than 4.1 and 4.2 do,
-# for the same v16 node.
 node_lut <- build_id_lut(node_translator, "v16_node_id", "v17_node_id", "node translator")
 node_ambiguous <- attr(node_lut, "ambiguous_from_ids")
 node_lut <- node_lut %>% mutate(from_id = as_id_chr(from_id),
@@ -102,18 +46,14 @@ attr(node_lut, "ambiguous_from_ids") <- as_id_chr(node_ambiguous)
 
 
 # =============================================================================
-# 1. Read, filter, harmonise
+# 1. Read, filter, harmonize
 # =============================================================================
 
-# Identifiers are read as text so a 14-digit node_id cannot be turned into a
-# double and then into scientific notation, which would silently break the
-# translator join.
 width_raw <- read_csv(WIDTH_CSV,
                       col_types = cols(node_id  = col_character(),
                                        reach_id = col_character()),
                       show_col_types = FALSE)
 
-# --- preflight: fail here, naming the problem, not ten lines down ------------
 NEEDED <- c("sword_version", "node_id", "river", "residuals", "percent_diff",
             "width", "ortho_width_m", "bias", "dark_frac", "cycle_id",
             "pass_id", ORTHO_ID_COL)

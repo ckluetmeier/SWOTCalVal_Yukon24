@@ -8,33 +8,10 @@
 # Slope residuals are stored in m/m; multiplied by 1e5 for cm/km.
 #
 # Produces: Tables 4, 5, S8, S9;  Figures 5a-c, 6b
-# (The original header numbered these 5, 6, S3, S4 -- that numbering no longer
-#  matches the manuscript. Renumbered to match YR_CalVal_D7.)
-#
-# WHAT CHANGED IN THIS REWRITE (see 4.0_comparison_helpers.R)
-#   1. Exhaustive version partitioning. The old Table S8 did not reconcile with
-#      Table 4: GNSS D0 37 same + 10 unique = 47 against a total of 56, and the
-#      PT rows had no "unique" row at all (49 same against a total of 89).
-#   2. The matched subset is now symmetric. partition_versions() takes a
-#      required `value_col` and buckets only rows that already carry a usable
-#      slope residual, so a key where one version is NA becomes version-unique
-#      rather than "same". Without this the PT "same" row came out as 54/17 for
-#      PGD0 against 49/14 for PIC0. It is now 49/14 on both sides -- which is
-#      exactly what the published Table S8 reports.
-#   3. version_inclusion computed within in situ type, not pooled.
-#   4. Translator join no longer fans out (no reach was affected in this
-#      dataset, but the join is now guarded so it cannot silently start to).
-#   5. Metric definitions come from one shared function.
-#
-# NOTE ON REACH SETS: the <9 km exclusion applied here is the same one the
-# published slope tables used, and it IS the correct behaviour. Be aware the
-# published reach WSE tables (Table 2/S6/S7) were built WITHOUT it, so the
-# slope and WSE results currently describe slightly different reach sets.
-# 4.1 now applies it in both places.
 # =============================================================================
 
 library(tidyverse)
-source("4.0_comparison_helpers.R")
+source("/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts/SWOTCalVal_Yukon24/4.0_comparison_helpers.R")
 
 
 # =============================================================================
@@ -58,7 +35,7 @@ SLOPE_VALUE <- "slope_residuals_nobias"   # metric the partition is defined agai
 
 
 # =============================================================================
-# 1. Read, filter, harmonise
+# 1. Read, filter, harmonize
 # =============================================================================
 
 read_slope <- function(path, insitu, version) {
@@ -82,8 +59,6 @@ slope_GNSS_vD <- read_slope(file.path(BASE, "reach/RiverSP_v17b/reach_slope_SWOT
 # =============================================================================
 # 2. Partition on version-independent keys
 # =============================================================================
-# Both keys lead with id_harmonised so that the two members of a matched pair
-# always refer to the same reach and n_unique is symmetric between versions.
 
 slope_PT <- bind_rows(slope_PT_vC, slope_PT_vD) %>%
   partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "pt_time_UTC"),
@@ -108,9 +83,6 @@ attr(slope_all, "partition_value_col") <- SLOPE_VALUE
 # =============================================================================
 # 3. TABLES
 # =============================================================================
-# bias_col = NULL: the slope products carry no single reach-level slope bias
-# (the PT file has bias_us / bias_ds; the GNSS file's `bias` column is the WSE
-# bias, not a slope bias). Do not report it as if it were one.
 
 # --- Table 4: relative reach slope by version ---------------------------------
 table4 <- slope_all %>%
@@ -147,10 +119,6 @@ table5 <- slope_all %>%
 print(table5)
 
 # --- Percent-change claim in section 3.2 --------------------------------------
-# The manuscript's "30% more observations / 24% more unique reaches, aggregated
-# across PT and GNSS" is actually the GNSS-only figure. This computes it
-# aggregated (n_distinct pooled across in situ types) AND per in situ type, so
-# whichever is quoted can be labelled correctly.
 slope_change_pooled <- slope_all %>% version_change(SLOPE_VALUE)
 print(slope_change_pooled)
 
@@ -233,8 +201,6 @@ ggplot(filter(slope_all, source == VERSION_D),
 # export: 7.17 x 6.35 in
 
 # --- Figure 5c: observation count by version ----------------------------------
-# table4 has one row per (insitu_type, source), so plotting it directly gives a
-# bar stacked by in situ type with a label on each SEGMENT. Aggregate first.
 fig5c_data <- table4 %>%
   summarise(n = sum(n), .by = source) %>%
   mutate(v = factor(source, c(VERSION_D, VERSION_C), c("D0", "C0")))
@@ -277,10 +243,8 @@ ggplot(fig6b_data, aes(x = river, y = abs(.data[[SLOPE_VALUE]]) * SCALE_SLOPE, f
 # =============================================================================
 # 5. DIAGNOSTICS — covariate scatter plots (D0)
 # =============================================================================
-# Section 3.2 states slope error is uncorrelated with dark_frac, cross-track
-# distance, layover, node count, slope and width. These plots support that
-# claim; add a printed correlation so the statement is quantified rather than
-# eyeballed.
+# Slope error is uncorrelated with dark_frac, cross-track
+# distance, layover, node count, slope and width.
 
 slope_d <- slope_all %>% filter(source == VERSION_D, !is.na(.data[[SLOPE_VALUE]]))
 
