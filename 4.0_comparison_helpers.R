@@ -1,67 +1,5 @@
 # =============================================================================
 # Shared helpers for SWOT version C0 / D0 comparison scripts (4.1, 4.2, 4.3)
-# -----------------------------------------------------------------------------
-# Written for R >= 4.4 and dplyr >= 1.1 (uses .by=, relationship=, unmatched=).
-# Verified against dplyr 1.2.1 / R 4.6.0 idiom.
-#
-# WHY THIS FILE EXISTS
-# --------------------
-# The original 4.1/4.2/4.3 each re-implemented the same three operations
-# (SWORD v16 -> v17b harmonisation, version partitioning, error summaries)
-# with small differences, and two of those operations were wrong:
-#
-#   1. left_join() to the SWORD translator FANNED OUT rows, because the
-#      translator has one row per v17 id and some v16 ids split into several
-#      v17 ids. This silently inflated every version-C count
-#      (+36 GNSS node obs, +9 PT node obs).
-#
-#   2. The "same subset" was keyed on (id, insitu_time_utc) while the
-#      version_inclusion flag was keyed on id alone, so the two were not
-#      complementary and Same + Unique != Total. The in situ timestamp is
-#      NOT stable across SWORD versions (node/reach footprints move, so the
-#      GNSS drift midpoint inside them moves too).
-#
-# REVISION: the "same" bucket must be SYMMETRIC
-# ---------------------------------------------
-# A first version of this file bucketed every row and then let
-# summarise_errors() drop rows with a missing residual. That made the "same"
-# bucket asymmetric between versions, which is wrong by definition -- a matched
-# subset must contain the same number of observations on both sides. Two causes,
-# both of which showed up in the node PT table (269/57 vs 263/52):
-#
-#   a) 6 pairs had a usable residual in one version and NA in the other. The
-#      pair was bucketed as "same" but only contributed to one version's n.
-#      FIX: bucket only rows that already carry a usable residual, so a key
-#      where one side is NA becomes C0_only / D0_only. That is also the correct
-#      reading -- one version produced a usable comparison and the other did not.
-#      partition_versions() now takes `value_col` for this reason.
-#
-#   b) 10 of 270 PT pairs had the two versions disagreeing on the harmonised
-#      node id, because the node-PT key was (pt_serial, pt_time_UTC) and did
-#      not mention the node. n matched but n_unique did not.
-#      FIX: include id_harmonised in every observation key, node PT included.
-#      A pair that straddles two different nodes is not the same node
-#      observation and is now correctly bucketed as version-unique.
-#
-# partition_table() asserts symmetry and stops if it is ever violated again.
-#
-# REVISION 3: the "unmappable" bucket
-# -----------------------------------
-# 39 v16 nodes (53 GNSS node observations) have no v17b counterpart in the
-# translator at all. They cannot pair with D0 by construction, so they were
-# falling into C0_only -- which is the row the manuscript uses to argue that
-# nodes dropped by D0's quality filter were poor quality. That inference does
-# not hold for these 39: SWORD v17b simply re-noded those reaches, and for 32
-# of the 39 the physically-nearest v17b node IS present in the D0 dataset. D0
-# observed that stretch of river, under a different node id.
-#
-# They also carry anomalously high error (|68%ile| 56.9 cm against 16.2 cm for
-# C0 overall), so folding them into C0_only moved that statistic from 33.0 to
-# 33.7 cm -- a small effect, but in the direction that flatters the argument.
-#
-# They are now reported as their own bucket: still inside the C0 total (so
-# Table 2 reconciles unchanged at 6,048), but visible and excluded from the
-# C0_only claim. Rows are identified by xlate_missing == TRUE.
 # =============================================================================
 
 library(tidyverse)
@@ -81,9 +19,7 @@ VERSION_D <- "PGD0"   # SWOT version D0, SWORD v17b
 # In the Yukon domain this affects 25 v16 nodes (each splitting into exactly 2
 # v17 nodes) and no reaches. The translator provides no field that can pick a
 # winner (boundary_percent is 0 for all of them), so we take the lowest v17 id
-# deterministically and flag the affected rows so they stay auditable.
-#
-# Returns a two-column tibble: from_id, to_id  (guaranteed unique on from_id).
+# deterministically and flag the affected rows.
 # -----------------------------------------------------------------------------
 build_id_lut <- function(translator, from_col, to_col, label = "translator") {
 
@@ -163,16 +99,6 @@ harmonise_ids <- function(df, id_col, lut, version, label = "") {
 # -----------------------------------------------------------------------------
 # add_obs_key() — a version-INDEPENDENT identifier for one paired observation
 # -----------------------------------------------------------------------------
-# Do NOT key on the in situ timestamp. For GNSS the timestamp is the drift
-# midpoint computed INSIDE the node/reach footprint, and those footprints move
-# between SWORD v16 and v17b, so the same physical observation gets a different
-# timestamp in each version and the match silently fails. Measured on the node
-# GNSS data: of 3,064 rows sharing node+cycle+pass across versions, only 2,207
-# (72%) had an identical timestamp.
-#
-# ALWAYS include id_harmonised, so that both members of a matched pair refer to
-# the same node/reach and n_unique is symmetric by construction.
-#
 # Use, per product:
 #   node GNSS   : id_harmonised + cycle_id + pass_id + basename(drift_id)
 #   node PT     : id_harmonised + pt_serial + pt_time_UTC
@@ -181,9 +107,6 @@ harmonise_ids <- function(df, id_col, lut, version, label = "") {
 #   reach GNSS  : id_harmonised + cycle_id + pass_id + basename(drift_id)
 #   reach PT    : id_harmonised + cycle_id + pass_id + pt_time_UTC
 #   node width  : id_harmonised + cycle_id + pass_id + ortho id
-#
-# basename() strips the version-specific directory prefix that drift_id carries
-# ("Munged drifts/reprocessed_2025_09_02/..." vs ".../v17b_reprocessed_...").
 # -----------------------------------------------------------------------------
 add_obs_key <- function(df, key_cols) {
   missing_cols <- setdiff(key_cols, names(df))
@@ -205,24 +128,10 @@ add_obs_key <- function(df, key_cols) {
 #   obs_bucket  "same" / "C0_only" / "D0_only" / "unmappable", OBSERVATION level
 #   id_bucket   "same" / "C0_only" / "D0_only" / "unmappable", NODE/REACH level
 # Rows with a missing `value_col` get NA in both and are excluded from all
-# tables (summarise_errors() drops them anyway).
+# tables.
 #
 # "unmappable" takes precedence over everything else and marks version-C rows
-# whose v16 id has no v17b counterpart (xlate_missing). They cannot pair with
-# D0 for a reason that has nothing to do with quality filtering, so they must
-# not be counted as evidence in the C0_only row. They remain inside the C0
-# total, so reconciliation is unaffected.
-#
-# `value_col` is REQUIRED: the partition is defined with respect to one metric.
-# Bucketing is done on rows that already carry a usable value, so a key where
-# one version is NA is correctly labelled version-unique rather than "same".
-# Without this, the "same" bucket is asymmetric -- see the header note.
-#
-# obs_bucket and id_bucket are computed separately because they answer different
-# questions, and conflating them is what broke the original tables. Both are
-# computed WITHIN each in situ type (`strata`), because every published table is
-# stratified by in situ type while the old version_inclusion flag pooled PT and
-# GNSS together.
+# whose v16 id has no v17b counterpart (xlate_missing).
 #
 # "same" means both versions passed quality filtering, produced a usable value,
 # and did so at the same overpass on the same feature.
@@ -303,19 +212,12 @@ BUCKET_LEVELS <- c("total", "same", "C0_only", "D0_only", "unmappable")
 
 
 # -----------------------------------------------------------------------------
-# summarise_errors() — the single canonical metric definition
+# summarise_errors() — metric definition
 # -----------------------------------------------------------------------------
-# One function for every table in 4.1/4.2/4.3, so that a percentile and an MAE
-# in the same row can never be computed from different columns again. (In the
-# original 4.3, Table S10's MAE used residuals_nobias while the percentiles and
-# RMSE in the same row used residuals.)
 #
 #   scale   100 for m -> cm (WSE), 1e5 for m/m -> cm/km (slope), 1 for width (m)
 #   n            number of non-missing values of `value_col`
 #   n_unique     number of distinct features among THOSE SAME ROWS
-#                (the original counted distinct ids over all rows, including
-#                rows whose residual was NA, so n and n_unique described
-#                different row sets)
 # -----------------------------------------------------------------------------
 summarise_errors <- function(df, value_col, by, scale = 100, digits = 1,
                              bias_col = "bias", id_col = "id_harmonised") {
@@ -339,15 +241,7 @@ summarise_errors <- function(df, value_col, by, scale = 100, digits = 1,
 
 
 # -----------------------------------------------------------------------------
-# partition_table() — total + the buckets, in one table, with two checks
-# -----------------------------------------------------------------------------
-# This is what should be published in place of the old "Same" / "Unique"
-# supplementary tables. It enforces:
-#   RECONCILIATION  the TOTAL row equals the sum of same + C0_only + D0_only
-#                   + unmappable
-#   SYMMETRY        the "same" bucket has identical n and n_unique in both
-#                   versions -- the property that was broken for PT
-# and stops if either fails.
+# partition_table() — total + the buckets, in one table
 # -----------------------------------------------------------------------------
 partition_table <- function(df, value_col, by = c("insitu_type", "source"),
                             scale = 100, digits = 1, bias_col = "bias") {
