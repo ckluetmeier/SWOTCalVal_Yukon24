@@ -1,374 +1,549 @@
 # =============================================================================
 # SWOT WSE & Slope Domain Inclusion
 # -----------------------------------------------------------------------------
-# Determines, for each node/reach in the Yukon River domain, whether it
-# was observed by Version C, Version D, both, or neither SWOT product, and
-# writes the result as shapefiles for mapping. Also produces per-river domain
-# statistics and the in situ summary shapefiles + example timeseries
-# used in Figures 2 and 3.
+# Determines, for each node/reach in the Yukon River domain, whether it was
+# observed by Version C, Version D, both, or neither SWOT product, and writes
+# the result as shapefiles for mapping. Also produces per-river domain
+# statistics and the in situ summary shapefiles + example timeseries used in
+# Figures 2 and 3.
+#
 # SWOT processing versions:
-#   - Version C / PIC0 (SWORD v16, RiverSP)
+#   - Version C / PIC0 (SWORD v16,  RiverSP)
 #   - Version D / PGD0 (SWORD v17b, RiverSP)
-# SWOT and in situ measurements are matched in time/space in earlier scripts
-# and all data are harmonized to SWORD v17b node / reach IDs before analysis.
-# Version inclusion code (per node / reach):
+#
+# Version inclusion code (per node / reach, in SWORD v17b space):
 #   -1 = observed only in Version C (RiverSP v16 / PIC0)
 #    0 = observed in both versions
 #    1 = observed only in Version D (v17b / PGD0)
-#    2 = in the YR domain but not observed in either SWOT version
+#    2 = in the in situ YR domain but not observed in either SWOT version
 #
 # Contains:
-#   - Tables: 1
+#   - Tables: 1, S4
 #   - Figures: 2, 3
 #   - Shapefiles: node WSE inclusion, reach WSE inclusion, reach slope
 #                 inclusion, PT summary, GNSS summary
+#
 # =============================================================================
 
 library(sf)
-library(dplyr)
 library(tidyverse)
 library(lubridate)
 
-
-# =============================================================================
-# NODE-LEVEL WSE DOMAIN INCLUSION
-# =============================================================================
-
-
-# -----------------------------------------------------------------------------
-# 1. Read in node-level WSE data (time/space matched SWOT vs. in situ)
-# -----------------------------------------------------------------------------
-
-# PT — Version C (SWORD v16 / RiverSP) and Version D (SWORD v17b / RiverSP)
-node_SWOT_PT_vC <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_PT.csv") %>%
-  mutate(insitu_type = "PT") %>%
-  mutate(source = "PIC0") %>%
-  rename(old_node_id = node_id) %>%
-  filter(dark_frac < 0.5)
-node_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/node_SWOT_PT.csv") %>%
-  mutate(insitu_type = "PT") %>%
-  mutate(source = "PGD0") %>%
-  filter(dark_frac < 0.5)
-
-# GNSS — Version C and Version D
-node_SWOT_GNSS_vC <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv") %>%
-  mutate(insitu_type = "GNSS") %>%
-  mutate(source = "PIC0") %>%
-  rename(old_node_id = node_id) %>%
-  filter(dark_frac < 0.5)
-node_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverSP_v17b/node_SWOT_GNSS_3mdiff.csv") %>%
-  mutate(insitu_type = "GNSS") %>%
-  mutate(source = "PGD0") %>%
-  filter(dark_frac < 0.5)
-
-
-# -----------------------------------------------------------------------------
-# 2. Build the in situ node domain (from all PT and GNSS obs)
-# -----------------------------------------------------------------------------
-
-# Combine the munged PT files (per-river, per-PT cluster) into one frame.
-# SWORD v17b
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/upper_YR"
-setwd(wd)
-
-# List all PT node CSVs (toolbox output) and read them in
-csv_files <- list.files(wd, pattern = "\\.csv$", full.names = TRUE)
-data_list <- lapply(seq_along(csv_files), function(i) {
-  df <- read.csv(csv_files[i])
-  return(df)
-})
-combined_PT_df <- bind_rows(data_list)
-
-# Parse the PT timestamp column to POSIXct (UTC)
-combined_PT_df$pt_time_UTC <- as.POSIXct(
-  combined_PT_df$pt_time_UTC, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"
-)
-
-# GNSS drift node WSEs (SWORD v17b)
-GNSS_df <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv"
-)
-
-# YR node domain = unique nodes seen by either PT or GNSS
-YR_domain <- bind_rows(combined_PT_df, GNSS_df) %>%
-  distinct(node_id)
-
-
-# -----------------------------------------------------------------------------
-# 3. Harmonize to SWORD v17b and compute per-node version inclusion
-# -----------------------------------------------------------------------------
-
-# Translator: maps v16 node IDs to v17b
-SWORD_translator <- read_csv(
-  "/Users/camryn/Desktop/SWORD_translation/NA_NodeIDs_v17b_vs_v16.csv"
-)
-
-# Apply translation to Version C node data
-node_SWOT_PT_vC <- node_SWOT_PT_vC %>%
-  left_join(
-    SWORD_translator %>% select(v16_node_id, v17_node_id),
-    by = c("old_node_id" = "v16_node_id")
-  ) %>%
-  rename(node_id = v17_node_id)
-
-node_SWOT_GNSS_vC <- node_SWOT_GNSS_vC %>%
-  left_join(
-    SWORD_translator %>% select(v16_node_id, v17_node_id),
-    by = c("old_node_id" = "v16_node_id")
-  ) %>%
-  rename(node_id = v17_node_id)
-
-# Merge all four sources together
-node_SWOT_full_insitu <- bind_rows(
-  node_SWOT_PT_vC, node_SWOT_PT_vD,
-  node_SWOT_GNSS_vC, node_SWOT_GNSS_vD
-)
-
-# Compute version inclusion flag per node:
-#   -1 = observed only in Version C
-#    0 = observed in both versions
-#    1 = observed only in Version D
-all_nodes <- node_SWOT_full_insitu %>%
-  distinct(node_id, source) %>%                  # one row per node_id × source
-  group_by(node_id) %>%
-  summarise(
-    has_RiverSP   = any(source == "PIC0"),
-    has_RiverTile = any(source == "PGD0"),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    version_inclusion = case_when(
-      has_RiverSP & has_RiverTile  ~  0L,
-      has_RiverSP & !has_RiverTile ~ -1L,
-      !has_RiverSP & has_RiverTile ~  1L,
-      TRUE                         ~ NA_integer_
-    )
-  ) %>%
-  select(node_id, version_inclusion)
-
-# Join inclusion flag to the full YR node domain.
-# Nodes in the domain but missing from both SWOT versions get version_inclusion = 2.
-all_YR_domain_nodes <- YR_domain %>%
-  left_join(all_nodes, by = "node_id") %>%
-  mutate(version_inclusion = if_else(is.na(version_inclusion), 2L, version_inclusion))
-
-
-# -----------------------------------------------------------------------------
-# 4. Save node inclusion as a shapefile
-# -----------------------------------------------------------------------------
-
-# Bring in SWORD shapefile
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
-
-# Attach version_inclusion to SWORD geometry
-all_YR_domain_nodes_sf <- sword_sf %>%
-  left_join(all_YR_domain_nodes, by = "node_id")
-
-# Subset to nodes with a version_inclusion value
-all_YR_domain_nodes_sf_subset <- all_YR_domain_nodes_sf %>%
-  filter(!is.na(version_inclusion))
-
-# Save shapefile
-# NOTE: bad nodes (e.g. no matched overpass) were not removed from the field
-# data, so they were manually deleted in QGIS.
-st_write(
-  all_YR_domain_nodes_sf_subset,
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_nodes_subset.shp",
-  delete_layer = TRUE
-)
-
-
-# -----------------------------------------------------------------------------
-# 4b. Width version inclusion shapefile
-# -----------------------------------------------------------------------------
-#
-# sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
-# node_SWOT_ortho <- sword_sf %>%
-#   left_join(node_SWOT_ortho, by = "node_id")
-# node_SWOT_ortho_subset <- node_SWOT_ortho %>%
-#   filter(!is.na(version_inclusion))
-# st_write(
-#   node_SWOT_ortho_subset,
-#   "/Users/camryn/Desktop/all_YR_domain_nodes_width_subset.shp",
-#   delete_layer = TRUE
-# )
+source("/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts/SWOTCalVal_Yukon24/4.0_comparison_helpers.R")
 
 
 # =============================================================================
-# REACH-LEVEL WSE DOMAIN INCLUSION
+# 0. CONFIGURATION
 # =============================================================================
 
+WSE_BASE       <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse"
+TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
+SWORD_NODES    <- "/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp"
+SWORD_REACHES  <- "/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp"
+INCLUSION_OUT  <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps"
+
+PT_NODE_DIR    <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b"
+PT_REACH_DIR   <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
+GNSS_NODE_CSV  <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv"
+GNSS_REACH_CSV <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv"
+
+# Section 6 of this script (Figure 2) writes a merged PT node file back into
+# PT_NODE_DIR. Exclude it from the domain glob so a second run does not read
+# its own output.
+PT_MERGED_NODE_FILE <- "flyby_SWOTCalVal_YR_PT_L1_v17b.csv"
+
+# --- filters: must match 4.1 and 4.2 -----------------------------------------
+DARK_FRAC_MAX <- 0.5   # upstream scripts 1.2-2.2 only filter at <= 0.8,
+                       # so this filter is NOT redundant and does remove rows
+
+# Reaches shorter than 9 km, listed by ID in each SWORD version because
+# p_length is not carried through. (Manually checked in QGIS.)
+SHORT_REACHES_V16  <- c("81260300061", "81270500131", "81270500141")
+SHORT_REACHES_V17B <- c("81260300181", "81270500021", "81270500031")
+APPLY_SHORT_REACH_EXCLUSION <- TRUE
+
+# --- metrics the partitions are defined against: must match 4.1 and 4.2 ------
+NODE_VALUE  <- "residuals_nobias"
+REACH_VALUE <- "residuals_nobias"
+SLOPE_VALUE <- "slope_residuals_nobias"
+
+# --- inclusion codes ----------------------------------------------------------
+INCL_C_ONLY      <- -1L
+INCL_BOTH        <-  0L
+INCL_D_ONLY      <-  1L
+INCL_DOMAIN_ONLY <-  2L
+
+
+# =============================================================================
+# 0b. LOCAL HELPERS
+# =============================================================================
+
+# --- as_id_chr(): one canonical string form for a SWORD id --------------------
+# Same helper as 4.3. A 14-digit node id read as a double would render as
+# "8.126e+13" under as.character(), which matches nothing. sprintf("%.0f") is
+# exact for ids well under 2^53.
+as_id_chr <- function(x) {
+  if (is.numeric(x)) ifelse(is.na(x), NA_character_, sprintf("%.0f", x))
+  else               ifelse(is.na(x), NA_character_, trimws(as.character(x)))
+}
+
+# --- chr_lut(): put a build_id_lut() map into character space -----------------
+# build_id_lut() returns whatever type read_csv() gave the translator (numeric).
+# The data ids are coerced to character before harmonise_ids(), so the map has
+# to move with them -- including the ambiguous-id attribute.
+chr_lut <- function(lut) {
+  amb <- attr(lut, "ambiguous_from_ids")
+  out <- lut %>% mutate(from_id = as_id_chr(from_id), to_id = as_id_chr(to_id))
+  attr(out, "ambiguous_from_ids") <- as_id_chr(amb)
+  out
+}
+
+# --- collect_domain_ids(): the in situ domain, robust to column casing --------
+# PT node toolbox files use Node_ID / Reach_ID; PT reach files and the GNSS
+# files use node_id / reach_id. Reading the whole frame invites type conflicts
+# across clusters, so only the id column is read, and it is read as character.
+collect_domain_ids <- function(paths, candidates, label = "") {
+  paths <- unique(paths)
+  if (!length(paths)) stop("collect_domain_ids(): no files given for ", label)
+
+  out <- map_dfr(paths, function(f) {
+    hdr <- suppressWarnings(
+      read_csv(f, n_max = 0, show_col_types = FALSE, progress = FALSE))
+    hit <- intersect(candidates, names(hdr))
+    if (!length(hit)) {
+      warning("[domain ", label, "] no id column (", paste(candidates, collapse = "/"),
+              ") in ", basename(f), " -- file contributes nothing to the domain")
+      return(tibble(id = character(), src_file = character(), src_col = character()))
+    }
+    vals <- suppressWarnings(
+      read_csv(f, col_select = all_of(hit[1]), col_types = cols(.default = col_character()),
+               progress = FALSE))
+    tibble(id = as_id_chr(vals[[1]]), src_file = basename(f), src_col = hit[1])
+  })
+
+  out <- out %>% filter(!is.na(id), id != "")
+
+  message(sprintf("[domain %s] %d file(s), %d row(s), %d distinct id(s); id column(s) used: %s",
+                  label, length(paths), nrow(out), n_distinct(out$id),
+                  paste(sort(unique(out$src_col)), collapse = ", ")))
+  out
+}
+
+# --- report_unmappable(): what the v17b maps cannot show ----------------------
+# Version-C observations whose v16 id has no v17b counterpart.
+report_unmappable <- function(df, value_col, raw_id_col, label) {
+  u <- df %>% filter(!is.na(.data[[value_col]]), xlate_missing)
+  if (!nrow(u)) {
+    message(sprintf("[unmappable %s] none -- every version-C id has a v17b counterpart", label))
+    return(invisible(NULL))
+  }
+  ids <- sort(unique(as_id_chr(u[[raw_id_col]])))
+  message(sprintf(
+    "[unmappable %s] %d observation(s) on %d version-C feature(s) have no v17b counterpart.",
+    label, nrow(u), length(ids)))
+  message(sprintf(
+    "[unmappable %s]   These are EXCLUDED from the shapefile: there is no v17b geometry to draw them on.",
+    label))
+  message(sprintf("[unmappable %s]   v16 ids: %s", label, paste(ids, collapse = ", ")))
+  invisible(tibble(v16_id = ids))
+}
+
+# --- inclusion_from_partition(): feature-level buckets, pooled over in situ ----
+# 4.1/4.2 report id_bucket per (insitu_type, feature). A map needs ONE code per
+# feature, so has_c / has_d are recomputed over all in situ types rather than
+# combining the per-stratum buckets. Only rows with a usable value_col count,
+# which is what makes this agree with the tables.
+inclusion_from_partition <- function(df, value_col, label = "") {
+  usable <- df %>% filter(!is.na(.data[[value_col]]), !xlate_missing)
+
+  out <- usable %>%
+    summarise(n_obs_C = sum(source == VERSION_C),
+              n_obs_D = sum(source == VERSION_D),
+              .by = id_harmonised) %>%
+    mutate(version_inclusion = case_when(
+      n_obs_C >  0 & n_obs_D >  0 ~ INCL_BOTH,
+      n_obs_C >  0 & n_obs_D == 0 ~ INCL_C_ONLY,
+      n_obs_C == 0 & n_obs_D >  0 ~ INCL_D_ONLY
+    )) %>%
+    rename(id = id_harmonised)
+
+  if (any(is.na(out$version_inclusion))) {
+    stop("inclusion_from_partition(): a feature has neither a C nor a D ",
+         "observation, which cannot happen -- check `source` values against ",
+         "VERSION_C / VERSION_D.")
+  }
+  message(sprintf("[inclusion %s] %d observed feature(s): %d both, %d C-only, %d D-only",
+                  label, nrow(out),
+                  sum(out$version_inclusion == INCL_BOTH),
+                  sum(out$version_inclusion == INCL_C_ONLY),
+                  sum(out$version_inclusion == INCL_D_ONLY)))
+  out
+}
+
+# --- build_inclusion_table(): observed features + the unobserved domain -------
+# The old code left_join()ed FROM the domain, so an observed feature that was
+# not in the domain was dropped without a word. This takes the union and
+# reports the overlap instead, so every feature is accounted for.
+build_inclusion_table <- function(observed, domain_ids, id_name, label = "") {
+  domain_ids <- unique(domain_ids[!is.na(domain_ids)])
+
+  observed_not_in_domain <- setdiff(observed$id, domain_ids)
+  domain_not_observed    <- setdiff(domain_ids, observed$id)
+
+  if (length(observed_not_in_domain)) {
+    message(sprintf(
+      "[domain check %s] %d observed feature(s) are NOT in the in situ domain (kept in the map, coded normally): %s",
+      label, length(observed_not_in_domain),
+      paste(utils::head(observed_not_in_domain, 10), collapse = ", ")))
+  }
+
+  out <- tibble(id = union(domain_ids, observed$id)) %>%
+    left_join(observed, by = "id") %>%
+    mutate(
+      n_obs_C = replace_na(n_obs_C, 0L),
+      n_obs_D = replace_na(n_obs_D, 0L),
+      version_inclusion = replace_na(version_inclusion, INCL_DOMAIN_ONLY)
+    ) %>%
+    rename(!!id_name := id)
+
+  message(sprintf("[domain check %s] %d domain feature(s) with no SWOT observation -> code 2",
+                  label, length(domain_not_observed)))
+  message(sprintf("[inclusion %s] final table: %d feature(s)", label, nrow(out)))
+  print(count(out, version_inclusion))
+  out
+}
+
+# --- write_inclusion_shapefile(): join to SWORD geometry and write ------------
+write_inclusion_shapefile <- function(tbl, sword_path, id_name, out_path, label = "") {
+  geom <- st_read(sword_path, quiet = TRUE)
+
+  if (!id_name %in% names(geom)) {
+    stop("write_inclusion_shapefile(): '", id_name, "' is not a field in ",
+         basename(sword_path), ". Fields: ", paste(names(geom), collapse = ", "))
+  }
+
+  geom <- geom %>% mutate(.join_id = as_id_chr(.data[[id_name]]))
+  tbl_j <- tbl %>% mutate(.join_id = as_id_chr(.data[[id_name]])) %>% select(-all_of(id_name))
+
+  # many-to-one, not one-to-one: the SWORD reach layer carries duplicate
+  # reach_id rows (which is why Table 1 below still needs distinct()), and each
+  # of those geometries should receive the same code.
+  joined <- geom %>%
+    left_join(tbl_j, by = ".join_id", relationship = "many-to-one")
+
+  subset <- joined %>% filter(!is.na(version_inclusion))
+
+  matched <- sum(tbl_j$.join_id %in% geom$.join_id)
+  if (matched == 0) {
+    stop("write_inclusion_shapefile(): no ", label, " id matched ",
+         basename(sword_path), ".\n",
+         "  table e.g.    ", paste(utils::head(tbl_j$.join_id, 2), collapse = ", "), "\n",
+         "  shapefile e.g. ", paste(utils::head(geom$.join_id, 2), collapse = ", "),
+         "\nCheck that both are SWORD v17b ids.")
+  }
+  if (matched < nrow(tbl_j)) {
+    unmatched <- setdiff(tbl_j$.join_id, geom$.join_id)
+    warning(sprintf(
+      "[shapefile %s] %d of %d feature(s) have no geometry in %s and are NOT in the shapefile: %s",
+      label, length(unmatched), nrow(tbl_j), basename(sword_path),
+      paste(utils::head(unmatched, 10), collapse = ", ")))
+  }
+
+  subset <- subset %>% select(-any_of(".join_id"))
+
+  dir.create(dirname(out_path), showWarnings = FALSE, recursive = TRUE)
+  st_write(subset, out_path, delete_layer = TRUE)
+  message(sprintf("[shapefile %s] wrote %d feature(s) to %s",
+                  label, nrow(subset), basename(out_path)))
+  invisible(subset)
+}
+
+
+# =============================================================================
+# 0c. TRANSLATORS
+# =============================================================================
+
+node_translator  <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.csv"),
+                             show_col_types = FALSE)
+reach_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_ReachIDs_v17b_vs_v16.csv"),
+                             show_col_types = FALSE)
+
+node_lut  <- chr_lut(build_id_lut(node_translator,  "v16_node_id",  "v17_node_id",  "node translator"))
+reach_lut <- chr_lut(build_id_lut(reach_translator, "v16_reach_id", "v17_reach_id", "reach translator"))
+
+
+# =============================================================================
+# 1. THE IN SITU YR DOMAIN
+# =============================================================================
+# A node/reach is "in the domain" if any in situ instrument observed it.
+
+pt_node_files <- list.files(PT_NODE_DIR, pattern = "\\.csv$",
+                            full.names = TRUE, recursive = TRUE)
+pt_node_files <- pt_node_files[basename(pt_node_files) != PT_MERGED_NODE_FILE]
+
+pt_reach_files <- list.files(PT_REACH_DIR, pattern = "^YR_812.*\\.csv$",
+                             full.names = TRUE)
+
+domain_nodes <- bind_rows(
+  collect_domain_ids(pt_node_files, c("Node_ID", "node_id"), "PT nodes"),
+  collect_domain_ids(GNSS_NODE_CSV, c("node_id", "Node_ID"), "GNSS nodes")
+) %>% distinct(id) %>% pull(id)
+
+domain_reaches <- bind_rows(
+  collect_domain_ids(pt_reach_files, c("reach_id", "Reach_ID"), "PT reaches"),
+  collect_domain_ids(GNSS_REACH_CSV, c("reach_id", "Reach_ID"), "GNSS reaches")
+) %>% distinct(id) %>% pull(id)
+
+message(sprintf("[domain] %d node(s), %d reach(es) with in situ data",
+                length(domain_nodes), length(domain_reaches)))
+
+# The short reaches excluded from 4.1/4.2 are also removed from the reach
+# domain, so they cannot come back as code 2.
+if (APPLY_SHORT_REACH_EXCLUSION) {
+  domain_reaches <- setdiff(domain_reaches, SHORT_REACHES_V17B)
+  message(sprintf("[domain] %d reach(es) after removing sub-9 km reaches",
+                  length(domain_reaches)))
+}
+
+
+# =============================================================================
+# 2. NODE-LEVEL WSE DOMAIN INCLUSION
+# =============================================================================
+
+# --- 2a. Read, filter, harmonise (mirrors read_node() in 4.1) ----------------
+read_node_wse <- function(path, insitu, version) {
+  read_csv(path, show_col_types = FALSE) %>%
+    mutate(insitu_type = insitu,
+           source      = if (version == "C") VERSION_C else VERSION_D,
+           node_id     = as_id_chr(node_id)) %>%
+    filter(dark_frac < DARK_FRAC_MAX) %>%
+    harmonise_ids("node_id", node_lut, version,
+                  label = paste("node", insitu, version))
+}
+
+node_PT_vC   <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v16/node_SWOT_PT.csv"),           "PT",   "C")
+node_PT_vD   <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v17b/node_SWOT_PT.csv"),          "PT",   "D")
+node_GNSS_vC <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv"),  "GNSS", "C")
+node_GNSS_vD <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v17b/node_SWOT_GNSS_3mdiff.csv"), "GNSS", "D")
+
+# --- 2b. Partition on version-independent keys (identical to 4.1) ------------
+node_PT <- bind_rows(node_PT_vC, node_PT_vD) %>%
+  partition_versions(key_cols  = c("id_harmonised", "pt_serial", "pt_time_UTC"),
+                     value_col = NODE_VALUE)
+
+node_GNSS <- bind_rows(node_GNSS_vC, node_GNSS_vD) %>%
+  mutate(drift_file = basename(drift_id)) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = NODE_VALUE)
+
+node_all <- bind_rows(node_PT, node_GNSS)
+attr(node_all, "partition_value_col") <- NODE_VALUE
+
+# Cross-check against tableS6_node_ids in 4.1 -- these numbers should match.
+message("[check] node id_bucket by in situ type (compare with tableS6_node_ids in 4.1):")
+node_all %>%
+  filter(!is.na(id_bucket)) %>%
+  summarise(n_nodes = n_distinct(id_harmonised), .by = c(insitu_type, id_bucket)) %>%
+  arrange(insitu_type, id_bucket) %>%
+  print()
+
+report_unmappable(node_all, NODE_VALUE, "node_id", "node WSE")
+
+# --- 2c. Inclusion table and shapefile ---------------------------------------
+node_inclusion <- inclusion_from_partition(node_all, NODE_VALUE, "node WSE") %>%
+  build_inclusion_table(domain_nodes, "node_id", "node WSE")
+
+# NOTE: bad nodes (e.g. no matched overpass) are not removed from the field
+# data upstream, so they were previously deleted by hand in QGIS. Check whether
+# that is still necessary now that code 2 comes from a correctly built domain.
+write_inclusion_shapefile(
+  node_inclusion, SWORD_NODES, "node_id",
+  file.path(INCLUSION_OUT, "all_YR_domain_nodes_subset.shp"), "node WSE")
+
 
 # -----------------------------------------------------------------------------
-# 5. Read in reach-level WSE data (time/space matched SWOT vs. in situ)
+# 2d. Width version inclusion shapefile (not implemented)
 # -----------------------------------------------------------------------------
-
-# PT — Version C and Version D
-reach_SWOT_PT_vC <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_PT.csv") %>%
-  mutate(insitu_type = "PT") %>%
-  mutate(source = "PIC0") %>%
-  rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)
-reach_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_wse_SWOT_PT.csv") %>%
-  mutate(insitu_type = "PT") %>%
-  mutate(source = "PGD0") %>%
-  filter(dark_frac < 0.5)
-
-# GNSS — Version C and Version D
-reach_SWOT_GNSS_vC <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv") %>%
-  rename(old_reach_id = reach_id) %>%
-  mutate(source = "PIC0") %>%
-  filter(dark_frac < 0.5)
-reach_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_wse_SWOT_GNSS.csv") %>%
-  mutate(source = "PGD0") %>%
-  filter(dark_frac < 0.5)
+# Width lives in 4.3_width_comparisons.R, which already produces the feature
+# level buckets this would need (width_all$id_bucket, strata "Ortho"). To build
+# it here, decide first what the width DOMAIN is -- the ortho-surveyed node set,
+# not the PT/GNSS set used above -- because that is what code 2 would mean.
 
 
-# -----------------------------------------------------------------------------
-# 6. Build the in situ reach domain (union of PT and GNSS reaches)
-# -----------------------------------------------------------------------------
+# =============================================================================
+# 3. REACH-LEVEL WSE DOMAIN INCLUSION
+# =============================================================================
 
-# Combine the munged PT reach files
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
-setwd(wd)
+# --- 3a. Read, filter, harmonise (mirrors read_reach() in 4.1) ---------------
+read_reach_wse <- function(path, insitu, version) {
+  short <- if (version == "C") SHORT_REACHES_V16 else SHORT_REACHES_V17B
+  d <- read_csv(path, show_col_types = FALSE) %>%
+    mutate(insitu_type = insitu,
+           source      = if (version == "C") VERSION_C else VERSION_D,
+           reach_id    = as_id_chr(reach_id)) %>%
+    filter(dark_frac < DARK_FRAC_MAX)
+  if (APPLY_SHORT_REACH_EXCLUSION) d <- filter(d, !reach_id %in% short)
+  harmonise_ids(d, "reach_id", reach_lut, version,
+                label = paste("reach", insitu, version))
+}
 
-csv_files <- list.files(wd, pattern = "^YR_812.*\\.csv$", full.names = TRUE)
-data_list <- lapply(seq_along(csv_files), function(i) {
-  df <- read.csv(csv_files[i])
-  return(df)
-})
-# Coerce sorted_nodelist to character so bind_rows does not coerce it to NA
-data_list <- lapply(data_list, function(df) {
-  df %>% mutate(sorted_nodelist = as.character(sorted_nodelist))
-})
-combined_PT_df <- bind_rows(data_list)
+reach_PT_vC   <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v16/reach_wse_SWOT_PT.csv"),    "PT",   "C")
+reach_PT_vD   <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v17b/reach_wse_SWOT_PT.csv"),   "PT",   "D")
+reach_GNSS_vC <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv"),  "GNSS", "C")
+reach_GNSS_vD <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v17b/reach_wse_SWOT_GNSS.csv"), "GNSS", "D")
 
-# Parse PT timestamp to POSIXct
-combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, tz = "UTC")
+# --- 3b. Partition (identical to 4.1) ----------------------------------------
+reach_PT <- bind_rows(reach_PT_vC, reach_PT_vD) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "pt_time_UTC"),
+                     value_col = REACH_VALUE)
 
-# GNSS reach WSE & slope (SWORD v17b)
-GNSS_df <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv"
-)
+reach_GNSS <- bind_rows(reach_GNSS_vC, reach_GNSS_vD) %>%
+  mutate(drift_file = basename(drift_id)) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = REACH_VALUE)
 
-# YR reach domain
-YR_domain <- bind_rows(combined_PT_df, GNSS_df) %>%
-  distinct(reach_id)
+reach_all <- bind_rows(reach_PT, reach_GNSS)
+attr(reach_all, "partition_value_col") <- REACH_VALUE
 
+message("[check] reach WSE id_bucket by in situ type (compare with tableS6_reach_ids in 4.1):")
+reach_all %>%
+  filter(!is.na(id_bucket)) %>%
+  summarise(n_reaches = n_distinct(id_harmonised), .by = c(insitu_type, id_bucket)) %>%
+  arrange(insitu_type, id_bucket) %>%
+  print()
 
-# -----------------------------------------------------------------------------
-# 7. Harmonize to SWORD v17b and compute per-reach version inclusion
-# -----------------------------------------------------------------------------
+report_unmappable(reach_all, REACH_VALUE, "reach_id", "reach WSE")
 
-# Translator: maps v16 reach IDs to v17b
-SWORD_translator <- read_csv("/Users/camryn/Desktop/SWORD_translation/NA_ReachIDs_v17b_vs_v16.csv")
+# --- 3c. Inclusion table and shapefile ---------------------------------------
+reach_wse_inclusion <- inclusion_from_partition(reach_all, REACH_VALUE, "reach WSE") %>%
+  build_inclusion_table(domain_reaches, "reach_id", "reach WSE")
 
-reach_SWOT_PT_vC <- reach_SWOT_PT_vC %>%
-  left_join(
-    SWORD_translator %>% select(v16_reach_id, v17_reach_id),
-    by = c("old_reach_id" = "v16_reach_id")
-  ) %>%
-  rename(reach_id = v17_reach_id)
-
-reach_SWOT_GNSS_vC <- reach_SWOT_GNSS_vC %>%
-  left_join(
-    SWORD_translator %>% select(v16_reach_id, v17_reach_id),
-    by = c("old_reach_id" = "v16_reach_id")
-  ) %>%
-  rename(reach_id = v17_reach_id)
-
-# Merge all reach sources together, coalescing in situ WSE from PT or GNSS
-reach_SWOT_full_insitu <- bind_rows(
-  reach_SWOT_PT_vC, reach_SWOT_PT_vD,
-  reach_SWOT_GNSS_vC, reach_SWOT_GNSS_vD
-) %>%
-  mutate(insitu_wse_m        = coalesce(mean_reach_pt_wse_m, mean_reach_drift_wse_m)) %>%
-  mutate(insitu_wse_nobias_m = coalesce(pt_wse_nobias_m, mean_reach_drift_wse_no_bias_m))
-
-# Per-reach version inclusion flag (same coding as nodes)
-all_reaches <- reach_SWOT_full_insitu %>%
-  distinct(reach_id, source) %>%
-  group_by(reach_id) %>%
-  summarise(
-    has_RiverSP   = any(source == "PIC0"),
-    has_RiverTile = any(source == "PGD0"),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    version_inclusion = case_when(
-      has_RiverSP & has_RiverTile  ~  0L,
-      has_RiverSP & !has_RiverTile ~ -1L,
-      !has_RiverSP & has_RiverTile ~  1L,
-      TRUE                         ~ NA_integer_
-    )
-  ) %>%
-  select(reach_id, version_inclusion)
-
-# Join to YR reach domain; reaches with no SWOT match get version_inclusion = 2
-all_YR_domain_reaches <- YR_domain %>%
-  left_join(all_reaches, by = "reach_id") %>%
-  mutate(version_inclusion = if_else(is.na(version_inclusion), 2L, version_inclusion))
-
-
-# -----------------------------------------------------------------------------
-# 8. Save reach WSE inclusion as a shapefile
-# -----------------------------------------------------------------------------
-
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
-
-all_YR_domain_reaches_sf <- sword_sf %>%
-  left_join(all_YR_domain_reaches, by = "reach_id")
-
-all_YR_domain_reaches_sf_subset <- all_YR_domain_reaches_sf %>%
-  filter(!is.na(version_inclusion))
-
-st_write(
-  all_YR_domain_reaches_sf_subset,
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_reaches_subset.shp",
-  delete_layer = TRUE
-)
+write_inclusion_shapefile(
+  reach_wse_inclusion, SWORD_REACHES, "reach_id",
+  file.path(INCLUSION_OUT, "all_YR_domain_reaches_subset.shp"), "reach WSE")
 
 # Colors used in the corresponding plot:
-#   #E69F00  (Version C only)
-#   #ececec  (both)
-#   #0072B2  (Version D only)
-#   dashed gray 2 (no SWOT match)
+#   #E69F00  (Version C only, -1)
+#   #ececec  (both, 0)
+#   #0072B2  (Version D only, 1)
+#   dashed gray 2 (no SWOT match, 2)
 
 
 # =============================================================================
-# RIVER DOMAIN STATISTICS (TABLE 1)
+# 4. REACH-LEVEL SLOPE DOMAIN INCLUSION
 # =============================================================================
 
+# --- 4a. Read, filter, harmonise (mirrors read_slope() in 4.2) ---------------
+# 4.2 always excludes the short reaches; the flag here is honoured so the two
+# reach maps are built on the same reach set.
+read_reach_slope <- function(path, insitu, version) {
+  short <- if (version == "C") SHORT_REACHES_V16 else SHORT_REACHES_V17B
+  d <- read_csv(path, show_col_types = FALSE) %>%
+    mutate(insitu_type = insitu,
+           source      = if (version == "C") VERSION_C else VERSION_D,
+           reach_id    = as_id_chr(reach_id)) %>%
+    filter(dark_frac < DARK_FRAC_MAX)
+  if (APPLY_SHORT_REACH_EXCLUSION) d <- filter(d, !reach_id %in% short)
+  d %>%
+    merge_porcupine() %>%
+    harmonise_ids("reach_id", reach_lut, version,
+                  label = paste("slope", insitu, version))
+}
 
-# -----------------------------------------------------------------------------
-# 9. Per-river length, median width, median slope (from SWORD attributes)
-# -----------------------------------------------------------------------------
+slope_PT_vC   <- read_reach_slope(file.path(WSE_BASE, "reach/RiverSP_v16/reach_slope_SWOT_PT.csv"),    "PT",   "C")
+slope_PT_vD   <- read_reach_slope(file.path(WSE_BASE, "reach/RiverSP_v17b/reach_slope_SWOT_PT.csv"),   "PT",   "D")
+slope_GNSS_vC <- read_reach_slope(file.path(WSE_BASE, "reach/RiverSP_v16/reach_slope_SWOT_GNSS.csv"),  "GNSS", "C")
+slope_GNSS_vD <- read_reach_slope(file.path(WSE_BASE, "reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv"), "GNSS", "D")
 
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
+# --- 4b. Partition (identical to 4.2) ----------------------------------------
+slope_PT <- bind_rows(slope_PT_vC, slope_PT_vD) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "pt_time_UTC"),
+                     value_col = SLOPE_VALUE)
+
+slope_GNSS <- bind_rows(slope_GNSS_vC, slope_GNSS_vD) %>%
+  mutate(drift_file = basename(drift_id)) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = SLOPE_VALUE)
+
+slope_all <- bind_rows(slope_PT, slope_GNSS)
+attr(slope_all, "partition_value_col") <- SLOPE_VALUE
+
+message("[check] slope id_bucket by in situ type (compare with tableS8_ids in 4.2):")
+slope_all %>%
+  filter(!is.na(id_bucket)) %>%
+  summarise(n_reaches = n_distinct(id_harmonised), .by = c(insitu_type, id_bucket)) %>%
+  arrange(insitu_type, id_bucket) %>%
+  print()
+
+report_unmappable(slope_all, SLOPE_VALUE, "reach_id", "reach slope")
+
+# --- 4c. Inclusion table and shapefile ---------------------------------------
+slope_inclusion <- inclusion_from_partition(slope_all, SLOPE_VALUE, "reach slope") %>%
+  build_inclusion_table(domain_reaches, "reach_id", "reach slope")
+
+write_inclusion_shapefile(
+  slope_inclusion, SWORD_REACHES, "reach_id",
+  file.path(INCLUSION_OUT, "all_YR_domain_reaches_slope_subset.shp"), "reach slope")
+
+# Colors used in the corresponding plot:
+#   #e97132  (Version C only, -1)
+#   #ececec  (both, 0)
+#   #00008b  (Version D only, 1)
+#   dashed gray 2 (no SWOT match, 2)
+
+
+# =============================================================================
+# 5. INCLUSION SUMMARY (all three products side by side)
+# =============================================================================
+
+inclusion_summary <- bind_rows(
+  node_inclusion       %>% count(version_inclusion) %>% mutate(product = "node WSE",    .before = 1),
+  reach_wse_inclusion  %>% count(version_inclusion) %>% mutate(product = "reach WSE",   .before = 1),
+  slope_inclusion      %>% count(version_inclusion) %>% mutate(product = "reach slope", .before = 1)
+) %>%
+  mutate(label = case_when(
+    version_inclusion == INCL_C_ONLY      ~ "C0 only",
+    version_inclusion == INCL_BOTH        ~ "both",
+    version_inclusion == INCL_D_ONLY      ~ "D0 only",
+    version_inclusion == INCL_DOMAIN_ONLY ~ "in domain, no SWOT"
+  )) %>%
+  pivot_wider(id_cols = product, names_from = label, values_from = n, values_fill = 0L)
+print(inclusion_summary)
+
+dir.create(INCLUSION_OUT, showWarnings = FALSE, recursive = TRUE)
+write_csv(inclusion_summary, file.path(INCLUSION_OUT, "inclusion_summary.csv"))
+
+
+# =============================================================================
+# 6. RIVER DOMAIN STATISTICS (TABLE 1)
+# =============================================================================
+# Unchanged logic; YR_domain is now the corrected reach domain from section 1.
+
+YR_domain <- tibble(reach_id = domain_reaches)
+
+sword_sf <- st_read(SWORD_REACHES)
 
 # Subset SWORD to the YR domain reaches
 sword_subset <- sword_sf %>%
-  filter(reach_id %in% YR_domain$reach_id) %>%
-  distinct(reach_id, .keep_all = TRUE)
+  mutate(reach_id_chr = as_id_chr(reach_id)) %>%
+  filter(reach_id_chr %in% YR_domain$reach_id) %>%
+  distinct(reach_id_chr, .keep_all = TRUE)
 
-cat("Total km of river:", sum(sword_subset$reach_len) / 1000, "km")
+if (nrow(sword_subset) == 0) {
+  stop("Table 1: no SWORD reach matched the in situ domain. Check as_id_chr() ",
+       "against the reach_id field type in ", basename(SWORD_REACHES), ".")
+}
+
+cat("Total km of river:", sum(sword_subset$reach_len) / 1000, "km\n")
 
 # Name each river
 sword_subset <- sword_subset %>%
   mutate(
-    river_code = substr(reach_id, 1, 6),
+    river_code = substr(reach_id_chr, 1, 6),
     river = case_when(
-      reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
-      reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
-                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      reach_id_chr %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      reach_id_chr %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                          "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
       river_code == "812701" ~ "lowerYR",  # until the Circle bifurcation
       river_code == "812509" ~ "lowerYR",  # past the PR confluence
       river_code == "812705" ~ "upperYR",  # Circle up
@@ -382,18 +557,23 @@ sword_subset <- sword_subset %>%
 
 # Per-river totals from SWORD
 river_stats <- sword_subset %>%
+  st_drop_geometry() %>%
   group_by(river) %>%
   summarise(
-    total_km         = sum(reach_len, na.rm = TRUE) / 1000,
-    median_width     = median(width),
-    median_slope     = median(slope) * 100,
-    n_distinct(reach_id)
+    total_km     = sum(reach_len, na.rm = TRUE) / 1000,
+    median_width = median(width, na.rm = TRUE),
+    median_slope = median(slope, na.rm = TRUE) * 100,
+    n_reaches    = n_distinct(reach_id_chr),
+    .groups      = "drop"
   )
+print(river_stats)
 
 
 # -----------------------------------------------------------------------------
-# 10. GNSS per-river drift count
+# 6b. GNSS per-river drift count
 # -----------------------------------------------------------------------------
+
+GNSS_df <- read_csv(GNSS_REACH_CSV, show_col_types = FALSE)
 
 # To get node counts
 # GNSS_df <- GNSS_df %>%
@@ -403,11 +583,12 @@ river_stats <- sword_subset %>%
 # Tag each GNSS reach with its river (same case_when as above)
 GNSS_df <- GNSS_df %>%
   mutate(
-    river_code = substr(reach_id, 1, 6),
+    reach_id_chr = as_id_chr(reach_id),
+    river_code   = substr(reach_id_chr, 1, 6),
     river = case_when(
-      reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
-      reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
-                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      reach_id_chr %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      reach_id_chr %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                          "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
       river_code == "812701" ~ "lowerYR",
       river_code == "812509" ~ "lowerYR",
       river_code == "812705" ~ "upperYR",
@@ -421,159 +602,30 @@ GNSS_df <- GNSS_df %>%
 
 GNSS_stats <- GNSS_df %>%
   group_by(river) %>%
-  summarise(
-    num_drift_reaches = sum(!is.na(reach_id))
-  )
+  summarise(num_drift_reaches = sum(!is.na(reach_id)), .groups = "drop")
+print(GNSS_stats)
 
 
 # =============================================================================
-# REACH-LEVEL SLOPE DOMAIN INCLUSION
+# 7. FIGURE 2 — PT & GNSS SUMMARY SHAPEFILES
 # =============================================================================
+# Unchanged from the previous version of this script.
 
 
 # -----------------------------------------------------------------------------
-# 11. Read in reach-level slope data
-# -----------------------------------------------------------------------------
-
-# PT — Version C and Version D
-reach_SWOT_PT_vC <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_PT.csv") %>%
-  rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)
-reach_SWOT_PT_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_PT.csv") %>%
-  filter(dark_frac < 0.5)
-
-# GNSS — Version C and Version D
-reach_SWOT_GNSS_vC <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v16/reach_slope_SWOT_GNSS.csv") %>%
-  rename(old_reach_id = reach_id) %>%
-  filter(dark_frac < 0.5)
-reach_SWOT_GNSS_vD <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/reach/RiverSP_v17b/reach_slope_SWOT_GNSS.csv") %>%
-  filter(dark_frac < 0.5)
-
-
-# -----------------------------------------------------------------------------
-# 12. Build the in situ slope reach domain (PT + GNSS)
-# -----------------------------------------------------------------------------
-
-wd <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_reach/SWORD_v17b"
-setwd(wd)
-
-csv_files <- list.files(wd, pattern = "^YR_812.*\\.csv$", full.names = TRUE)
-data_list <- lapply(seq_along(csv_files), function(i) {
-  df <- read.csv(csv_files[i])
-  return(df)
-})
-data_list <- lapply(data_list, function(df) {
-  df %>% mutate(sorted_nodelist = as.character(sorted_nodelist))
-})
-combined_PT_df <- bind_rows(data_list)
-combined_PT_df$pt_time_UTC <- as.POSIXct(combined_PT_df$pt_time_UTC, tz = "UTC")
-
-GNSS_df <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv"
-)
-
-YR_domain <- bind_rows(combined_PT_df, GNSS_df) %>%
-  distinct(reach_id)
-
-
-# -----------------------------------------------------------------------------
-# 13. Harmonize to SWORD v17b and compute per-reach slope version inclusion
-# -----------------------------------------------------------------------------
-
-SWORD_translator <- read_csv("/Users/camryn/Desktop/SWORD_translation/NA_ReachIDs_v17b_vs_v16.csv")
-
-reach_SWOT_PT_vC <- reach_SWOT_PT_vC %>%
-  left_join(
-    SWORD_translator %>% select(v16_reach_id, v17_reach_id),
-    by = c("old_reach_id" = "v16_reach_id")
-  ) %>%
-  rename(reach_id = v17_reach_id)
-
-reach_SWOT_GNSS_vC <- reach_SWOT_GNSS_vC %>%
-  left_join(
-    SWORD_translator %>% select(v16_reach_id, v17_reach_id),
-    by = c("old_reach_id" = "v16_reach_id")
-  ) %>%
-  rename(reach_id = v17_reach_id)
-
-# Merge all four sources; coalesce in situ slope from PT or GNSS
-reach_SWOT_full_insitu <- bind_rows(
-  reach_SWOT_PT_vC, reach_SWOT_PT_vD,
-  reach_SWOT_GNSS_vC, reach_SWOT_GNSS_vD
-) %>%
-  mutate(insitu_slope_m_m        = coalesce(slope_m_m_abs, reach_drift_slope_m_m_abs)) %>%
-  mutate(insitu_slope_nobias_m_m = coalesce(mean_reach_PT_slope_no_bias_m_m, reach_drift_slope_m_m_abs_nobias))
-
-all_reaches <- reach_SWOT_full_insitu %>%
-  distinct(reach_id, source) %>%
-  group_by(reach_id) %>%
-  summarise(
-    has_RiverSP   = any(source == "PIC0"),
-    has_RiverTile = any(source == "PGD0"),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    version_inclusion = case_when(
-      has_RiverSP & has_RiverTile  ~  0L,
-      has_RiverSP & !has_RiverTile ~ -1L,
-      !has_RiverSP & has_RiverTile ~  1L,
-      TRUE                         ~ NA_integer_
-    )
-  ) %>%
-  select(reach_id, version_inclusion)
-
-all_YR_domain_reaches <- YR_domain %>%
-  left_join(all_reaches, by = "reach_id") %>%
-  mutate(version_inclusion = if_else(is.na(version_inclusion), 2L, version_inclusion))
-
-
-# -----------------------------------------------------------------------------
-# 14. Save reach slope inclusion as a shapefile
-# -----------------------------------------------------------------------------
-
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
-
-all_YR_domain_reaches_sf <- sword_sf %>%
-  left_join(all_YR_domain_reaches, by = "reach_id")
-
-all_YR_domain_reaches_sf_subset <- all_YR_domain_reaches_sf %>%
-  filter(!is.na(version_inclusion))
-
-st_write(
-  all_YR_domain_reaches_sf_subset,
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_reaches_slope_subset.shp",
-  delete_layer = TRUE
-)
-
-# Colors used in the corresponding plot:
-#   #e97132  (Version C only)
-#   #ececec  (both)
-#   #00008b  (Version D only)
-#   dashed gray 2 (no SWOT match)
-
-
-# =============================================================================
-# FIGURE 2 — PT & GNSS SUMMARY SHAPEFILES
-# =============================================================================
-
-
-# -----------------------------------------------------------------------------
-# 15. PT summary stats (per PT serial): obs count, deployment days, location
+# 7a. PT summary stats (per PT serial): obs count, deployment days, location
 # -----------------------------------------------------------------------------
 
 # Merge all PT node CSVs
-base_dir <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b"
+base_dir <- PT_NODE_DIR
 
 csv_files <- list.files(path = base_dir, pattern = "\\.csv$", full.names = TRUE, recursive = TRUE)
+csv_files <- csv_files[basename(csv_files) != PT_MERGED_NODE_FILE]
 
 combined_PT_df <- map_dfr(csv_files, read_csv, show_col_types = FALSE)
 
 # Save the merged PT node file
-write_csv(combined_PT_df, file.path(base_dir, "flyby_SWOTCalVal_YR_PT_L1_v17b.csv"))
+write_csv(combined_PT_df, file.path(base_dir, PT_MERGED_NODE_FILE))
 
 # SWOT node timeseries (RiverSP v17b / PGD0), filtered to the PT node set
 SWOT_df <- read_csv(
@@ -638,13 +690,14 @@ PT_summary_stats <- time_space_matched_SWOT_PT %>%
 # Add river name labels to data frame
 PT_summary_stats <- PT_summary_stats %>%
   mutate(
-    river_code = substr(Reach_ID, 1, 6),
+    Reach_ID_chr = as_id_chr(Reach_ID),
+    river_code   = substr(Reach_ID_chr, 1, 6),
     river = case_when(
       # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
       # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
-      Reach_ID %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
-      Reach_ID %in% c("81270100111", "81270100121", "81270100131", "81270100141",
-                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      Reach_ID_chr %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      Reach_ID_chr %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                          "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
       river_code == "812701" ~ "lowerYR",
       river_code == "812509" ~ "lowerYR",
       river_code == "812705" ~ "upperYR",
@@ -677,7 +730,7 @@ PT_summary_by_river <- PT_summary_stats %>%
   ) %>%
   arrange(river)
 
-# NOTE PT 2159244 ERRONEOUSLY HAS 7/31 LISTED AS FIRST INSTALL TIME 
+# NOTE PT 2159244 ERRONEOUSLY HAS 7/31 LISTED AS FIRST INSTALL TIME
 # THIS IS BECAUSE FIRST TIME IS PARSED AS NA
 # should be 2024-07-08T00:00:00.000000Z to 2024-07-26T18:50:00.000000Z
 # and then 2024-07-31T00:25:00.000000Z to 2024-08-21T15:35:00.000000Z
@@ -691,7 +744,6 @@ PT_summary_sf <- st_as_sf(
   coords = c("avg_pt_lon", "avg_pt_lat"),
   crs    = 4326
 )
-
 
 st_write(
   PT_summary_sf,
@@ -707,27 +759,27 @@ write.csv(
 
 
 # -----------------------------------------------------------------------------
-# 16. GNSS summary stats per reach and node
+# 7b. GNSS summary stats per reach and node
 # -----------------------------------------------------------------------------
 
 # REACH
 # ---------------------------
 
-GNSS_df <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_reach_wse_slope.csv")
+GNSS_df <- read_csv(GNSS_REACH_CSV, show_col_types = FALSE)
 
 GNSS_summary_stats <- GNSS_df %>%
   group_by(reach_id) %>%
-  summarise(
-    n_observations = n(),
-    .groups        = "drop")
+  summarise(n_observations = n(), .groups = "drop")
 
 # Attach to SWORD geometry, keep only reaches with GNSS observations
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_reaches_hb81_v17b.shp")
+sword_sf <- st_read(SWORD_REACHES)
 
 GNSS_summary_stats_sf <- sword_sf %>%
-  left_join(GNSS_summary_stats, by = "reach_id") %>%
-  filter(!is.na(n_observations))
+  mutate(.join_id = as_id_chr(reach_id)) %>%
+  left_join(GNSS_summary_stats %>% mutate(.join_id = as_id_chr(reach_id)) %>% select(-reach_id),
+            by = ".join_id", relationship = "many-to-one") %>%
+  filter(!is.na(n_observations)) %>%
+  select(-any_of(".join_id"))
 
 st_write(
   GNSS_summary_stats_sf,
@@ -738,22 +790,21 @@ st_write(
 # NODE
 # ---------------------------
 
-GNSS_df <- read_csv(
-  "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv")
+GNSS_df <- read_csv(GNSS_NODE_CSV, show_col_types = FALSE)
 
 GNSS_summary_stats <- GNSS_df %>%
   group_by(node_id) %>%
-  summarise(
-    n_observations = n(),
-    .groups        = "drop"
-  )
+  summarise(n_observations = n(), .groups = "drop")
 
-# Attach to SWORD geometry, keep only reaches with GNSS observations
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
+# Attach to SWORD geometry, keep only nodes with GNSS observations
+sword_sf <- st_read(SWORD_NODES)
 
 GNSS_summary_stats_sf <- sword_sf %>%
-  left_join(GNSS_summary_stats, by = "node_id") %>%
-  filter(!is.na(n_observations))
+  mutate(.join_id = as_id_chr(node_id)) %>%
+  left_join(GNSS_summary_stats %>% mutate(.join_id = as_id_chr(node_id)) %>% select(-node_id),
+            by = ".join_id", relationship = "many-to-one") %>%
+  filter(!is.na(n_observations)) %>%
+  select(-any_of(".join_id"))
 
 st_write(
   GNSS_summary_stats_sf,
@@ -761,29 +812,33 @@ st_write(
   delete_layer = TRUE
 )
 
-# =============================================================================
-# Table S4 — GNSS METADATA
-# =============================================================================
 
-GNSS_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/GNSS/_processed_data/reprocessed_2025_09_02/SWORD_v17b/YR_drift_node_wses.csv") %>%
+# =============================================================================
+# 8. Table S4 — GNSS METADATA
+# =============================================================================
+# Unchanged from the previous version of this script.
+
+GNSS_df <- read_csv(GNSS_NODE_CSV, show_col_types = FALSE) %>%
   filter(time_UTC > as.POSIXct("2024-01-01 00:00:00", tz = "UTC"))
 
-# Attach to SWORD geometry, keep only reaches with GNSS observations
-sword_sf <- st_read("/Users/camryn/Desktop/SWORD_v17b/NA/na_sword_nodes_hb81_v17b.shp")
+sword_sf <- st_read(SWORD_NODES)
 
 GNSS_sf <- sword_sf %>%
-  right_join(GNSS_df, by = "node_id")
+  mutate(.join_id = as_id_chr(node_id)) %>%
+  right_join(GNSS_df %>% mutate(.join_id = as_id_chr(node_id)) %>% select(-node_id),
+             by = ".join_id")
 
 # Add river name labels to data frame
 GNSS_sf <- GNSS_sf %>%
   mutate(
-    river_code = substr(reach_id, 1, 6),
+    reach_id_chr = as_id_chr(reach_id),
+    river_code   = substr(reach_id_chr, 1, 6),
     river = case_when(
       # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
       # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
-      reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
-      reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
-                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      reach_id_chr %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      reach_id_chr %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                          "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
       river_code == "812701" ~ "lowerYR",
       river_code == "812509" ~ "lowerYR",
       river_code == "812705" ~ "upperYR",
@@ -795,7 +850,6 @@ GNSS_sf <- GNSS_sf %>%
     )
   )
 
-
 GNSS_summary_stats <- GNSS_sf %>%
   group_by(drift_id) %>%
   summarise(
@@ -803,7 +857,7 @@ GNSS_summary_stats <- GNSS_sf %>%
     start_time       = min(time_UTC, na.rm = TRUE),
     end_time         = max(time_UTC, na.rm = TRUE),
     survey_length_km = round(sum(node_len) / 1000, 2),
-    reach_list       = paste(unique(reach_id), collapse = ", "),
+    reach_list       = paste(unique(reach_id_chr), collapse = ", "),
     .groups          = "drop"
   ) %>%
   mutate(
@@ -840,12 +894,13 @@ write.csv(
 
 
 # =============================================================================
-# FIGURE 3 — EXAMPLE WSE & WIDTH TIMESERIES
+# 9. FIGURE 3 — EXAMPLE WSE & WIDTH TIMESERIES
 # =============================================================================
+# Unchanged from the previous version of this script.
 
 
 # -----------------------------------------------------------------------------
-# 17. GNSS vs. SWOT longitudinal WSE (Porcupine River, 2024-08-20)
+# 9a. GNSS vs. SWOT longitudinal WSE (Porcupine River, 2024-08-20)
 # -----------------------------------------------------------------------------
 
 GNSS_df <- read_csv(
@@ -889,7 +944,7 @@ ggplot() +
 
 
 # -----------------------------------------------------------------------------
-# 18. PT vs. SWOT WSE timeseries (single node)
+# 9b. PT vs. SWOT WSE timeseries (single node)
 # -----------------------------------------------------------------------------
 
 # Candidate nodes: 81260300160901, 81260300170011
@@ -897,7 +952,7 @@ PT_df <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/PTs/toolboxes_dataframes/reprocessed_2025_09_02/_node/SWORD_v17b/upper_PR/flyby_SWOTCalVal_YR_PT_L1_PT230_20240704T120000_20240821T220000_20250714T183224_SWOTCalVal_YR_KEY_20240704_20240826_v17b.csv"
 )
 
-node_SWOT_PT_vD <- read_csv(
+example_node_SWOT_PT <- read_csv(
   "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse/node/RiverTile_v17b/node_SWOT_PT.csv") %>%
   mutate(insitu_type = "PT") %>%
   filter(node_id == 81260300160901)
@@ -913,7 +968,7 @@ ggplot() +
   geom_point(PT_df,
              mapping = aes(y = pt_wse_m - 0.1098754, x = pt_time_UTC),
              color = "#009E73", size = 1.2) +
-  geom_point(node_SWOT_PT_vD,
+  geom_point(example_node_SWOT_PT,
              mapping = aes(y = wse, x = time_utc),
              shape = 21, fill = "#2474b7", color = "black",
              stroke = 1.6, size = 5.5) +
@@ -922,7 +977,7 @@ ggplot() +
 
 
 # -----------------------------------------------------------------------------
-# 19. SWOT vs. ortho width along p_dist_out (Porcupine, 2024-07-10)
+# 9c. SWOT vs. ortho width along p_dist_out (Porcupine, 2024-07-10)
 # -----------------------------------------------------------------------------
 
 node_SWOT_ortho <- read_csv(
@@ -945,13 +1000,12 @@ ggplot(node_SWOT_ortho) +
 # export dimensions: width 8.13 in, height 3.96 in
 
 
-
-
-
-
-
-
-
+# =============================================================================
+# 10. ORTHO SURVEY METADATA TABLE
+# =============================================================================
+# Unchanged from the previous version of this script.
+# NOTE: this block reads and overwrites the same file, so a second run parses
+# already-reformatted timestamps and re-derives the columns from them.
 
 ortho_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/Tables/ortho_summary_stats.csv") %>%
   mutate(
@@ -959,9 +1013,8 @@ ortho_df <- read_csv("/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Fl
     end_time_UTC   = as.POSIXct(end_time_UTC,   format = "%m/%d/%y %H:%M", tz = "UTC"),
     SWOT_time_UTC  = as.POSIXct(SWOT_time_UTC,  format = "%m/%d/%y %H:%M", tz = "UTC"))
 
-
 # Compute midpoint
-ortho_df$midpoint_time_UTC <- ortho_df$start_time_UTC + 
+ortho_df$midpoint_time_UTC <- ortho_df$start_time_UTC +
   (ortho_df$end_time_UTC - ortho_df$start_time_UTC) / 2
 
 # Compute absolute offset in hours between midpoint and SWOT time
@@ -969,13 +1022,12 @@ ortho_df$offset_time_UTC <- round(abs(as.numeric(difftime(ortho_df$midpoint_time
 
 ortho_df$survey_length_hours <- round(as.numeric(difftime(ortho_df$end_time_UTC, ortho_df$start_time_UTC, units = "hours")), 2)
 
-
 # Remove midpoint column and reorder
-ortho_df <- ortho_df[, c("River(s)", "start_time_UTC", "end_time_UTC", 
-                         "survey_length_hours", "SWOT_pass_id", 
+ortho_df <- ortho_df[, c("River(s)", "start_time_UTC", "end_time_UTC",
+                         "survey_length_hours", "SWOT_pass_id",
                          "SWOT_time_UTC", "offset_time_UTC")]
 
 # Save to CSV
-write.csv(ortho_df, 
+write.csv(ortho_df,
           "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/_figures/Tables/ortho_summary_stats.csv",
           row.names = FALSE)
