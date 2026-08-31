@@ -91,7 +91,7 @@ harmonise_ids <- function(df, id_col, lut, version, label = "") {
       sum(out$xlate_missing), sum(out$xlate_ambiguous)))
   }
 
-  stopifnot(nrow(out) == n_before)   # harmonisation must never fan out
+  stopifnot(nrow(out) == n_before)   # harmonization must never fan out
   out
 }
 

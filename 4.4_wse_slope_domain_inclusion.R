@@ -57,7 +57,8 @@ DARK_FRAC_MAX <- 0.5   # upstream scripts 1.2-2.2 only filter at <= 0.8,
                        # so this filter is NOT redundant and does remove rows
 
 # Reaches shorter than 9 km, listed by ID in each SWORD version because
-# p_length is not carried through. (Manually checked in QGIS.)
+# p_length is not carried through. (Manually checked in QGIS.) Character, so
+# the comparison happens on the same type the ids are carried in here.
 SHORT_REACHES_V16  <- c("81260300061", "81270500131", "81270500141")
 SHORT_REACHES_V17B <- c("81260300181", "81270500021", "81270500031")
 APPLY_SHORT_REACH_EXCLUSION <- TRUE
@@ -130,7 +131,6 @@ collect_domain_ids <- function(paths, candidates, label = "") {
 }
 
 # --- report_unmappable(): what the v17b maps cannot show ----------------------
-# Version-C observations whose v16 id has no v17b counterpart.
 report_unmappable <- function(df, value_col, raw_id_col, label) {
   u <- df %>% filter(!is.na(.data[[value_col]]), xlate_missing)
   if (!nrow(u)) {
@@ -149,10 +149,6 @@ report_unmappable <- function(df, value_col, raw_id_col, label) {
 }
 
 # --- inclusion_from_partition(): feature-level buckets, pooled over in situ ----
-# 4.1/4.2 report id_bucket per (insitu_type, feature). A map needs ONE code per
-# feature, so has_c / has_d are recomputed over all in situ types rather than
-# combining the per-stratum buckets. Only rows with a usable value_col count,
-# which is what makes this agree with the tables.
 inclusion_from_partition <- function(df, value_col, label = "") {
   usable <- df %>% filter(!is.na(.data[[value_col]]), !xlate_missing)
 
@@ -181,9 +177,6 @@ inclusion_from_partition <- function(df, value_col, label = "") {
 }
 
 # --- build_inclusion_table(): observed features + the unobserved domain -------
-# The old code left_join()ed FROM the domain, so an observed feature that was
-# not in the domain was dropped without a word. This takes the union and
-# reports the overlap instead, so every feature is accounted for.
 build_inclusion_table <- function(observed, domain_ids, id_name, label = "") {
   domain_ids <- unique(domain_ids[!is.na(domain_ids)])
 
@@ -213,6 +206,9 @@ build_inclusion_table <- function(observed, domain_ids, id_name, label = "") {
   out
 }
 
+# --- SHP_CODE_FIELD: the on-disk name of the inclusion code -------------------
+SHP_CODE_FIELD <- "vrsn_nc"
+
 # --- write_inclusion_shapefile(): join to SWORD geometry and write ------------
 write_inclusion_shapefile <- function(tbl, sword_path, id_name, out_path, label = "") {
   geom <- st_read(sword_path, quiet = TRUE)
@@ -222,22 +218,14 @@ write_inclusion_shapefile <- function(tbl, sword_path, id_name, out_path, label 
          basename(sword_path), ". Fields: ", paste(names(geom), collapse = ", "))
   }
 
-  geom <- geom %>% mutate(.join_id = as_id_chr(.data[[id_name]]))
-  tbl_j <- tbl %>% mutate(.join_id = as_id_chr(.data[[id_name]])) %>% select(-all_of(id_name))
-
-  # many-to-one, not one-to-one: the SWORD reach layer carries duplicate
-  # reach_id rows (which is why Table 1 below still needs distinct()), and each
-  # of those geometries should receive the same code.
-  joined <- geom %>%
-    left_join(tbl_j, by = ".join_id", relationship = "many-to-one")
-
-  subset <- joined %>% filter(!is.na(version_inclusion))
+  geom  <- geom %>% mutate(.join_id = as_id_chr(.data[[id_name]]))
+  tbl_j <- tbl  %>% mutate(.join_id = as_id_chr(.data[[id_name]])) %>% select(-all_of(id_name))
 
   matched <- sum(tbl_j$.join_id %in% geom$.join_id)
   if (matched == 0) {
     stop("write_inclusion_shapefile(): no ", label, " id matched ",
          basename(sword_path), ".\n",
-         "  table e.g.    ", paste(utils::head(tbl_j$.join_id, 2), collapse = ", "), "\n",
+         "  table e.g.     ", paste(utils::head(tbl_j$.join_id, 2), collapse = ", "), "\n",
          "  shapefile e.g. ", paste(utils::head(geom$.join_id, 2), collapse = ", "),
          "\nCheck that both are SWORD v17b ids.")
   }
@@ -249,13 +237,64 @@ write_inclusion_shapefile <- function(tbl, sword_path, id_name, out_path, label 
       paste(utils::head(unmatched, 10), collapse = ", ")))
   }
 
-  subset <- subset %>% select(-any_of(".join_id"))
+  # many-to-one, not one-to-one: the SWORD reach layer can carry duplicate
+  # reach_id rows (which is why Table 1 below still needs distinct()), and each
+  # of those geometries should receive the same code.
+  out <- geom %>%
+    left_join(tbl_j, by = ".join_id", relationship = "many-to-one") %>%
+    filter(!is.na(version_inclusion)) %>%
+    # Overwrite SWORD's numeric id with the canonical string. st_read() brings
+    # an 11/14-digit id in as a double and st_write() then puts it back as a
+    # Real with 12 decimals ("81250800021.000000000000"), which is unusable as
+    # a join key in QGIS.
+    mutate(!!id_name := .join_id) %>%
+    rename(!!SHP_CODE_FIELD := version_inclusion) %>%
+    select(-any_of(".join_id"))
+
+  # --- guard: nothing may exceed the shapefile field-name limit --------------
+  fields  <- setdiff(names(out), attr(out, "sf_column"))
+  too_long <- fields[nchar(fields) > 10]
+  if (length(too_long)) {
+    stop("write_inclusion_shapefile(): field name(s) longer than 10 characters: ",
+         paste(too_long, collapse = ", "),
+         ".\nsf would abbreviate EVERY field in the layer, not just these. ",
+         "Shorten them before writing.")
+  }
 
   dir.create(dirname(out_path), showWarnings = FALSE, recursive = TRUE)
-  st_write(subset, out_path, delete_layer = TRUE)
-  message(sprintf("[shapefile %s] wrote %d feature(s) to %s",
-                  label, nrow(subset), basename(out_path)))
-  invisible(subset)
+  st_write(out, out_path, delete_layer = TRUE)
+
+  # --- read back and verify what actually landed on disk ---------------------
+  chk <- st_read(out_path, quiet = TRUE)
+  renamed <- setdiff(fields, names(chk))
+  if (length(renamed)) {
+    stop("[shapefile ", label, "] the driver renamed field(s) on write: ",
+         paste(renamed, collapse = ", "), ". On-disk names: ",
+         paste(names(chk), collapse = ", "))
+  }
+  if (nrow(chk) != nrow(out)) {
+    stop("[shapefile ", label, "] wrote ", nrow(out), " feature(s) but read back ",
+         nrow(chk), ".")
+  }
+  codes <- sort(unique(chk[[SHP_CODE_FIELD]]))
+  if (!all(codes %in% c(INCL_C_ONLY, INCL_BOTH, INCL_D_ONLY, INCL_DOMAIN_ONLY))) {
+    print(table(chk[[SHP_CODE_FIELD]], useNA = "ifany"))
+    stop("[shapefile ", label, "] ", SHP_CODE_FIELD,
+         " on disk contains value(s) outside {-1, 0, 1, 2}: ",
+         paste(codes, collapse = ", "))
+  }
+
+  # --- CSV twin, with full unabbreviated names, as the source of truth -------
+  csv_path <- sub("\\.shp$", "_attributes.csv", out_path)
+  write_csv(st_drop_geometry(out) %>% rename(version_inclusion = all_of(SHP_CODE_FIELD)),
+            csv_path)
+
+  message(sprintf("[shapefile %s] wrote %d feature(s) to %s; %s verified in {-1,0,1,2}: %s",
+                  label, nrow(chk), basename(out_path), SHP_CODE_FIELD,
+                  paste(codes, collapse = ", ")))
+  message(sprintf("[shapefile %s] field names on disk: %s",
+                  label, paste(names(chk), collapse = ", ")))
+  invisible(out)
 }
 
 
@@ -275,7 +314,7 @@ reach_lut <- chr_lut(build_id_lut(reach_translator, "v16_reach_id", "v17_reach_i
 # =============================================================================
 # 1. THE IN SITU YR DOMAIN
 # =============================================================================
-# A node/reach is "in the domain" if any in situ instrument observed it.
+# A node/reach is "in the domain" if any in situ instrument observed it
 
 pt_node_files <- list.files(PT_NODE_DIR, pattern = "\\.csv$",
                             full.names = TRUE, recursive = TRUE)
@@ -353,22 +392,9 @@ report_unmappable(node_all, NODE_VALUE, "node_id", "node WSE")
 node_inclusion <- inclusion_from_partition(node_all, NODE_VALUE, "node WSE") %>%
   build_inclusion_table(domain_nodes, "node_id", "node WSE")
 
-# NOTE: bad nodes (e.g. no matched overpass) are not removed from the field
-# data upstream, so they were previously deleted by hand in QGIS. Check whether
-# that is still necessary now that code 2 comes from a correctly built domain.
 write_inclusion_shapefile(
   node_inclusion, SWORD_NODES, "node_id",
   file.path(INCLUSION_OUT, "all_YR_domain_nodes_subset.shp"), "node WSE")
-
-
-# -----------------------------------------------------------------------------
-# 2d. Width version inclusion shapefile (not implemented)
-# -----------------------------------------------------------------------------
-# Width lives in 4.3_width_comparisons.R, which already produces the feature
-# level buckets this would need (width_all$id_bucket, strata "Ortho"). To build
-# it here, decide first what the width DOMAIN is -- the ortho-surveyed node set,
-# not the PT/GNSS set used above -- because that is what code 2 would mean.
-
 
 # =============================================================================
 # 3. REACH-LEVEL WSE DOMAIN INCLUSION
@@ -510,14 +536,9 @@ inclusion_summary <- bind_rows(
   pivot_wider(id_cols = product, names_from = label, values_from = n, values_fill = 0L)
 print(inclusion_summary)
 
-dir.create(INCLUSION_OUT, showWarnings = FALSE, recursive = TRUE)
-write_csv(inclusion_summary, file.path(INCLUSION_OUT, "inclusion_summary.csv"))
-
-
 # =============================================================================
 # 6. RIVER DOMAIN STATISTICS (TABLE 1)
 # =============================================================================
-# Unchanged logic; YR_domain is now the corrected reach domain from section 1.
 
 YR_domain <- tibble(reach_id = domain_reaches)
 
@@ -761,6 +782,13 @@ write.csv(
 # -----------------------------------------------------------------------------
 # 7b. GNSS summary stats per reach and node
 # -----------------------------------------------------------------------------
+# NOT FIXED (left alone deliberately -- see note (h) in the header):
+# "n_observations" is 14 characters, so these two layers still get their WHOLE
+# attribute table abbreviated by sf, exactly as the inclusion shapefiles did.
+# Renaming it to something <= 10 characters (e.g. n_obs) fixes it, but it also
+# changes the on-disk field name, which the Figure 2 QGIS styling is keyed to.
+# The same applies to PT_summary_sf below (pt_install_UTC, pt_uninstall_UTC,
+# avg_pt_lat, avg_pt_lon are all over the limit).
 
 # REACH
 # ---------------------------
