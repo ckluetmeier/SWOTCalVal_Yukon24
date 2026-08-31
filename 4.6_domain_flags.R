@@ -1,53 +1,63 @@
 # =============================================================================
-# SWOT Version-Unique Node Diagnostics
+# SWOT Version-Unique Node Observation Diagnostics
 # -----------------------------------------------------------------------------
-# Asks WHY a node appears in one SWOT version's validation set but not the
-# other's. For each version-unique node, this script goes back to the ORIGINAL
-# (unfiltered) node timeseries of the OTHER version and works out what happened
-# to it there.
-#   - Version C / PIC0 (SWORD v16,  RiverSP, hydrocron timeseries)
+# Asks WHY a paired observation appears in one SWOT version's validation set but
+# not the other's. For every version-unique observation, this script goes back
+# to the ORIGINAL (unfiltered) node timeseries of the OTHER version, finds that
+# same node AT THAT SAME OVERPASS, and works out what happened to it there.
+#   - Version C / PIC0 (SWORD v16,  RiverSP)
 #   - Version D / PGD0 (SWORD v17b, RiverSP)
 #
-# The version-unique node sets come from 4.4_wse_slope_domain_inclusion.R, so
-# "unique" here means exactly what it means in Tables 2/S6 and the inclusion
-# maps: the node produced a usable relative WSE residual in one version and not
-# the other, pooled over PT and GNSS.
+# -----------------------------------------------------------------------------
+# THE UNIT IS THE OBSERVATION, NOT THE NODE
+# -----------------------------------------------------------------------------
+# This matters more than it sounds. Table S6 counts PAIRED OBSERVATIONS
+# (`Count`) and reports how many distinct nodes those observations fall on
+# (`Unique Count`), separately for PT and GNSS. That is `obs_bucket` from
+# partition_versions() in 4.0, exactly as 4.1 computes it.
+#
+# An earlier version of this script took its node sets from 4.4's inclusion
+# shapefile, which collapses everything to ONE code per node pooled over both
+# instruments. That is the right unit for a QGIS map and the wrong unit here: a
+# node observed on four overpasses can be paired in both versions on two of them
+# and unique to C0 on the other two. Collapsed to a node it reads as "in both",
+# and the two C0-only observations vanish. It also turns the diagnostic question
+# from "did the other version see this node ON THIS PASS" into "did the other
+# version ever see this node at all", which is why that version reported ~96% of
+# uniqueness as "passed QC, no in situ match" -- almost any node passes QC on
+# SOME overpass.
+#
+# So the partition is rebuilt here from the matched comparison files, exactly as
+# 4.1 does it, and section 1 ASSERTS that the rebuild reproduces the published
+# Table S6 counts before anything else runs.
 #
 # -----------------------------------------------------------------------------
-# WHY THE FOUR-WAY DECOMPOSITION COMES FIRST
+# WHY THE DECOMPOSITION COMES FIRST
 # -----------------------------------------------------------------------------
-# It is tempting to read "unique to C0" as "failed D0's quality filtering", but
-# there are four ways a node can end up version-unique, and only one of them is
-# a quality-flag story:
+# "Unique to C0" does not mean "failed D0's quality filtering". There are five
+# ways an observation can end up version-unique, and only one is a flag story:
 #
-#   no_sword_counterpart       the node does not exist in the other SWORD
-#                              version at all, so no amount of processing could
-#                              have produced an observation
-#   absent_from_timeseries     the node exists in that SWORD version but the
-#                              other version's timeseries has no row for it
-#   failed_qc                  rows exist, but none survive the quality cascade
-#                              -- THIS is the group the flag analysis is about
-#   passed_qc_no_insitu_match  rows exist and survive the cascade, but never
-#                              matched an in situ observation in time/space
-#                              (+-7.5 min for PT in 1.2, +-5 hr for GNSS in 2.1)
-#                              so they never reached the comparison file
+#   no_sword_counterpart    the node does not exist in the other SWORD version
+#   node_absent             the node exists but the other version's timeseries
+#                           has no row for it at all
+#   overpass_absent         the node is in the other timeseries, but not on this
+#                           overpass -- SWOT did not deliver that node/pass pair
+#   failed_qc               the row exists at this overpass and fails the
+#                           quality cascade -- THIS is the flag story
+#   passed_qc_no_pairing    the row exists at this overpass and passes every
+#                           filter, so the SWOT side was fine and the pairing
+#                           failed on the IN SITU side
 #
-# Pooling these together would mix nodes that were never observable with nodes
-# that were flagged, and any pattern in the flags would be diluted by nodes that
-# have no flags to speak of. Section 3 splits them; sections 4-6 analyse
-# `failed_qc` against a reference group of nodes that passed in BOTH versions.
-#
-# ASYMMETRY WORTH KNOWING: a C0-only node reached its v17b id through the
-# translator in 4.1, and 4.4 drops the untranslatable ones, so
-# `no_sword_counterpart` cannot occur when looking for C0-only nodes in the D0
-# timeseries. It CAN occur in the other direction: a D0-only node may be new in
-# v17b with no v16 ancestor. Section 3 checks and reports this.
+# The last category is the interesting one at observation level: it means SWOT
+# had good data at that node and pass in both versions, and only the in situ
+# assignment differs. Section 6 tests whether that is SWORD renumbering moving
+# the in situ point to a neighbouring node.
 #
 # -----------------------------------------------------------------------------
 # THE QUALITY CASCADE
 # -----------------------------------------------------------------------------
-# Reproduced from 1.2_PT_node_wse_diff.R and 2.1_GNSS_node_wse_diff.R (both use
-# an identical cascade), plus the tighter dark_frac used from 4.1 onwards:
+# Reproduced from 1.2_PT_node_wse_diff.R and 2.1_GNSS_node_wse_diff.R (identical
+# in both), plus the tighter dark_frac used from 4.1 onwards:
 #
 #   distinct(node_id, time, wse)   drop repeated rows
 #   node_q < 2                     0=good, 1=suspect, 2=degraded, 3=bad
@@ -57,27 +67,31 @@
 #   dark_frac <  0.50              comparison stage (4.1 / 4.2 / 4.4)
 #
 # VERIFIED, not assumed: the comment in 1.2 says fill values are removed, but
-# the code only calls distinct(). It turns out not to matter -- every row with
-# a fill WSE (< -1e10) carries node_q = 3 in both files (36,913 of 120,146 rows
-# in C0; 30,351 of 122,876 in D0), so `node_q < 2` removes all of them and none
-# reach the comparison. They ARE kept here, flagged as `is_fill`, because "the
-# node only ever returned fill values" is a diagnosis, not noise.
+# the code only calls distinct(). It turns out not to matter -- every row with a
+# fill WSE (< -1e10) carries node_q = 3 in both files (36,913 of 120,146 rows in
+# C0; 30,351 of 122,876 in D0), so `node_q < 2` removes all of them. They ARE
+# kept here, flagged as `is_fill`, because "the node returned fill on that pass"
+# is a diagnosis, not noise.
 #
-# Section 6 then tests the leading explanation for the dominant category. If
-# version-uniqueness comes from SWORD renumbering moving the IN SITU assignment
-# between neighbouring nodes, C0-only and D0-only nodes should sit next to each
-# other far more often than chance allows. That is tested against a permutation
-# null, with nodes usable in both versions as a control.
+# -----------------------------------------------------------------------------
+# LOCATING AN OBSERVATION IN THE OTHER VERSION'S TIMESERIES
+# -----------------------------------------------------------------------------
+#   GNSS  the 4.1 key already carries cycle_id and pass_id, so the lookup is a
+#         direct join on (node, cycle, pass)
+#   PT    the node-level PT file carries pt_serial and pt_time_UTC and no
+#         cycle/pass, so the overpass is found by time, reusing 1.2's +-7.5 min
+#         window. "The overpass exists but failed QC" therefore means exactly
+#         what it means in 1.2
 #
 # Contains:
-#   - Tables: version-unique decomposition, node_q_b bit prevalence,
-#             attribute comparison, spatial/temporal clustering,
+#   - Tables: Table S6 rebuild and check, observation-level decomposition,
+#             node_q_b bit prevalence, attribute comparison, per-overpass
 #             adjacency test and the node pairs behind it
 #   - Figures: bit prevalence, node_q class mix, attribute distributions,
-#              unique-node counts by river and overpass, adjacency against the
-#              null, and the along-river layout of every node
+#              decomposition by river, adjacency against a permutation null
 #
-# DEPENDS ON: 4.4 having been run (it writes the inclusion attribute CSV).
+# NOTE: node level only. Table S6's reach half needs the reach timeseries, which
+# are not read here.
 # =============================================================================
 
 library(tidyverse)
@@ -89,30 +103,52 @@ source("/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts
 # 0. CONFIGURATION
 # =============================================================================
 
+WSE_BASE       <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse"
 SWOT_NODE_DIR  <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node"
 TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
 
 RAW_C0 <- file.path(SWOT_NODE_DIR, "hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv")
 RAW_D0 <- file.path(SWOT_NODE_DIR, "RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv")
 
-# Written by 4.4_wse_slope_domain_inclusion.R
-INCLUSION_CSV <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/inclusion_maps/all_YR_domain_nodes_subset_attributes.csv"
-
 OUT <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/domain_flags"
 
-# --- inclusion codes, as written by 4.4 --------------------------------------
-INCL_C_ONLY      <- -1L
-INCL_BOTH        <-  0L
-INCL_D_ONLY      <-  1L
-INCL_DOMAIN_ONLY <-  2L
-
-# --- quality cascade ---------------------------------------------------------
+# --- filters: must match 4.1 --------------------------------------------------
+DARK_FRAC_CMP   <- 0.50    # 4.1 / 4.2 / 4.4 comparison stage
+DARK_FRAC_MATCH <- 0.80    # 1.2 / 2.1 matching stage
 NODE_Q_MAX      <- 2       # keep node_q < 2
 XTRK_MIN        <- 10000   # m
 XTRK_MAX        <- 60000   # m
-DARK_FRAC_MATCH <- 0.80    # 1.2 / 2.1
-DARK_FRAC_CMP   <- 0.50    # 4.1 / 4.2 / 4.4
 FILL_WSE        <- -1e10   # anything below this is a product fill value
+
+NODE_VALUE   <- "residuals_nobias"   # the metric 4.1 partitions against
+PT_MATCH_MIN <- 7.5                  # minutes; 1.2's PT-to-overpass window
+
+# --- TAI -> UTC ---------------------------------------------------------------
+TAI_EPOCH      <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
+TAI_UTC_OFFSET <- 37   # seconds
+
+# --- published Table S6, node half --------------------------------------------
+# The rebuild in section 1 must reproduce these exactly. If it does not, either
+# the upstream comparison files have changed since the table was made or a
+# reader here has drifted from 4.1 -- both are things to know about BEFORE
+# reading any of the diagnostics below.
+TABLE_S6_NODE <- tribble(
+  ~insitu_type, ~version, ~bucket,    ~n,     ~n_unique,
+  "PT",         "D0",     "same",      253L,   51L,
+  "PT",         "C0",     "same",      253L,   51L,
+  "GNSS",       "D0",     "same",     5120L, 2946L,
+  "GNSS",       "C0",     "same",     5120L, 2946L,
+  "PT",         "D0",     "D0_only",    90L,   46L,
+  "PT",         "C0",     "C0_only",    46L,   23L,
+  "GNSS",       "D0",     "D0_only",  1476L, 1057L,
+  "GNSS",       "C0",     "C0_only",   875L,  626L
+)
+STOP_ON_TABLE_S6_MISMATCH <- TRUE   # set FALSE if Table S6 is knowingly stale
+
+# --- adjacency test -----------------------------------------------------------
+ADJ_N_PERM    <- 499L      # permutation replicates
+ADJ_IMMEDIATE <- 1L        # "adjacent" means within this many node positions
+ADJ_SEED      <- 20260831L
 
 # --- node_q_b bit labels -----------------------------------------------------
 # node_q_b is the bitwise node quality field. 390 distinct values appear in C0
@@ -195,9 +231,9 @@ N_QB_BITS <- 32L   # node_q_b is a 32-bit field; the largest value observed in
 # types the first as a double and the second as character, so binding the whole
 # frames fails. Only the columns actually used are carried through, and
 # sword_version is forced to character.
-ID_COLS      <- c("node_id", "reach_id", "sword_version")
-OVERPASS_COLS<- c("time", "cycle_id", "pass_id")
-QC_COLS      <- c("wse", "node_q", "node_q_b", "xtrk_dist", "dark_frac")
+ID_COLS        <- c("node_id", "reach_id", "sword_version")
+OVERPASS_COLS  <- c("time", "time_tai", "cycle_id", "pass_id")
+QC_COLS        <- c("wse", "node_q", "node_q_b", "xtrk_dist", "dark_frac")
 ATTR_QC_COLS   <- c("node_q", "dark_frac", "xtrk_dist", "n_good_pix",
                     "layovr_val", "xovr_cal_q")
 ATTR_GEOM_COLS <- c("wse_u", "wse_r_u", "width", "width_u", "area_total",
@@ -237,6 +273,8 @@ reach_id_from_node <- function(node_id) {
           NA_character_)
 }
 
+node_number <- function(node_id) as.integer(substr(as_id_chr(node_id), 11, 13))
+
 # --- label_river(): the river naming used in 4.4 and 4.5 ----------------------
 # Takes SWORD v17b reach ids as character.
 label_river <- function(reach_id_chr) {
@@ -266,7 +304,6 @@ qb_bit <- function(v, k) {
   out
 }
 
-# --- bit_label(): apply NODE_Q_B_LABELS, falling back to bit_NN ---------------
 bit_label <- function(bit) {
   lab <- NODE_Q_B_LABELS$label[match(bit, NODE_Q_B_LABELS$bit)]
   if_else(is.na(lab), sprintf("bit_%02d", bit), lab)
@@ -288,62 +325,123 @@ decode_q_b <- function(v) {
 
 
 # =============================================================================
-# 1. THE VERSION-UNIQUE NODE SETS (from 4.4)
+# 0c. TRANSLATOR
 # =============================================================================
-
-if (!file.exists(INCLUSION_CSV)) {
-  stop("4.6 needs the node inclusion table written by 4.4:\n  ", INCLUSION_CSV,
-       "\nRun 4.4_wse_slope_domain_inclusion.R first (it writes this CSV next ",
-       "to the shapefile).")
-}
-
-inclusion <- read_csv(INCLUSION_CSV, show_col_types = FALSE) %>%
-  mutate(node_id = as_id_chr(node_id))
-
-stopifnot("version_inclusion" %in% names(inclusion))
-
-message("[4.6] inclusion table from 4.4:")
-inclusion %>%
-  count(version_inclusion) %>%
-  mutate(meaning = case_when(
-    version_inclusion == INCL_C_ONLY      ~ "C0 only",
-    version_inclusion == INCL_BOTH        ~ "both",
-    version_inclusion == INCL_D_ONLY      ~ "D0 only",
-    version_inclusion == INCL_DOMAIN_ONLY ~ "in domain, no SWOT")) %>%
-  print()
-
-nodes_C_only <- inclusion %>% filter(version_inclusion == INCL_C_ONLY) %>% pull(node_id)
-nodes_D_only <- inclusion %>% filter(version_inclusion == INCL_D_ONLY) %>% pull(node_id)
-nodes_both   <- inclusion %>% filter(version_inclusion == INCL_BOTH)   %>% pull(node_id)
-
-message(sprintf("[4.6] %d C0-only, %d D0-only, %d in both",
-                length(nodes_C_only), length(nodes_D_only), length(nodes_both)))
-
-
-# =============================================================================
-# 2. THE ORIGINAL TIMESERIES, HARMONISED TO SWORD v17b
-# =============================================================================
-# Both files carry the same 31 data columns. The C0 file is SWORD v16, so its
-# node ids are translated forward with the same strict 1:1 map used everywhere
-# else in phase 4; the D0 file is already v17b and passes through.
 
 node_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.csv"),
                             show_col_types = FALSE)
 node_lut <- chr_lut(build_id_lut(node_translator, "v16_node_id", "v17_node_id",
                                  "node translator"))
 
-# --- 2a. read, tag, harmonise -------------------------------------------------
+# v17b ids that have a v16 ancestor. A D0-only observation on a node outside
+# this set is on a node that is new in v17b.
+v17b_with_v16_ancestor <- unique(node_lut$to_id)
+
+
+# =============================================================================
+# 1. REBUILD THE 4.1 NODE PARTITION, THEN CHECK IT AGAINST TABLE S6
+# =============================================================================
+
+# --- 1a. read, filter, harmonise (mirrors read_node() in 4.1) ----------------
+# KEEP IN SYNC WITH 4.1. The Table S6 assertion below is what makes drift
+# impossible to miss rather than merely unlikely.
+read_node_wse <- function(path, insitu, version) {
+  read_csv(path, show_col_types = FALSE) %>%
+    mutate(insitu_type = insitu,
+           source      = if (version == "C") VERSION_C else VERSION_D,
+           node_id     = as_id_chr(node_id)) %>%
+    filter(dark_frac < DARK_FRAC_CMP) %>%
+    harmonise_ids("node_id", node_lut, version,
+                  label = paste("node", insitu, version))
+}
+
+node_PT_vC   <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v16/node_SWOT_PT.csv"),           "PT",   "C")
+node_PT_vD   <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v17b/node_SWOT_PT.csv"),          "PT",   "D")
+node_GNSS_vC <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v16/node_SWOT_GNSS_3mdiff.csv"),  "GNSS", "C")
+node_GNSS_vD <- read_node_wse(file.path(WSE_BASE, "node/RiverSP_v17b/node_SWOT_GNSS_3mdiff.csv"), "GNSS", "D")
+
+# --- 1b. partition on the 4.1 keys -------------------------------------------
+node_PT <- bind_rows(node_PT_vC, node_PT_vD) %>%
+  partition_versions(key_cols  = c("id_harmonised", "pt_serial", "pt_time_UTC"),
+                     value_col = NODE_VALUE)
+
+node_GNSS <- bind_rows(node_GNSS_vC, node_GNSS_vD) %>%
+  mutate(drift_file = basename(drift_id)) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = NODE_VALUE)
+
+node_all <- bind_rows(node_PT, node_GNSS)
+attr(node_all, "partition_value_col") <- NODE_VALUE
+
+# --- 1c. reproduce Table S6 and assert ---------------------------------------
+tableS6_rebuilt <- node_all %>%
+  partition_table(NODE_VALUE, by = c("insitu_type", "source"),
+                  scale = 100, digits = 1)
+print(tableS6_rebuilt, n = Inf)
+
+stopifnot(all(TABLE_S6_NODE$version %in% c("C0", "D0")))
+s6_check <- TABLE_S6_NODE %>%
+  mutate(source = if_else(version == "D0", VERSION_D, VERSION_C)) %>%
+  left_join(tableS6_rebuilt %>%
+              mutate(bucket = as.character(bucket)) %>%
+              select(insitu_type, source, bucket, n_got = n, n_unique_got = n_unique),
+            by = c("insitu_type", "source", "bucket")) %>%
+  mutate(n_ok = !is.na(n_got) & n_got == n,
+         n_unique_ok = !is.na(n_unique_got) & n_unique_got == n_unique)
+
+if (!all(s6_check$n_ok & s6_check$n_unique_ok)) {
+  print(s6_check %>% filter(!n_ok | !n_unique_ok), n = Inf, width = Inf)
+  msg <- paste0(
+    "the rebuilt partition does not reproduce the published Table S6.\n",
+    "  Either the comparison CSVs have changed since the table was made, or\n",
+    "  read_node_wse() here has drifted from read_node() in 4.1.\n",
+    "  Reconcile before trusting anything below; set ",
+    "STOP_ON_TABLE_S6_MISMATCH <- FALSE to proceed anyway.")
+  if (STOP_ON_TABLE_S6_MISMATCH) stop(msg) else warning(msg)
+} else {
+  message("[4.6] OK: rebuild reproduces every published Table S6 node count")
+}
+
+# --- 1d. the observation-level sets ------------------------------------------
+# One row per version-unique paired observation, carrying everything needed to
+# find it again in the other version's timeseries.
+obs_cols <- c("obs_key", "id_harmonised", "insitu_type", "source", "obs_bucket",
+              "cycle_id", "pass_id", "pt_time_UTC", "drift_file")
+
+observations <- node_all %>%
+  filter(!is.na(.data[[NODE_VALUE]]), !is.na(obs_bucket)) %>%
+  select(any_of(obs_cols)) %>%
+  mutate(reach_id_v17b = reach_id_from_node(id_harmonised),
+         river         = label_river(reach_id_v17b))
+
+message("[4.6] observations by bucket (the Table S6 `Count` column):")
+observations %>% count(insitu_type, source, obs_bucket) %>% print(n = Inf)
+
+unique_obs <- observations %>% filter(obs_bucket %in% c("C0_only", "D0_only"))
+same_obs   <- observations %>% filter(obs_bucket == "same")
+
+# Version-C observations whose v16 node has no v17b counterpart cannot be looked
+# up by v17b id at all. Reported, not silently dropped.
+unmappable_obs <- node_all %>%
+  filter(!is.na(.data[[NODE_VALUE]]), obs_bucket == "unmappable")
+message(sprintf("[4.6] %d observation(s) on %d node(s) are 'unmappable' (no v17b counterpart) and are excluded from the lookup",
+                nrow(unmappable_obs), n_distinct(unmappable_obs$id_harmonised)))
+
+
+# =============================================================================
+# 2. THE ORIGINAL TIMESERIES, HARMONISED TO SWORD v17b
+# =============================================================================
+
 read_raw <- function(path, version) {
   raw <- read_csv(path, show_col_types = FALSE, guess_max = 100000)
 
-  needed <- c("node_id", "reach_id", "time", "wse", "node_q", "node_q_b",
-              "xtrk_dist", "dark_frac", "cycle_id", "pass_id")
+  needed <- c("node_id", "reach_id", "time", "time_tai", "wse", "node_q",
+              "node_q_b", "xtrk_dist", "dark_frac", "cycle_id", "pass_id")
   missing_cols <- setdiff(needed, names(raw))
   if (length(missing_cols)) {
     stop(basename(path), " is missing column(s): ",
          paste(missing_cols, collapse = ", "))
   }
-
   absent <- setdiff(c(ATTR_QC_COLS, ATTR_GEOM_COLS), names(raw))
   if (length(absent)) {
     message("[4.6] ", basename(path), " has no ", paste(absent, collapse = ", "),
@@ -356,17 +454,11 @@ read_raw <- function(path, version) {
            node_id       = as_id_chr(node_id),
            reach_id      = as_id_chr(reach_id),
            sword_version = as.character(sword_version)) %>%
-    # 1.2 / 2.1 both start here
-    distinct(node_id, time, wse, .keep_all = TRUE) %>%
-    harmonise_ids("node_id", node_lut, version, label = paste("raw", version))
+    distinct(node_id, time, wse, .keep_all = TRUE) %>%   # 1.2 / 2.1 start here
+    harmonise_ids("node_id", node_lut, version, label = paste("raw", version)) %>%
+    mutate(time_utc = TAI_EPOCH + time_tai - TAI_UTC_OFFSET)
 }
 
-raw_C0 <- read_raw(RAW_C0, "C")
-raw_D0 <- read_raw(RAW_D0, "D")
-
-# --- 2b. apply the cascade, one flag per filter -------------------------------
-# Each filter gets its own column so a node can be attributed to the filter that
-# actually removed it, rather than only to whichever one happens to come first.
 add_qc_flags <- function(df) {
   df %>%
     mutate(
@@ -376,11 +468,8 @@ add_qc_flags <- function(df) {
       pass_xtrk_far  = abs(xtrk_dist) <= XTRK_MAX,
       pass_dark_080  = dark_frac <= DARK_FRAC_MATCH,
       pass_dark_050  = dark_frac <  DARK_FRAC_CMP,
-      # the 1.2 / 2.1 matching stage
       pass_match     = pass_node_q & pass_xtrk_near & pass_xtrk_far & pass_dark_080,
-      # the full cascade a row must survive to reach a 4.1 table
       pass_all       = pass_match & pass_dark_050,
-      # first binding constraint, in cascade order (NA if the row passes)
       first_fail = case_when(
         !pass_node_q    ~ "node_q >= 2",
         !pass_xtrk_near ~ "xtrk < 10 km",
@@ -394,21 +483,16 @@ add_qc_flags <- function(df) {
     )
 }
 
-raw_C0 <- add_qc_flags(raw_C0)
-raw_D0 <- add_qc_flags(raw_D0)
+raw_C0 <- add_qc_flags(read_raw(RAW_C0, "C"))
+raw_D0 <- add_qc_flags(read_raw(RAW_D0, "D"))
 
 message("[4.6] cascade survival, whole files:")
 bind_rows(raw_C0, raw_D0) %>%
-  summarise(rows = n(),
-            fill_rows = sum(is_fill, na.rm = TRUE),
+  summarise(rows = n(), fill_rows = sum(is_fill, na.rm = TRUE),
             pass_match = sum(pass_match, na.rm = TRUE),
-            pass_all = sum(pass_all, na.rm = TRUE),
-            .by = source) %>%
+            pass_all = sum(pass_all, na.rm = TRUE), .by = source) %>%
   print()
 
-# Fill values must never survive the cascade (see the header note). If this
-# stops, something changed in the products and the comparison files may contain
-# fill WSEs.
 fill_survivors <- bind_rows(raw_C0, raw_D0) %>% filter(is_fill, pass_all)
 if (nrow(fill_survivors)) {
   print(count(fill_survivors, source, node_q))
@@ -419,103 +503,144 @@ message("[4.6] OK: no fill-WSE row survives the cascade in either version")
 
 
 # =============================================================================
-# 3. WHY IS EACH NODE VERSION-UNIQUE?
+# 3. WHAT HAPPENED TO EACH OBSERVATION IN THE OTHER VERSION?
 # =============================================================================
-# For each version-unique node, look it up in the OTHER version's raw file.
 
-# The set of v17b ids that have a v16 ancestor. A D0-only node outside this set
-# is new in v17b and could not possibly appear in the C0 product.
-v17b_with_v16_ancestor <- unique(node_lut$to_id)
+# --- 3a. locate one set of observations in one raw file ----------------------
+# GNSS joins on (node, cycle, pass). PT has no cycle/pass at node level, so the
+# overpass is found by time within 1.2's +-7.5 min window. Returns one row per
+# (observation x matching raw row); an observation with no match appears once
+# with NA raw columns.
+RAW_KEEP <- c("id_harmonised", "cycle_id", "pass_id", "time_utc", "is_fill",
+              "pass_all", "pass_match", "first_fail", "node_q", "node_q_b",
+              ATTR_QC_COLS, ATTR_GEOM_COLS)
 
-classify_uniqueness <- function(unique_ids, other_raw, check_ancestor,
-                                label = "") {
+locate_in_raw <- function(obs, raw, label = "") {
+  raw_small <- raw %>% select(any_of(RAW_KEEP))
 
-  present <- other_raw %>%
-    filter(id_harmonised %in% unique_ids) %>%
-    summarise(n_rows      = n(),
-              n_pass_all  = sum(pass_all,   na.rm = TRUE),
-              n_pass_match= sum(pass_match, na.rm = TRUE),
-              n_fill      = sum(is_fill,    na.rm = TRUE),
-              .by = id_harmonised)
+  gnss <- obs %>%
+    filter(insitu_type == "GNSS") %>%
+    left_join(raw_small, by = c("id_harmonised", "cycle_id", "pass_id"),
+              relationship = "many-to-many")
 
-  tibble(node_id = unique_ids) %>%
-    left_join(present, by = c("node_id" = "id_harmonised")) %>%
+  pt <- obs %>% filter(insitu_type == "PT")
+  if (nrow(pt)) {
+    pt_hits <- pt %>%
+      select(obs_key, id_harmonised, pt_time_UTC) %>%
+      inner_join(raw_small, by = "id_harmonised", relationship = "many-to-many") %>%
+      filter(abs(as.numeric(difftime(pt_time_UTC, time_utc, units = "mins")))
+             <= PT_MATCH_MIN) %>%
+      select(-id_harmonised, -pt_time_UTC)
+    pt <- pt %>%
+      select(-any_of(c("cycle_id", "pass_id"))) %>%
+      left_join(pt_hits, by = "obs_key", relationship = "many-to-many")
+  }
+
+  out <- bind_rows(gnss, pt)
+  message(sprintf("[locate %s] %d observation(s) -> %d row(s); %d observation(s) found no row at their overpass",
+                  label, nrow(obs), nrow(out),
+                  sum(is.na(out$pass_all[!duplicated(out$obs_key)]))))
+  out
+}
+
+# C0-only observations are looked for in the D0 timeseries, and vice versa.
+unique_C_rows <- locate_in_raw(unique_obs %>% filter(obs_bucket == "C0_only"),
+                               raw_D0, "C0_only in D0")
+unique_D_rows <- locate_in_raw(unique_obs %>% filter(obs_bucket == "D0_only"),
+                               raw_C0, "D0_only in C0")
+
+# The control: observations that paired in BOTH versions, located in the same
+# file by the same route. This is a properly matched reference -- same nodes,
+# same overpasses, same lookup -- not "all rows of every node".
+same_in_D_rows <- locate_in_raw(same_obs %>% filter(source == VERSION_D),
+                                raw_D0, "same in D0")
+same_in_C_rows <- locate_in_raw(same_obs %>% filter(source == VERSION_C),
+                                raw_C0, "same in C0")
+
+# --- 3b. classify each version-unique observation ----------------------------
+nodes_in_raw_D <- unique(raw_D0$id_harmonised)
+nodes_in_raw_C <- unique(raw_C0$id_harmonised)
+
+classify_obs <- function(rows, nodes_present, check_ancestor, label) {
+  rows %>%
+    summarise(
+      insitu_type   = first(insitu_type),
+      obs_bucket    = first(obs_bucket),
+      id_harmonised = first(id_harmonised),
+      river         = first(river),
+      reach_id_v17b = first(reach_id_v17b),
+      n_raw_rows    = sum(!is.na(pass_all)),
+      n_pass_all    = sum(pass_all,   na.rm = TRUE),
+      n_pass_match  = sum(pass_match, na.rm = TRUE),
+      n_fill        = sum(is_fill,    na.rm = TRUE),
+      .by = obs_key
+    ) %>%
     mutate(
-      n_rows       = replace_na(n_rows, 0L),
-      n_pass_all   = replace_na(n_pass_all, 0L),
-      n_pass_match = replace_na(n_pass_match, 0L),
-      n_fill       = replace_na(n_fill, 0L),
-      has_ancestor = if (check_ancestor) node_id %in% v17b_with_v16_ancestor else TRUE,
+      has_ancestor = if (check_ancestor) id_harmonised %in% v17b_with_v16_ancestor else TRUE,
+      node_present = id_harmonised %in% nodes_present,
       reason = case_when(
-        !has_ancestor   ~ "no_sword_counterpart",
-        n_rows == 0     ~ "absent_from_timeseries",
-        n_pass_all == 0 ~ "failed_qc",
-        TRUE            ~ "passed_qc_no_insitu_match"
+        !has_ancestor    ~ "no_sword_counterpart",
+        !node_present    ~ "node_absent",
+        n_raw_rows == 0  ~ "overpass_absent",
+        n_pass_all == 0  ~ "failed_qc",
+        TRUE             ~ "passed_qc_no_pairing"
       ),
-      river = label_river(reach_id_from_node(node_id)),
-      set   = label
+      looked_in = label
     )
 }
 
-# C0-only nodes: why are they missing from D0? Their v17b id is what 4.1
-# assigned them, so an ancestor check is not meaningful in this direction.
-why_C_only <- classify_uniqueness(nodes_C_only, raw_D0,
-                                  check_ancestor = FALSE, label = "C0_only")
-
-# D0-only nodes: why are they missing from C0? Here a node may simply be new in
-# SWORD v17b.
-why_D_only <- classify_uniqueness(nodes_D_only, raw_C0,
-                                  check_ancestor = TRUE,  label = "D0_only")
+why_C_only <- classify_obs(unique_C_rows, nodes_in_raw_D,
+                           check_ancestor = FALSE, label = VERSION_D)
+why_D_only <- classify_obs(unique_D_rows, nodes_in_raw_C,
+                           check_ancestor = TRUE,  label = VERSION_C)
 
 why_all <- bind_rows(why_C_only, why_D_only) %>%
-  mutate(reason = factor(reason, levels = c("no_sword_counterpart",
-                                            "absent_from_timeseries",
-                                            "failed_qc",
-                                            "passed_qc_no_insitu_match")))
+  mutate(reason = factor(reason, levels = c("no_sword_counterpart", "node_absent",
+                                            "overpass_absent", "failed_qc",
+                                            "passed_qc_no_pairing")))
 
-message("[4.6] why each version-unique node is unique:")
+message("[4.6] why each version-unique OBSERVATION is unique:")
 table3_reasons <- why_all %>%
-  count(set, reason) %>%
-  mutate(pct = round(100 * n / sum(n), 1), .by = set)
+  count(obs_bucket, insitu_type, reason) %>%
+  mutate(pct = round(100 * n / sum(n), 1), .by = c(obs_bucket, insitu_type))
 print(table3_reasons, n = Inf)
 
+message("[4.6] ... and the distinct nodes those observations fall on:")
+table3_reason_nodes <- why_all %>%
+  summarise(n_obs = n(), n_nodes = n_distinct(id_harmonised),
+            .by = c(obs_bucket, insitu_type, reason))
+print(table3_reason_nodes, n = Inf)
+
 message("[4.6] ... broken down by river:")
-table3_reasons_river <- why_all %>% count(set, reason, river)
+table3_reasons_river <- why_all %>% count(obs_bucket, reason, river)
 print(table3_reasons_river, n = Inf)
 
-# --- 3b. within failed_qc, which filter did the removing? ---------------------
-# Reported two ways, because they answer different questions:
-#   binding   the first filter in cascade order that a row hit -- what would
-#             have to change for the row to survive
-#   any       how often each filter fails at all, ignoring order -- whether
-#             failures are single-cause or piled up
-failed_qc_nodes <- why_all %>% filter(reason == "failed_qc")
-
+# --- 3c. within failed_qc, which filter did the removing? --------------------
 qc_rows <- bind_rows(
-  raw_D0 %>% filter(id_harmonised %in% failed_qc_nodes$node_id[failed_qc_nodes$set == "C0_only"]) %>%
-    mutate(set = "C0_only", looked_in = VERSION_D),
-  raw_C0 %>% filter(id_harmonised %in% failed_qc_nodes$node_id[failed_qc_nodes$set == "D0_only"]) %>%
-    mutate(set = "D0_only", looked_in = VERSION_C)
-)
+  unique_C_rows %>% semi_join(why_all %>% filter(reason == "failed_qc",
+                                                 obs_bucket == "C0_only"), by = "obs_key"),
+  unique_D_rows %>% semi_join(why_all %>% filter(reason == "failed_qc",
+                                                 obs_bucket == "D0_only"), by = "obs_key")
+) %>% filter(!is.na(pass_all))
 
 message("[4.6] failed_qc rows, first binding filter:")
 table4_binding <- qc_rows %>%
-  count(set, looked_in, first_fail) %>%
-  mutate(pct = round(100 * n / sum(n), 1), .by = c(set, looked_in))
+  count(obs_bucket, insitu_type, first_fail) %>%
+  mutate(pct = round(100 * n / sum(n), 1), .by = c(obs_bucket, insitu_type))
 print(table4_binding, n = Inf)
 
 message("[4.6] failed_qc rows, each filter failed at all (not mutually exclusive):")
 table4_anyfail <- qc_rows %>%
   summarise(
-    n_rows            = n(),
-    `node_q >= 2`     = sum(!pass_node_q,    na.rm = TRUE),
-    `xtrk < 10 km`    = sum(!pass_xtrk_near, na.rm = TRUE),
-    `xtrk > 60 km`    = sum(!pass_xtrk_far,  na.rm = TRUE),
-    `dark_frac > 0.80`= sum(!pass_dark_080,  na.rm = TRUE),
-    `dark_frac >= 0.50` = sum(!pass_dark_050, na.rm = TRUE),
-    fill_wse          = sum(is_fill,         na.rm = TRUE),
-    .by = c(set, looked_in)) %>%
-  pivot_longer(-c(set, looked_in, n_rows), names_to = "filter", values_to = "n_failing") %>%
+    n_rows              = n(),
+    `node_q >= 2`       = sum(node_q >= NODE_Q_MAX, na.rm = TRUE),
+    `xtrk out of range` = sum(abs(xtrk_dist) < XTRK_MIN | abs(xtrk_dist) > XTRK_MAX, na.rm = TRUE),
+    `dark_frac > 0.80`  = sum(dark_frac >  DARK_FRAC_MATCH, na.rm = TRUE),
+    `dark_frac >= 0.50` = sum(dark_frac >= DARK_FRAC_CMP,   na.rm = TRUE),
+    fill_wse            = sum(is_fill, na.rm = TRUE),
+    .by = c(obs_bucket, insitu_type)) %>%
+  pivot_longer(-c(obs_bucket, insitu_type, n_rows),
+               names_to = "filter", values_to = "n_failing") %>%
   mutate(pct_of_rows = round(100 * n_failing / n_rows, 1))
 print(table4_anyfail, n = Inf)
 
@@ -523,363 +648,302 @@ print(table4_anyfail, n = Inf)
 # =============================================================================
 # 4. node_q_b BIT DECOMPOSITION
 # =============================================================================
-# The reference group is the nodes that produced a usable residual in BOTH
-# versions, using their rows from the SAME file the failed_qc nodes were looked
-# up in. That keeps the comparison within one product version, so a difference
-# in bit prevalence is a difference between nodes, not between products.
+# failed_qc rows against the matched control: the rows the SAME lookup returns
+# for observations that paired in both versions.
 
 ref_rows <- bind_rows(
-  raw_D0 %>% filter(id_harmonised %in% nodes_both) %>%
-    mutate(set = "C0_only", looked_in = VERSION_D),
-  raw_C0 %>% filter(id_harmonised %in% nodes_both) %>%
-    mutate(set = "D0_only", looked_in = VERSION_C)
-) %>% mutate(group = "both_versions")
+  same_in_D_rows %>% filter(!is.na(pass_all)),
+  same_in_C_rows %>% filter(!is.na(pass_all))
+)
 
 cmp_rows <- bind_rows(
-  qc_rows %>% mutate(group = "failed_qc"),
-  ref_rows
+  qc_rows  %>% mutate(group = "failed_qc"),
+  ref_rows %>% mutate(group = "both_versions")
 ) %>%
-  mutate(group = factor(group, levels = c("failed_qc", "both_versions")))
+  mutate(group = factor(group, levels = c("failed_qc", "both_versions")),
+         looked_in = if_else(source == VERSION_C, VERSION_D, VERSION_C))
 
-message(sprintf("[4.6] bit analysis on %d failed_qc rows vs %d reference rows",
+message(sprintf("[4.6] bit analysis on %d failed_qc rows vs %d matched reference rows",
                 sum(cmp_rows$group == "failed_qc"),
                 sum(cmp_rows$group == "both_versions")))
 
-# --- 4a. prevalence of every bit, by set and group ---------------------------
 bit_prevalence <- map_dfr(0:(N_QB_BITS - 1L), function(k) {
   cmp_rows %>%
-    summarise(n_rows = n(),
-              n_set  = sum(qb_bit(node_q_b, k), na.rm = TRUE),
-              .by = c(set, looked_in, group)) %>%
+    summarise(n_rows = n(), n_set = sum(qb_bit(node_q_b, k), na.rm = TRUE),
+              .by = c(insitu_type, group)) %>%
     mutate(bit = k, .before = 1)
 }) %>%
-  mutate(prevalence = n_set / n_rows,
-         flag = bit_label(bit))
+  mutate(prevalence = n_set / n_rows, flag = bit_label(bit))
 
-# Drop bits that are never set anywhere -- there is nothing to say about them.
 bits_used <- bit_prevalence %>%
   summarise(any_set = sum(n_set) > 0, .by = bit) %>%
   filter(any_set) %>% pull(bit)
-
 bit_prevalence <- bit_prevalence %>% filter(bit %in% bits_used)
 message(sprintf("[4.6] %d of %d bits are set at least once: %s",
                 length(bits_used), N_QB_BITS, paste(bits_used, collapse = ", ")))
 
-# --- 4b. the contrast: failed_qc minus both_versions --------------------------
-# If one set has no failed_qc nodes at all, that column will not exist and the
-# contrast is undefined -- say so rather than failing on a missing column.
 table5_bits <- bit_prevalence %>%
-  select(set, looked_in, bit, flag, group, prevalence) %>%
+  select(insitu_type, bit, flag, group, prevalence) %>%
   pivot_wider(names_from = group, values_from = prevalence)
-
 for (col in c("failed_qc", "both_versions")) {
   if (!col %in% names(table5_bits)) {
-    warning("no '", col, "' rows to compare -- the bit contrast is undefined. ",
-            "Check the reason counts in section 3.")
+    warning("no '", col, "' rows to compare -- the bit contrast is undefined.")
     table5_bits[[col]] <- NA_real_
   }
 }
-
 table5_bits <- table5_bits %>%
-  mutate(
-    diff        = round(failed_qc - both_versions, 3),
-    ratio       = round(failed_qc / both_versions, 2),
-    failed_qc   = round(failed_qc, 3),
-    both_versions = round(both_versions, 3)
-  ) %>%
-  arrange(set, desc(abs(diff)))
+  mutate(diff  = round(failed_qc - both_versions, 3),
+         ratio = round(failed_qc / both_versions, 2),
+         failed_qc = round(failed_qc, 3),
+         both_versions = round(both_versions, 3)) %>%
+  arrange(insitu_type, desc(abs(diff)))
 print(table5_bits, n = Inf)
 
-# --- 4c. whole node_q_b values and node_q classes -----------------------------
-# Decoding happens after slice_max so only the top composites are expanded.
 table5_qb_values <- cmp_rows %>%
-  count(set, looked_in, group, node_q_b) %>%
-  mutate(pct = round(100 * n / sum(n), 1), .by = c(set, looked_in, group)) %>%
-  slice_max(order_by = n, n = 10, by = c(set, looked_in, group)) %>%
-  arrange(set, group, desc(n)) %>%
+  count(insitu_type, group, node_q_b) %>%
+  mutate(pct = round(100 * n / sum(n), 1), .by = c(insitu_type, group)) %>%
+  slice_max(order_by = n, n = 10, by = c(insitu_type, group)) %>%
+  arrange(insitu_type, group, desc(n)) %>%
   mutate(flags = decode_q_b(node_q_b))
 print(table5_qb_values, n = Inf, width = Inf)
 
 table5_node_q <- cmp_rows %>%
-  count(set, looked_in, group, node_q) %>%
-  mutate(pct = round(100 * n / sum(n), 1), .by = c(set, looked_in, group))
+  count(insitu_type, group, node_q) %>%
+  mutate(pct = round(100 * n / sum(n), 1), .by = c(insitu_type, group))
 print(table5_node_q, n = Inf)
 
 
 # =============================================================================
 # 5. ATTRIBUTE COMPARISON
 # =============================================================================
-# Continuous attributes are summarised on NON-FILL rows only. A fill row carries
-# -1e12 in wse and matching fill values elsewhere, and mixing those into a median
-# would produce a number that describes the fill convention rather than the
-# river. The fill fraction is reported separately, as its own diagnostic.
+# Continuous attributes on NON-FILL rows only: a fill row carries -1e12 in wse
+# and matching fill elsewhere, and mixing those into a median describes the fill
+# convention rather than the river. The fill fraction is its own diagnostic.
 
-ATTR_QC <- ATTR_QC_COLS
-ATTR_GEOM <- ATTR_GEOM_COLS
-
-attr_cols <- intersect(c(ATTR_QC, ATTR_GEOM), names(cmp_rows))
-missing_attrs <- setdiff(c(ATTR_QC, ATTR_GEOM), names(cmp_rows))
-if (length(missing_attrs)) {
-  message("[4.6] attribute(s) not in these files, skipped: ",
-          paste(missing_attrs, collapse = ", "))
-}
+attr_cols <- intersect(c(ATTR_QC_COLS, ATTR_GEOM_COLS), names(cmp_rows))
 
 table6_attrs <- cmp_rows %>%
   filter(!is_fill) %>%
   pivot_longer(all_of(attr_cols), names_to = "attribute", values_to = "value") %>%
   filter(!is.na(value)) %>%
-  summarise(
-    n      = n(),
-    p25    = round(quantile(value, 0.25), 3),
-    median = round(median(value), 3),
-    p75    = round(quantile(value, 0.75), 3),
-    .by = c(set, looked_in, group, attribute)
-  ) %>%
+  summarise(n = n(),
+            p25 = round(quantile(value, 0.25), 3),
+            median = round(median(value), 3),
+            p75 = round(quantile(value, 0.75), 3),
+            .by = c(insitu_type, group, attribute)) %>%
   pivot_wider(names_from = group, values_from = c(n, p25, median, p75)) %>%
-  arrange(set, attribute)
+  arrange(insitu_type, attribute)
 print(table6_attrs, n = Inf)
 
 table6_fill <- cmp_rows %>%
-  summarise(n_rows = n(),
-            n_fill = sum(is_fill, na.rm = TRUE),
+  summarise(n_rows = n(), n_fill = sum(is_fill, na.rm = TRUE),
             pct_fill = round(100 * mean(is_fill, na.rm = TRUE), 1),
-            .by = c(set, looked_in, group))
+            .by = c(insitu_type, group))
 print(table6_fill)
 
-# --- 5b. spatial / temporal clustering ---------------------------------------
-# Are version-unique nodes scattered, or do they sit on particular rivers,
-# reaches, or overpasses?
-table7_river <- why_all %>%
-  count(set, reason, river) %>%
-  pivot_wider(names_from = reason, values_from = n, values_fill = 0L) %>%
-  arrange(set, river)
-print(table7_river, n = Inf)
-
 table7_reach <- why_all %>%
-  mutate(reach_id_v17b = reach_id_from_node(node_id)) %>%
-  filter(reason == "failed_qc") %>%
-  count(set, river, reach_id_v17b, sort = TRUE)
-print(table7_reach, n = Inf)
-
-table7_overpass <- qc_rows %>%
-  count(set, looked_in, cycle_id, pass_id, first_fail) %>%
-  arrange(set, cycle_id, pass_id, desc(n))
-print(table7_overpass, n = Inf)
+  filter(reason %in% c("failed_qc", "passed_qc_no_pairing")) %>%
+  count(obs_bucket, reason, river, reach_id_v17b, sort = TRUE)
+print(table7_reach %>% slice_head(n = 30), n = Inf)
 
 
 # =============================================================================
-# 6. ADJACENCY TEST
+# 6. ADJACENCY TEST, PER OVERPASS
 # =============================================================================
 # WHAT THIS IS FOR
 # -----------------------------------------------------------------------------
-# Section 3 found that ~90% of version-unique nodes fall in
-# `passed_qc_no_insitu_match`: the other version observed the node, the data
-# passed every quality filter, and it still never produced a residual. The
-# leading explanation is NOT a SWOT processing difference at all.
+# `passed_qc_no_pairing` means SWOT had good data at that node on that pass in
+# both versions, and only the in situ pairing differs. The leading explanation is
+# that SWORD renumbering moved the IN SITU assignment to a neighbouring node: the
+# PT and GNSS node assignments were made against v16 for the C0 run and v17b for
+# the D0 run.
 #
-# The PT and GNSS node assignments were made against SWORD v16 for the C0 run
-# and against SWORD v17b for the D0 run. Wherever SWORD renumbered or reshaped
-# nodes between versions, the IN SITU observation moves to a neighbouring node
-# even though SWOT observed both nodes perfectly well in both versions. The
-# node then looks "unique" to whichever version still has the in situ pairing.
+# If so, then WITHIN A SINGLE OVERPASS a C0-only observation should sit next to a
+# D0-only observation, because the in situ point moved from one node to the
+# other on that pass. Testing per overpass is the point -- a node-level test that
+# pools all passes blurs exactly the structure being looked for.
 #
-# If that is what is happening, version-unique nodes are not scattered at
-# random: a C0-only node should sit next to a D0-only node, because the in situ
-# observation moved from one to the other. If instead uniqueness reflects
-# something real about SWOT's ability to see those nodes, the two classes have
-# no reason to be adjacent.
+# THE NULL. With hundreds of unique observations spread along a river, plenty
+# will be neighbours by chance. Labels are therefore shuffled WITHIN each
+# river x cycle x pass stratum, preserving how many of each label that overpass
+# carries and where its nodes are, and the observed statistics are placed in that
+# distribution. Nodes paired in both versions act as a control: they have no
+# reason to show any affinity for D0-only nodes.
 #
-# HOW IT IS TESTED
+# TWO-SIDED, and the side is reported. An earlier version tested only the
+# direction the hypothesis predicts, so a result pointing the OTHER way came back
+# at p ~ 1 and was labelled "consistent with chance" when every statistic in fact
+# sat outside the null interval. Statistics below the null on adjacency, or above
+# it on distance, mean the classes are SEGREGATED, not interleaved.
 # -----------------------------------------------------------------------------
-# Nodes are ordered along each river by p_dist_out (distance to outlet), which
-# is monotonic downstream and, unlike node-number arithmetic, does not break at
-# reach boundaries. For every C0-only node the distance to the nearest D0-only
-# node is measured, in node positions and in metres, and vice versa.
-#
-# THE NULL MATTERS. With 173 C0-only and 241 D0-only nodes in a domain of a few
-# thousand, plenty of them will be neighbours by chance, so a raw adjacency
-# count proves nothing on its own. The observed statistics are therefore
-# compared against a permutation null: the inclusion labels are shuffled among
-# the nodes WITHIN each river (preserving how many of each label a river has,
-# and the spatial layout of the nodes themselves), the statistic is recomputed,
-# and the observed value is placed in that distribution.
-#
-# READING THE RESULT
-#   observed adjacency much higher than null  -> uniqueness is a SWORD
-#                                                reassignment artefact, and the
-#                                                "more data in D0" claim is
-#                                                largely bookkeeping
-#   observed indistinguishable from null      -> uniqueness is spatially real
-#                                                and something else explains it
-#
-# This tests a spatial signature, not the mechanism itself. A positive result is
-# strong circumstantial evidence, not proof; the direct confirmation is to take
-# a handful of the pairs this produces and check in the PT/GNSS node files
-# whether the same physical instrument reading is assigned to the C0-only node
-# under v16 and the D0-only node under v17b.
-# -----------------------------------------------------------------------------
-
-ADJ_N_PERM     <- 999L   # permutation replicates
-ADJ_IMMEDIATE  <- 1L     # "adjacent" means within this many node positions
-ADJ_SEED       <- 20260831L
 
 # --- 6a. a v17b spatial frame -------------------------------------------------
-# p_dist_out comes from the D0 timeseries because that file is already in v17b
-# node space. A node observed on several overpasses has one prior distance, so
-# any row will do; the median guards against a stray value.
 node_positions <- raw_D0 %>%
   filter(!is.na(p_dist_out)) %>%
-  summarise(p_dist_out = median(p_dist_out, na.rm = TRUE), .by = id_harmonised) %>%
-  rename(node_id = id_harmonised)
+  summarise(p_dist_out = median(p_dist_out, na.rm = TRUE), .by = id_harmonised)
 
-adj_nodes <- inclusion %>%
-  select(node_id, version_inclusion) %>%
-  left_join(node_positions, by = "node_id") %>%
-  mutate(river = label_river(reach_id_from_node(node_id)),
-         reach_id_v17b = reach_id_from_node(node_id),
-         status = case_when(
-           version_inclusion == INCL_C_ONLY      ~ "C0_only",
-           version_inclusion == INCL_D_ONLY      ~ "D0_only",
-           version_inclusion == INCL_BOTH        ~ "both",
-           version_inclusion == INCL_DOMAIN_ONLY ~ "domain_only"))
+# --- 6b. give every observation an overpass ----------------------------------
+# GNSS already carries cycle/pass. A PT observation is assigned the overpass from
+# its OWN version's timeseries (not the other version's, which would be circular)
+# using the same +-7.5 min window.
+own_raw <- list(raw_C0, raw_D0) %>% set_names(c(VERSION_C, VERSION_D))
 
-n_no_pos   <- sum(is.na(adj_nodes$p_dist_out))
-n_no_river <- sum(is.na(adj_nodes$river))
-message(sprintf("[adjacency] %d node(s) have no p_dist_out in the D0 timeseries and %d have no river label; both are excluded from the test",
-                n_no_pos, n_no_river))
-if (n_no_pos > 0) {
-  adj_nodes %>% filter(is.na(p_dist_out)) %>% count(status) %>% print()
+overpass_of_pt <- function(obs) {
+  if (!nrow(obs)) return(obs %>% mutate(cycle_id = NA_real_, pass_id = NA_real_))
+  map_dfr(names(own_raw), function(src) {
+    o <- obs %>% filter(source == src)
+    if (!nrow(o)) return(NULL)
+    o %>%
+      select(-any_of(c("cycle_id", "pass_id"))) %>%
+      inner_join(own_raw[[src]] %>% select(id_harmonised, time_utc, cycle_id, pass_id),
+                 by = "id_harmonised", relationship = "many-to-many") %>%
+      filter(abs(as.numeric(difftime(pt_time_UTC, time_utc, units = "mins")))
+             <= PT_MATCH_MIN) %>%
+      slice_min(abs(as.numeric(difftime(pt_time_UTC, time_utc, units = "mins"))),
+                n = 1, by = obs_key, with_ties = FALSE) %>%
+      select(-time_utc)
+  })
 }
 
-adj_nodes <- adj_nodes %>%
-  filter(!is.na(p_dist_out), !is.na(river)) %>%
-  arrange(river, p_dist_out) %>%
-  mutate(rank = row_number(), .by = river)
+obs_with_overpass <- bind_rows(
+  observations %>% filter(insitu_type == "GNSS"),
+  overpass_of_pt(observations %>% filter(insitu_type == "PT"))
+) %>%
+  filter(!is.na(cycle_id), !is.na(pass_id), !is.na(river)) %>%
+  left_join(node_positions, by = "id_harmonised") %>%
+  filter(!is.na(p_dist_out))
 
-message("[adjacency] nodes entering the test:")
-print(count(adj_nodes, river, status))
+message(sprintf("[adjacency] %d of %d observations have both an overpass and a position",
+                nrow(obs_with_overpass), nrow(observations)))
 
-# --- 6b. nearest-neighbour distance, vectorised -------------------------------
-# For each value in `x`, the distance to the closest value in `targets`. The
-# status classes are disjoint, so a node can never match itself.
+# One label per (node, overpass). If a node carries several observations at one
+# overpass with different buckets, the unique label wins -- that is the event
+# being tested.
+adj_nodes <- obs_with_overpass %>%
+  summarise(status = case_when(
+              any(obs_bucket == "C0_only") & any(obs_bucket == "D0_only") ~ "both_unique",
+              any(obs_bucket == "C0_only") ~ "C0_only",
+              any(obs_bucket == "D0_only") ~ "D0_only",
+              TRUE                          ~ "same"),
+            p_dist_out = first(p_dist_out),
+            reach_id_v17b = first(reach_id_v17b),
+            .by = c(river, cycle_id, pass_id, id_harmonised)) %>%
+  mutate(stratum = paste(river, cycle_id, pass_id, sep = "|")) %>%
+  arrange(stratum, p_dist_out) %>%
+  mutate(rank = row_number(), .by = stratum)
+
+message("[adjacency] node-overpass events entering the test:")
+print(count(adj_nodes, status))
+message(sprintf("[adjacency] %d strata (river x cycle x pass)", n_distinct(adj_nodes$stratum)))
+
+# --- 6c. statistics -----------------------------------------------------------
 nearest_dist <- function(x, targets) {
   if (!length(targets)) return(rep(NA_real_, length(x)))
   t   <- sort(targets)
-  idx <- findInterval(x, t)                      # how many targets are <= x
-  left  <- ifelse(idx >= 1L,        x - t[pmax(idx, 1L)],              Inf)
-  right <- ifelse(idx < length(t),  t[pmin(idx + 1L, length(t))] - x,  Inf)
+  idx <- findInterval(x, t)
+  left  <- ifelse(idx >= 1L,       x - t[pmax(idx, 1L)],             Inf)
+  right <- ifelse(idx < length(t), t[pmin(idx + 1L, length(t))] - x, Inf)
   pmin(left, right)
 }
 
-# Statistics computed on one labelling of the nodes. Returned as a named vector
-# so the observed run and the permutation runs are guaranteed to be comparable.
 adj_stats <- function(df, status_col = "status") {
   s <- df[[status_col]]
-  out <- map_dfr(split(seq_along(s), df$river), function(ix) {
-    r  <- df$rank[ix]
-    tibble(status = s[ix],
-           rank   = r,
+  out <- map_dfr(split(seq_along(s), df$stratum), function(ix) {
+    r <- df$rank[ix]
+    tibble(status = s[ix], rank = r,
            d_to_C = nearest_dist(r, r[s[ix] == "C0_only"]),
            d_to_D = nearest_dist(r, r[s[ix] == "D0_only"]))
   })
 
   c_only <- out %>% filter(status == "C0_only")
   d_only <- out %>% filter(status == "D0_only")
-  both   <- out %>% filter(status == "both")
+  same   <- out %>% filter(status == "same")
 
-  c(
-    # how often the opposite class is an immediate neighbour
-    C_adj_D    = mean(c_only$d_to_D <= ADJ_IMMEDIATE, na.rm = TRUE),
-    D_adj_C    = mean(d_only$d_to_C <= ADJ_IMMEDIATE, na.rm = TRUE),
-    # how far away it is, typically
-    C_med_dist = median(c_only$d_to_D, na.rm = TRUE),
-    D_med_dist = median(d_only$d_to_C, na.rm = TRUE),
-    # control: nodes usable in BOTH versions should show no such affinity
-    both_adj_D = mean(both$d_to_D <= ADJ_IMMEDIATE, na.rm = TRUE)
-  )
+  same_runs <- map_dfr(split(seq_along(s), df$stratum), function(ix) {
+    o <- order(df$rank[ix]); r <- rle(s[ix][o])
+    tibble(status = r$values, len = r$lengths)
+  })
+  mean_run <- function(st) {
+    v <- same_runs$len[same_runs$status == st]
+    if (!length(v)) NA_real_ else mean(v)
+  }
+
+  c(C_adj_D      = mean(c_only$d_to_D <= ADJ_IMMEDIATE, na.rm = TRUE),
+    D_adj_C      = mean(d_only$d_to_C <= ADJ_IMMEDIATE, na.rm = TRUE),
+    C_med_dist   = median(c_only$d_to_D, na.rm = TRUE),
+    D_med_dist   = median(d_only$d_to_C, na.rm = TRUE),
+    same_adj_D   = mean(same$d_to_D <= ADJ_IMMEDIATE, na.rm = TRUE),
+    C_run_len    = mean_run("C0_only"),
+    D_run_len    = mean_run("D0_only"),
+    same_run_len = mean_run("same"))
 }
 
 observed_stats <- adj_stats(adj_nodes)
 
-# --- 6c. permutation null -----------------------------------------------------
 set.seed(ADJ_SEED)
 null_draws <- map_dfr(seq_len(ADJ_N_PERM), function(i) {
-  shuffled <- adj_nodes %>% mutate(status = sample(status), .by = river)
-  as_tibble_row(adj_stats(shuffled))
+  as_tibble_row(adj_stats(adj_nodes %>% mutate(status = sample(status), .by = stratum)))
 })
 
 # NB: the vector is `observed_stats`, not `observed` -- the tibble has a column
-# called `observed`, and inside mutate() a column always shadows an object of
-# the same name in the calling environment.
+# called `observed`, and inside mutate() a column shadows an object of the same
+# name in the calling environment.
 table8_adjacency <- tibble(
   statistic = names(observed_stats),
   observed  = round(as.numeric(observed_stats), 4)
 ) %>%
-  left_join(
-    null_draws %>%
-      pivot_longer(everything(), names_to = "statistic", values_to = "value") %>%
-      summarise(null_mean = round(mean(value, na.rm = TRUE), 4),
-                null_lo   = round(quantile(value, 0.025, na.rm = TRUE), 4),
-                null_hi   = round(quantile(value, 0.975, na.rm = TRUE), 4),
-                .by = statistic),
-    by = "statistic") %>%
+  left_join(null_draws %>%
+              pivot_longer(everything(), names_to = "statistic", values_to = "value") %>%
+              summarise(null_mean = round(mean(value, na.rm = TRUE), 4),
+                        null_lo = round(quantile(value, 0.025, na.rm = TRUE), 4),
+                        null_hi = round(quantile(value, 0.975, na.rm = TRUE), 4),
+                        .by = statistic),
+            by = "statistic") %>%
   mutate(
-    # one-sided empirical p: adjacency statistics are extreme when HIGH,
-    # distance statistics when LOW
-    direction = if_else(str_detect(statistic, "adj"), "greater", "less"),
-    p_value = map2_dbl(statistic, direction, function(st, dir) {
-      nd <- null_draws[[st]]
-      if (dir == "greater") (1 + sum(nd >= observed_stats[[st]], na.rm = TRUE)) / (ADJ_N_PERM + 1)
-      else                  (1 + sum(nd <= observed_stats[[st]], na.rm = TRUE)) / (ADJ_N_PERM + 1)
-    }),
-    p_value = round(p_value, 4),
-    verdict = case_when(
-      p_value <= 0.01 ~ "far from chance",
-      p_value <= 0.05 ~ "beyond chance",
-      TRUE            ~ "consistent with chance")
-  )
+    p_greater = map_dbl(statistic, ~ (1 + sum(null_draws[[.x]] >= observed_stats[[.x]], na.rm = TRUE)) / (ADJ_N_PERM + 1)),
+    p_less    = map_dbl(statistic, ~ (1 + sum(null_draws[[.x]] <= observed_stats[[.x]], na.rm = TRUE)) / (ADJ_N_PERM + 1)),
+    p_two_sided = round(pmin(1, 2 * pmin(p_greater, p_less)), 4),
+    side = case_when(observed > null_hi ~ "above null",
+                     observed < null_lo ~ "below null",
+                     TRUE               ~ "inside null"),
+    verdict = case_when(p_two_sided > 0.05    ~ "consistent with chance",
+                        side == "inside null" ~ "borderline",
+                        TRUE ~ paste0(side, ", p = ", p_two_sided))
+  ) %>%
+  select(statistic, observed, null_mean, null_lo, null_hi, side, p_two_sided, verdict)
 
-message("[adjacency] observed vs permutation null (", ADJ_N_PERM, " replicates):")
-message("  C_adj_D    fraction of C0-only nodes with a D0-only node within ",
-        ADJ_IMMEDIATE, " node position(s)")
-message("  D_adj_C    the same, with the roles reversed")
-message("  C_med_dist median node positions from a C0-only node to the nearest D0-only node")
-message("  D_med_dist the same, reversed")
-message("  both_adj_D CONTROL -- nodes usable in both versions should sit at the null")
+message("[adjacency] observed vs permutation null (", ADJ_N_PERM, " replicates), per overpass:")
+message("  C_adj_D / D_adj_C   fraction with an opposite-class node within ",
+        ADJ_IMMEDIATE, " position(s) ON THE SAME OVERPASS")
+message("  C_med_dist / D_med_dist   typical separation, in node positions")
+message("  same_adj_D          CONTROL -- observations paired in both versions")
+message("  *_run_len           mean length of an unbroken run of that class")
+message("  ADJACENCY ABOVE the null = interleaved = SWORD reassignment.")
+message("  ADJACENCY BELOW the null = segregated = something else.")
 print(table8_adjacency, n = Inf, width = Inf)
 
-# --- 6d. the pairs themselves, for inspection in QGIS -------------------------
-# Every version-unique node with its nearest opposite-class node, so the claim
-# can be checked one pair at a time rather than taken on the p-value.
-pos_lookup <- adj_nodes %>% select(node_id, river, rank, p_dist_out, reach_id_v17b, status)
-
+# --- 6d. the pairs themselves -------------------------------------------------
 nearest_partner <- function(from_status, to_status) {
-  map_dfr(split(pos_lookup, pos_lookup$river), function(g) {
+  map_dfr(split(adj_nodes, adj_nodes$stratum), function(g) {
     a <- g %>% filter(status == from_status)
     b <- g %>% filter(status == to_status)
     if (!nrow(a) || !nrow(b)) return(NULL)
     j <- vapply(a$rank, function(r) which.min(abs(b$rank - r)), integer(1))
-    tibble(
-      river            = a$river,
-      node_id          = a$node_id,
-      node_status      = from_status,
-      reach_id_v17b    = a$reach_id_v17b,
-      partner_node_id  = b$node_id[j],
-      partner_status   = to_status,
-      partner_reach    = b$reach_id_v17b[j],
-      same_reach       = a$reach_id_v17b == b$reach_id_v17b[j],
-      sep_nodes        = abs(b$rank[j] - a$rank),
-      sep_m            = round(abs(b$p_dist_out[j] - a$p_dist_out), 1)
-    )
+    tibble(stratum = a$stratum, river = a$river,
+           cycle_id = a$cycle_id, pass_id = a$pass_id,
+           node_id = a$id_harmonised, node_status = from_status,
+           reach_id_v17b = a$reach_id_v17b,
+           partner_node_id = b$id_harmonised[j], partner_status = to_status,
+           same_reach = a$reach_id_v17b == b$reach_id_v17b[j],
+           sep_nodes = abs(b$rank[j] - a$rank),
+           sep_m = round(abs(b$p_dist_out[j] - a$p_dist_out), 1))
   })
 }
 
-table8_pairs <- bind_rows(
-  nearest_partner("C0_only", "D0_only"),
-  nearest_partner("D0_only", "C0_only")
-) %>% arrange(node_status, sep_nodes, river)
+table8_pairs <- bind_rows(nearest_partner("C0_only", "D0_only"),
+                          nearest_partner("D0_only", "C0_only")) %>%
+  arrange(node_status, sep_nodes, river)
 
-message("[adjacency] separation between a version-unique node and its nearest opposite-class node:")
 table8_pair_summary <- table8_pairs %>%
   summarise(n = n(),
             immediate_neighbour = sum(sep_nodes <= ADJ_IMMEDIATE),
@@ -888,10 +952,37 @@ table8_pair_summary <- table8_pairs %>%
             median_sep_nodes = median(sep_nodes),
             median_sep_m = median(sep_m),
             .by = c(node_status, river))
+message("[adjacency] separation to the nearest opposite-class node, same overpass:")
 print(table8_pair_summary, n = Inf)
 
-message("[adjacency] closest 20 pairs -- these are the ones to check in the PT/GNSS node files:")
+message("[adjacency] closest 20 pairs -- check these in the PT/GNSS node files:")
 print(table8_pairs %>% slice_head(n = 20), n = Inf, width = Inf)
+
+# --- 6e. within-reach node-number offset --------------------------------------
+# If SWORD renumbering shifted the in situ assignment by a CONSTANT offset rather
+# than by one node, the two classes occupy disjoint blocks of node numbers in the
+# same reach. Disjoint ranges with a repeatable median gap point at an offset;
+# overlapping ranges do not.
+table8_offsets <- adj_nodes %>%
+  filter(status %in% c("C0_only", "D0_only")) %>%
+  mutate(node_no = node_number(id_harmonised)) %>%
+  summarise(n = n(), lo = min(node_no), hi = max(node_no), med = median(node_no),
+            .by = c(river, reach_id_v17b, status)) %>%
+  pivot_wider(names_from = status, values_from = c(n, lo, hi, med)) %>%
+  filter(!is.na(n_C0_only), !is.na(n_D0_only)) %>%
+  mutate(median_offset  = med_D0_only - med_C0_only,
+         ranges_overlap = !(hi_C0_only < lo_D0_only | hi_D0_only < lo_C0_only)) %>%
+  arrange(river, reach_id_v17b)
+
+message("[adjacency] reaches holding BOTH classes -- node-number blocks and offset:")
+print(table8_offsets, n = Inf, width = Inf)
+if (nrow(table8_offsets)) {
+  message(sprintf("[adjacency] %d of %d such reaches have DISJOINT node-number ranges; median offset %s (IQR %s to %s)",
+                  sum(!table8_offsets$ranges_overlap), nrow(table8_offsets),
+                  median(table8_offsets$median_offset),
+                  quantile(table8_offsets$median_offset, 0.25),
+                  quantile(table8_offsets$median_offset, 0.75)))
+}
 
 
 # =============================================================================
@@ -900,89 +991,80 @@ print(table8_pairs %>% slice_head(n = 20), n = Inf, width = Inf)
 
 group_colours <- c(failed_qc = "#D55E00", both_versions = "#999999")
 
-# --- Figure A: node_q_b bit prevalence, failed_qc vs both ---------------------
-figA_data <- bit_prevalence %>%
-  mutate(flag = fct_reorder(flag, bit))
-
-ggplot(figA_data, aes(x = flag, y = prevalence, fill = group)) +
-  geom_col(position = position_dodge(width = 0.8), width = 0.75) +
-  facet_wrap(~ paste0(set, " (looked up in ", looked_in, ")"), ncol = 1) +
-  scale_fill_manual(values = group_colours) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(x = "node_q_b bit", y = "Rows with bit set",
-       fill = NULL,
-       title = "Quality bits: version-unique nodes that failed QC vs nodes usable in both") +
-  theme_minimal(base_size = 18) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+# --- Figure A: decomposition of version-unique observations -------------------
+ggplot(table3_reasons, aes(x = reason, y = n, fill = insitu_type)) +
+  geom_col(position = position_dodge(width = 0.85), width = 0.8) +
+  geom_text(aes(label = n), position = position_dodge(width = 0.85),
+            vjust = -0.3, size = 4.5) +
+  facet_wrap(~ obs_bucket, ncol = 1, scales = "free_y") +
+  scale_fill_manual(values = insitu_colours) +
+  labs(x = NULL, y = "Version-unique observations", fill = NULL,
+       title = "Why each version-unique observation is unique") +
+  theme_minimal(base_size = 17) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.9),
         legend.position = "top")
-# export: 11 x 8 in
+# export: 10 x 8 in
 
-# --- Figure B: the contrast, sorted ------------------------------------------
-figB_data <- table5_bits %>%
-  filter(!is.na(diff)) %>%
+# --- Figure B: node_q_b bit contrast ------------------------------------------
+figB_data <- table5_bits %>% filter(!is.na(diff)) %>%
   mutate(flag = fct_reorder(flag, diff))
 
 ggplot(figB_data, aes(x = diff, y = flag, fill = diff > 0)) +
   geom_col(width = 0.7) +
   geom_vline(xintercept = 0, colour = "grey40") +
-  facet_wrap(~ set, ncol = 2, scales = "free_y") +
+  facet_wrap(~ insitu_type, ncol = 2, scales = "free_y") +
   scale_fill_manual(values = c(`TRUE` = "#D55E00", `FALSE` = "#0072B2"), guide = "none") +
-  labs(x = "Prevalence in failed_qc minus prevalence in both-version nodes",
-       y = NULL,
-       title = "Which quality bits separate the version-unique nodes") +
-  theme_minimal(base_size = 18)
+  labs(x = "Prevalence in failed_qc minus prevalence in matched control",
+       y = NULL, title = "Which quality bits separate the version-unique observations") +
+  theme_minimal(base_size = 17)
 # export: 11 x 7 in
 
 # --- Figure C: node_q class mix ----------------------------------------------
 ggplot(table5_node_q, aes(x = factor(node_q), y = pct, fill = group)) +
   geom_col(position = position_dodge(width = 0.8), width = 0.75) +
-  facet_wrap(~ set, ncol = 2) +
+  facet_wrap(~ insitu_type, ncol = 2) +
   scale_fill_manual(values = group_colours) +
   labs(x = "node_q  (0 good, 1 suspect, 2 degraded, 3 bad)",
        y = "Percent of rows", fill = NULL) +
-  theme_minimal(base_size = 18) +
+  theme_minimal(base_size = 17) +
   theme(legend.position = "top")
 # export: 9 x 5 in
 
-# --- Figure D: attribute distributions ---------------------------------------
+# --- Figure D: quality-driver attributes --------------------------------------
 figD_data <- cmp_rows %>%
   filter(!is_fill) %>%
-  select(set, group, all_of(intersect(ATTR_QC, attr_cols))) %>%
-  pivot_longer(-c(set, group), names_to = "attribute", values_to = "value") %>%
+  select(insitu_type, group, all_of(intersect(ATTR_QC_COLS, attr_cols))) %>%
+  pivot_longer(-c(insitu_type, group), names_to = "attribute", values_to = "value") %>%
   filter(!is.na(value))
 
 ggplot(figD_data, aes(x = group, y = value, fill = group)) +
   geom_violin(alpha = 0.8, colour = NA) +
   geom_boxplot(width = 0.18, fill = "white", outlier.size = 1) +
-  facet_grid(attribute ~ set, scales = "free_y") +
+  facet_grid(attribute ~ insitu_type, scales = "free_y") +
   scale_fill_manual(values = group_colours, guide = "none") +
-  labs(x = NULL, y = NULL,
-       title = "Quality-driver attributes, non-fill rows") +
-  theme_minimal(base_size = 16)
+  labs(x = NULL, y = NULL, title = "Quality-driver attributes, non-fill rows") +
+  theme_minimal(base_size = 15)
 # export: 9 x 12 in
 
-# --- Figure E: where the version-unique nodes are ----------------------------
+# --- Figure E: version-unique observations by river ---------------------------
 figE_data <- why_all %>%
   filter(!is.na(river)) %>%
-  count(set, reason, river) %>%
+  count(obs_bucket, reason, river) %>%
   mutate(river = factor(river, levels = river_levels))
 
 ggplot(figE_data, aes(x = river, y = n, fill = reason)) +
   geom_col(width = 0.8) +
-  facet_wrap(~ set, ncol = 2) +
+  facet_wrap(~ obs_bucket, ncol = 2) +
   scale_x_discrete(breaks = river_levels, labels = river_labels) +
-  labs(x = "River", y = "Version-unique nodes", fill = NULL) +
-  theme_minimal(base_size = 18) +
+  labs(x = "River", y = "Version-unique observations", fill = NULL) +
+  theme_minimal(base_size = 17) +
   theme(axis.text.x = element_text(angle = 25, hjust = 0.9),
         legend.position = "top")
 # export: 11 x 6 in
 
-
-# --- Figure F: observed adjacency against the permutation null ----------------
+# --- Figure F: adjacency against the null -------------------------------------
 figF_data <- null_draws %>%
-  select(C_adj_D, D_adj_C, both_adj_D) %>%
   pivot_longer(everything(), names_to = "statistic", values_to = "value")
-
 figF_obs <- table8_adjacency %>% filter(statistic %in% unique(figF_data$statistic))
 
 ggplot(figF_data, aes(x = value)) +
@@ -990,48 +1072,23 @@ ggplot(figF_data, aes(x = value)) +
   geom_vline(data = figF_obs, aes(xintercept = observed),
              colour = "#D55E00", linewidth = 1.2) +
   geom_text(data = figF_obs,
-            aes(x = observed, y = Inf, label = paste0("observed = ", observed,
-                                                      "\np = ", p_value)),
-            hjust = -0.05, vjust = 1.4, size = 5, colour = "#D55E00") +
-  facet_wrap(~ statistic, ncol = 1, scales = "free") +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(x = "Fraction with an opposite-class node as immediate neighbour",
-       y = "Permutation replicates",
-       title = "Are version-unique nodes adjacent more often than chance?",
-       subtitle = "Grey = label-shuffled null; both_adj_D is the control and should sit inside it") +
-  theme_minimal(base_size = 17)
-# export: 9 x 9 in
+            aes(x = observed, y = Inf,
+                label = paste0("obs = ", observed, "\n", side, "\np = ", p_two_sided)),
+            hjust = -0.05, vjust = 1.4, size = 4.2, colour = "#D55E00") +
+  facet_wrap(~ statistic, ncol = 2, scales = "free") +
+  labs(x = "Statistic value", y = "Permutation replicates",
+       title = "Per-overpass adjacency against a label-shuffled null",
+       subtitle = "Orange = observed. same_adj_D and same_run_len are controls.") +
+  theme_minimal(base_size = 15)
+# export: 11 x 10 in
 
-# --- Figure G: the nodes laid out along each river ----------------------------
-# The persuasive picture. If uniqueness is a reassignment artefact, C0-only and
-# D0-only points interleave in tight pairs rather than forming separate runs.
-status_colours <- c(both = "#CCCCCC", domain_only = "#8C8C8C",
-                    C0_only = version_colours[[VERSION_C]],
-                    D0_only = version_colours[[VERSION_D]])
-
-figG_data <- adj_nodes %>%
-  mutate(river  = factor(river, levels = river_levels),
-         status = factor(status, levels = c("both", "domain_only", "C0_only", "D0_only")))
-
-ggplot(figG_data, aes(x = p_dist_out / 1000, y = status, colour = status)) +
-  geom_point(size = 1.6, alpha = 0.85) +
-  facet_wrap(~ river, ncol = 1, scales = "free_x",
-             labeller = labeller(river = setNames(river_labels, river_levels))) +
-  scale_colour_manual(values = status_colours, guide = "none") +
-  labs(x = "Distance to river outlet (km)", y = NULL,
-       title = "Where the version-unique nodes sit along each river") +
-  theme_minimal(base_size = 15) +
-  theme(panel.grid.minor = element_blank())
-# export: 12 x 14 in
-
-# --- Figure H: separation to the nearest opposite-class node ------------------
+# --- Figure G: separation to the nearest opposite-class node ------------------
 ggplot(table8_pairs, aes(x = sep_nodes, fill = node_status)) +
   geom_histogram(binwidth = 1, position = position_dodge(preserve = "single")) +
   scale_fill_manual(values = c(C0_only = version_colours[[VERSION_C]],
                                D0_only = version_colours[[VERSION_D]])) +
-  labs(x = "Node positions to the nearest opposite-class node",
-       y = "Nodes", fill = NULL,
-       title = "How close is each version-unique node to one unique to the other version?") +
+  labs(x = "Node positions to the nearest opposite-class node, same overpass",
+       y = "Node-overpass events", fill = NULL) +
   coord_cartesian(xlim = c(0, 30)) +
   theme_minimal(base_size = 17) +
   theme(legend.position = "top")
@@ -1044,8 +1101,10 @@ ggplot(table8_pairs, aes(x = sep_nodes, fill = node_status)) +
 
 dir.create(OUT, showWarnings = FALSE, recursive = TRUE)
 
-write_csv(why_all,               file.path(OUT, "version_unique_node_reasons.csv"))
+write_csv(tableS6_rebuilt,       file.path(OUT, "tableS6_node_rebuilt.csv"))
+write_csv(why_all,               file.path(OUT, "version_unique_obs_reasons.csv"))
 write_csv(table3_reasons,        file.path(OUT, "reason_counts.csv"))
+write_csv(table3_reason_nodes,   file.path(OUT, "reason_counts_with_nodes.csv"))
 write_csv(table3_reasons_river,  file.path(OUT, "reason_counts_by_river.csv"))
 write_csv(table4_binding,        file.path(OUT, "failed_qc_binding_filter.csv"))
 write_csv(table4_anyfail,        file.path(OUT, "failed_qc_filter_failures.csv"))
@@ -1054,13 +1113,12 @@ write_csv(table5_qb_values,      file.path(OUT, "node_q_b_top_values.csv"))
 write_csv(table5_node_q,         file.path(OUT, "node_q_class_mix.csv"))
 write_csv(table6_attrs,          file.path(OUT, "attribute_comparison.csv"))
 write_csv(table6_fill,           file.path(OUT, "fill_fraction.csv"))
-write_csv(table7_river,          file.path(OUT, "unique_nodes_by_river.csv"))
-write_csv(table7_reach,          file.path(OUT, "failed_qc_by_reach.csv"))
-write_csv(table7_overpass,       file.path(OUT, "failed_qc_by_overpass.csv"))
+write_csv(table7_reach,          file.path(OUT, "unique_obs_by_reach.csv"))
 write_csv(table8_adjacency,      file.path(OUT, "adjacency_test.csv"))
 write_csv(table8_pairs,          file.path(OUT, "adjacency_pairs.csv"))
 write_csv(table8_pair_summary,   file.path(OUT, "adjacency_pair_summary.csv"))
-write_csv(adj_nodes,             file.path(OUT, "adjacency_node_positions.csv"))
+write_csv(table8_offsets,        file.path(OUT, "adjacency_reach_offsets.csv"))
+write_csv(adj_nodes,             file.path(OUT, "adjacency_node_overpass_events.csv"))
 
 message("[4.6] wrote ", length(list.files(OUT, pattern = "\\.csv$")),
         " table(s) to ", OUT)
