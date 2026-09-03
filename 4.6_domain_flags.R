@@ -9,8 +9,7 @@
 #   - Version D / PGD0 (SWORD v17b, RiverSP)
 #
 # -----------------------------------------------------------------------------
-# "Unique to C0" does not mean "failed D0's quality filtering". There are five
-# ways an observation can end up version-unique:
+# There are five ways an observation can end up version-unique:
 #
 #   no_sword_counterpart    the node does not exist in the other SWORD version
 #   node_absent             the node exists but the other version's timeseries
@@ -23,41 +22,15 @@
 #                           filter, so the SWOT side was fine and the pairing
 #                           failed on the IN SITU side
 #
-# The last category is the interesting one at observation level: it means SWOT
-# had good data at that node and pass in both versions, and only the in situ
-# assignment differs. Section 6 tests whether that is SWORD renumbering moving
-# the in situ point to a neighboring node.
-#
 # -----------------------------------------------------------------------------
 # THE QUALITY CASCADE
 # -----------------------------------------------------------------------------
-# Reproduced from 1.2_PT_node_wse_diff.R and 2.1_GNSS_node_wse_diff.R (identical
-# in both), plus the tighter dark_frac used from 4.1 onwards:
-#
 #   distinct(node_id, time, wse)   drop repeated rows
 #   node_q < 2                     0=good, 1=suspect, 2=degraded, 3=bad
 #   abs(xtrk_dist) >= 10 km        inner swath edge
 #   abs(xtrk_dist) <= 60 km        outer swath edge
 #   dark_frac <= 0.80              matching stage (1.2 / 2.1)
 #   dark_frac <  0.50              comparison stage (4.1 / 4.2 / 4.4)
-#
-#
-# -----------------------------------------------------------------------------
-# LOCATING AN OBSERVATION IN THE OTHER VERSION'S TIMESERIES
-# -----------------------------------------------------------------------------
-#   GNSS  the 4.1 key already carries cycle_id and pass_id, so the lookup is a
-#         direct join on (node, cycle, pass)
-#   PT    the node-level PT file carries pt_serial and pt_time_UTC and no
-#         cycle/pass, so the overpass is found by time, reusing 1.2's +-7.5 min
-#         window. "The overpass exists but failed QC" therefore means exactly
-#         what it means in 1.2
-#
-# Contains:
-#   - Tables: Table S6 rebuild and check, observation-level decomposition,
-#             node_q_b bit prevalence, attribute comparison, per-overpass
-#             adjacency test and the node pairs behind it
-#   - Figures: bit prevalence, node_q class mix, attribute distributions,
-#              decomposition by river, adjacency against a permutation null
 #
 # =============================================================================
 
@@ -94,7 +67,7 @@ PT_MATCH_MIN <- 7.5                  # minutes; 1.2's PT-to-overpass window
 TAI_EPOCH      <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
 TAI_UTC_OFFSET <- 37   # seconds
 
-# --- published Table S6, node half --------------------------------------------
+# --- Table S6 -----------------------------------------------------------------
 # The rebuild in section 1 must reproduce these exactly
 TABLE_S6_NODE <- tribble(
   ~insitu_type, ~version, ~bucket,    ~n,     ~n_unique,
@@ -170,8 +143,6 @@ REACH_Q_B_LABELS <- tribble(
   28L,  268435456,    "no_pixels"
 )
 
-# Transcription check: every documented decimal must equal 2^bit. This catches
-# a mistyped row in either table before any of it reaches a figure.
 walk2(list(NODE_Q_B_LABELS, REACH_Q_B_LABELS), c("node_q_b", "reach_q_b"),
       function(tbl, nm) {
         bad <- tbl %>% filter(decimal != 2^bit)
@@ -778,31 +749,3 @@ ggplot(figE_data, aes(x = river, y = n, fill = reason)) +
         legend.position = "top")
 # export: 11 x 6 in
 
-
-# =============================================================================
-# 8. EXPORT
-# =============================================================================
-
-dir.create(OUT, showWarnings = FALSE, recursive = TRUE)
-
-write_csv(tableS6_rebuilt,       file.path(OUT, "tableS6_node_rebuilt.csv"))
-write_csv(why_all,               file.path(OUT, "version_unique_obs_reasons.csv"))
-write_csv(table3_reasons,        file.path(OUT, "reason_counts.csv"))
-write_csv(table3_reason_nodes,   file.path(OUT, "reason_counts_with_nodes.csv"))
-write_csv(table3_reasons_river,  file.path(OUT, "reason_counts_by_river.csv"))
-write_csv(table4_binding,        file.path(OUT, "failed_qc_binding_filter.csv"))
-write_csv(table4_anyfail,        file.path(OUT, "failed_qc_filter_failures.csv"))
-write_csv(table5_bits,           file.path(OUT, "node_q_b_bit_prevalence.csv"))
-write_csv(table5_qb_values,      file.path(OUT, "node_q_b_top_values.csv"))
-write_csv(table5_node_q,         file.path(OUT, "node_q_class_mix.csv"))
-write_csv(table6_attrs,          file.path(OUT, "attribute_comparison.csv"))
-write_csv(table6_fill,           file.path(OUT, "fill_fraction.csv"))
-write_csv(table7_reach,          file.path(OUT, "unique_obs_by_reach.csv"))
-write_csv(table8_adjacency,      file.path(OUT, "adjacency_test.csv"))
-write_csv(table8_pairs,          file.path(OUT, "adjacency_pairs.csv"))
-write_csv(table8_pair_summary,   file.path(OUT, "adjacency_pair_summary.csv"))
-write_csv(table8_offsets,        file.path(OUT, "adjacency_reach_offsets.csv"))
-write_csv(adj_nodes,             file.path(OUT, "adjacency_node_overpass_events.csv"))
-
-message("[4.6] wrote ", length(list.files(OUT, pattern = "\\.csv$")),
-        " table(s) to ", OUT)
