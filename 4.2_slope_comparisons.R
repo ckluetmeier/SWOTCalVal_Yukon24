@@ -239,6 +239,19 @@ ggplot(fig6b_data, aes(x = river, y = abs(.data[[SLOPE_VALUE]]) * SCALE_SLOPE, f
   coord_cartesian(ylim = c(-0.5, 16))
 # export: 9.44 x 6.01 in
 
+# # Scatter: bias-corrected PT slope vs SWOT slope
+# ggplot(fig6b_data,
+#        aes(x = mean_reach_PT_slope_no_bias_m_m * 100000, y = slope_abs * 100000, color = factor(river))) +
+#   geom_point(size = 4) +
+#   scale_color_manual(values = river_palette) +
+#   geom_abline(linetype = "dashed", color = "gray") +
+#   xlab("PT slope (cm/km)") +
+#   ylab("SWOT slope (cm/km)") +
+#   labs(color = "River") +
+#   scale_x_continuous(labels = scales::comma) +
+#   scale_y_continuous(labels = scales::comma) +
+#   theme_minimal(base_size = 30)
+
 
 # =============================================================================
 # 5. DIAGNOSTICS — covariate scatter plots (D0)
