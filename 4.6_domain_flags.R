@@ -32,6 +32,8 @@
 #   dark_frac <= 0.80              matching stage (1.2 / 2.1)
 #   dark_frac <  0.50              comparison stage (4.1 / 4.2 / 4.4)
 #
+# Section 7 repeats the whole analysis at reach scale
+#
 # =============================================================================
 
 library(tidyverse)
@@ -45,6 +47,7 @@ source("/Users/camryn/Documents/UNC/_Tier1_sites/_data_management/YR2024_scripts
 
 WSE_BASE       <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/CalVal_dataframes/wse"
 SWOT_NODE_DIR  <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/node"
+SWOT_REACH_DIR <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats/SWOT/reach"
 TRANSLATOR_DIR <- "/Users/camryn/Desktop/SWORD_translation"
 
 RAW_C0 <- file.path(SWOT_NODE_DIR, "hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv")
@@ -67,8 +70,7 @@ PT_MATCH_MIN <- 7.5                  # minutes; 1.2's PT-to-overpass window
 TAI_EPOCH      <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
 TAI_UTC_OFFSET <- 37   # seconds
 
-# --- Table S6 -----------------------------------------------------------------
-# The rebuild in section 1 must reproduce these exactly
+# --- published Table S6, node half --------------------------------------------
 TABLE_S6_NODE <- tribble(
   ~insitu_type, ~version, ~bucket,    ~n,     ~n_unique,
   "PT",         "D0",     "same",      253L,   51L,
@@ -82,31 +84,58 @@ TABLE_S6_NODE <- tribble(
 )
 STOP_ON_TABLE_S6_MISMATCH <- TRUE   # set FALSE if Table S6 is knowingly stale
 
-# --- adjacency test -----------------------------------------------------------
-ADJ_N_PERM    <- 499L      # permutation replicates
-ADJ_IMMEDIATE <- 1L        # "adjacent" means within this many node positions
-ADJ_SEED      <- 20260831L
+# --- reach scale --------------------------------------------------------------
+#
+#   distinct(reach_id, time, wse)
+#   reach_q  < 2          (not node_q)
+#   abs(xtrk_dist) 10-60 km
+#   partial_f == 0        
+#   dark_frac <= 0.80
+#
+RAW_C0_REACH <- file.path(SWOT_REACH_DIR, "RiverSP_v16/RiverSP_domain_reach_timeseries_v16.csv")
+RAW_D0_REACH <- file.path(SWOT_REACH_DIR, "RiverSP_v17b/RiverSP_domain_reach_timeseries_PGD0_v17b.csv")
+
+REACH_Q_MAX  <- 2    # keep reach_q < 2
+PARTIAL_F_OK <- 0    # keep partial_f == 0
+
+# Reaches shorter than 9 km, excluded by 4.1 / 4.2. Character, to match the ids.
+SHORT_REACHES_V16  <- c("81260300061", "81270500131", "81270500141")
+SHORT_REACHES_V17B <- c("81260300181", "81270500021", "81270500031")
+APPLY_SHORT_REACH_EXCLUSION <- TRUE
+
+REACH_VALUE <- "residuals_nobias"
+
+# --- published Table S6, reach half -------------------------------------------
+TABLE_S6_REACH <- tribble(
+  ~insitu_type, ~version, ~bucket,   ~n,  ~n_unique,
+  "PT",         "D0",     "same",     71L, 18L,
+  "PT",         "C0",     "same",     71L, 18L,
+  "GNSS",       "D0",     "same",     31L, 23L,
+  "GNSS",       "C0",     "same",     31L, 23L,
+  "PT",         "D0",     "D0_only",  46L, 18L,
+  "PT",         "C0",     "C0_only",  19L,  9L,
+  "GNSS",       "D0",     "D0_only",  23L, 18L,
+  "GNSS",       "C0",     "C0_only",   6L,  6L
+)
 
 # --- node_q_b bit labels -----------------------------------------------------
-# node_q_b is the bitwise node quality field. 390 distinct values appear in C0
-# and 538 in D0, so the raw integers are not interpretable on their own; the
-# bits are.
+# node_q_b is the bitwise node quality field.
 #
-# Table 12. Measurement Quality Flag Bit Definitions in the
-# SWOT RiverSP product documentation (node_q_b column).
+# From Table 12. Measurement Quality Flag Bit Definitions in the
+# SWOT product documentation (node_q_b column).
 #
 # Bits 5, 6, 8, 12, 16, 17, 20 and 21 are undefined in the table, and bit 15
 # (partially_observed) is defined for reach_q_b only, not node_q_b. Those are
 # reported as "bit_NN" wherever they appear.
 NODE_Q_B_LABELS <- tribble(
   ~bit, ~decimal,     ~label,
-   0L,          1,    "sig0_qual_suspect",
-   1L,          2,    "classification_qual_suspect",
-   2L,          4,    "geolocation_qual_suspect",
-   3L,          8,    "water_fraction_suspect",
-   4L,         16,    "blocking_width_suspect",
-   7L,        128,    "bright_land",
-   9L,        512,    "few_sig0_observations",
+  0L,          1,    "sig0_qual_suspect",
+  1L,          2,    "classification_qual_suspect",
+  2L,          4,    "geolocation_qual_suspect",
+  3L,          8,    "water_fraction_suspect",
+  4L,         16,    "blocking_width_suspect",
+  7L,        128,    "bright_land",
+  9L,        512,    "few_sig0_observations",
   10L,       1024,    "few_area_observations",
   11L,       2048,    "few_wse_observations",
   13L,       8192,    "far_range_suspect",
@@ -125,10 +154,10 @@ NODE_Q_B_LABELS <- tribble(
 # The reach flags differ from the node flags at bits 0, 4, 9, 15, 23, 24 and 25
 REACH_Q_B_LABELS <- tribble(
   ~bit, ~decimal,     ~label,
-   1L,          2,    "classification_qual_suspect",
-   2L,          4,    "geolocation_qual_suspect",
-   3L,          8,    "water_fraction_suspect",
-   7L,        128,    "bright_land",
+  1L,          2,    "classification_qual_suspect",
+  2L,          4,    "geolocation_qual_suspect",
+  3L,          8,    "water_fraction_suspect",
+  7L,        128,    "bright_land",
   10L,       1024,    "few_area_observations",
   11L,       2048,    "few_wse_observations",
   13L,       8192,    "far_range_suspect",
@@ -143,6 +172,7 @@ REACH_Q_B_LABELS <- tribble(
   28L,  268435456,    "no_pixels"
 )
 
+# every documented decimal must equal 2^bit.
 walk2(list(NODE_Q_B_LABELS, REACH_Q_B_LABELS), c("node_q_b", "reach_q_b"),
       function(tbl, nm) {
         bad <- tbl %>% filter(decimal != 2^bit)
@@ -153,15 +183,9 @@ walk2(list(NODE_Q_B_LABELS, REACH_Q_B_LABELS), c("node_q_b", "reach_q_b"),
         }
       })
 
-N_QB_BITS <- 32L   # node_q_b is a 32-bit field; the largest value observed in
-                   # either file (520093696) occupies 29 bits
+N_QB_BITS <- 32L   # node_q_b is a 32-bit field
 
 # --- columns carried out of the raw files -------------------------------------
-# The two products do not share a schema exactly (the D0 file adds crid and
-# collection_version), and sword_version is "16" in C0 but "7b" in D0 -- readr
-# types the first as a double and the second as character, so binding the whole
-# frames fails. Only the columns actually used are carried through, and
-# sword_version is forced to character.
 ID_COLS        <- c("node_id", "reach_id", "sword_version")
 OVERPASS_COLS  <- c("time", "time_tai", "cycle_id", "pass_id")
 QC_COLS        <- c("wse", "node_q", "node_q_b", "xtrk_dist", "dark_frac")
@@ -178,8 +202,6 @@ KEEP_COLS <- unique(c(ID_COLS, OVERPASS_COLS, QC_COLS,
 # =============================================================================
 
 # --- as_id_chr(): one canonical string form for a SWORD id --------------------
-# Same helper as 4.3 / 4.4. A 14-digit node id read as a double renders as
-# "8.126e+13" under as.character(), which matches nothing.
 as_id_chr <- function(x) {
   if (is.numeric(x)) ifelse(is.na(x), NA_character_, sprintf("%.0f", x))
   else               ifelse(is.na(x), NA_character_, trimws(as.character(x)))
@@ -229,16 +251,17 @@ qb_bit <- function(v, k) {
   out
 }
 
-bit_label <- function(bit) {
-  lab <- NODE_Q_B_LABELS$label[match(bit, NODE_Q_B_LABELS$bit)]
+bit_label_from <- function(bit, labels) {
+  lab <- labels$label[match(bit, labels$bit)]
   if_else(is.na(lab), sprintf("bit_%02d", bit), lab)
 }
+bit_label       <- function(bit) bit_label_from(bit, NODE_Q_B_LABELS)
+bit_label_reach <- function(bit) bit_label_from(bit, REACH_Q_B_LABELS)
 
 # --- decode_q_b(): a whole node_q_b value as its list of set flags -------------
 # 520093696, the most common value in both products, decodes to
 # wse_bad + no_sig0_observations + no_area_observations + no_wse_observations +
-# no_pixels -- i.e. "nothing was measured at this node on this pass", which is
-# why every fill-WSE row carries it.
+# no_pixels -- nothing was measured at this node on this pass
 decode_q_b <- function(v) {
   vapply(v, function(x) {
     if (is.na(x)) return(NA_character_)
@@ -258,17 +281,21 @@ node_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_NodeIDs_v17b_vs_v16.cs
 node_lut <- chr_lut(build_id_lut(node_translator, "v16_node_id", "v17_node_id",
                                  "node translator"))
 
-# v17b ids that have a v16 match A D0-only observation on a node outside
-# this set is on a node that is new in v17b.
-v17b_with_v16_ancestor <- unique(node_lut$to_id)
+reach_translator <- read_csv(file.path(TRANSLATOR_DIR, "NA_ReachIDs_v17b_vs_v16.csv"),
+                             show_col_types = FALSE)
+reach_lut <- chr_lut(build_id_lut(reach_translator, "v16_reach_id", "v17_reach_id",
+                                  "reach translator"))
+
+# v17b ids that have a v16 counterpart
+v17b_with_v16_ancestor       <- unique(node_lut$to_id)
+v17b_reach_with_v16_ancestor <- unique(reach_lut$to_id)
 
 
 # =============================================================================
 # 1. REBUILD THE 4.1 NODE PARTITION, THEN CHECK IT AGAINST TABLE S6
 # =============================================================================
 
-# --- 1a. read, filter, harmonize (mirrors read_node() in 4.1) ----------------
-# KEEP IN SYNC WITH 4.1!!
+# --- 1a. read, filter, harmonize ---------------------------------------------
 read_node_wse <- function(path, insitu, version) {
   read_csv(path, show_col_types = FALSE) %>%
     mutate(insitu_type = insitu,
@@ -327,8 +354,6 @@ if (!all(s6_check$n_ok & s6_check$n_unique_ok)) {
 }
 
 # --- 1d. the observation-level sets ------------------------------------------
-# One row per version-unique paired observation, carrying everything needed to
-# find it again in the other version's timeseries.
 obs_cols <- c("obs_key", "id_harmonised", "insitu_type", "source", "obs_bucket",
               "cycle_id", "pass_id", "pt_time_UTC", "drift_file")
 
@@ -345,7 +370,7 @@ unique_obs <- observations %>% filter(obs_bucket %in% c("C0_only", "D0_only"))
 same_obs   <- observations %>% filter(obs_bucket == "same")
 
 # Version-C observations whose v16 node has no v17b counterpart cannot be looked
-# up by v17b id at all. Reported, not silently dropped.
+# up by v17b id at all.
 unmappable_obs <- node_all %>%
   filter(!is.na(.data[[NODE_VALUE]]), obs_bucket == "unmappable")
 message(sprintf("[4.6] %d observation(s) on %d node(s) are 'unmappable' (no v17b counterpart) and are excluded from the lookup",
@@ -353,12 +378,12 @@ message(sprintf("[4.6] %d observation(s) on %d node(s) are 'unmappable' (no v17b
 
 
 # =============================================================================
-# 2. THE ORIGINAL TIMESERIES, HARMONISED TO SWORD v17b
+# 2. THE ORIGINAL TIMESERIES, HARMONIZED TO SWORD v17b
 # =============================================================================
 
 read_raw <- function(path, version) {
   raw <- read_csv(path, show_col_types = FALSE, guess_max = 100000)
-
+  
   needed <- c("node_id", "reach_id", "time", "time_tai", "wse", "node_q",
               "node_q_b", "xtrk_dist", "dark_frac", "cycle_id", "pass_id")
   missing_cols <- setdiff(needed, names(raw))
@@ -371,7 +396,7 @@ read_raw <- function(path, version) {
     message("[4.6] ", basename(path), " has no ", paste(absent, collapse = ", "),
             " -- those attributes are dropped from the comparison")
   }
-
+  
   raw %>%
     select(any_of(KEEP_COLS)) %>%
     mutate(source        = if (version == "C") VERSION_C else VERSION_D,
@@ -427,7 +452,7 @@ message("[4.6] OK: no fill-WSE row survives the cascade in either version")
 
 
 # =============================================================================
-# 3. WHAT HAPPENED TO EACH OBSERVATION IN THE OTHER VERSION
+# 3. WHAT HAPPENED TO EACH OBSERVATION IN THE OTHER VERSION?
 # =============================================================================
 
 # --- 3a. locate one set of observations in one raw file ----------------------
@@ -441,12 +466,12 @@ RAW_KEEP <- c("id_harmonised", "cycle_id", "pass_id", "time_utc", "is_fill",
 
 locate_in_raw <- function(obs, raw, label = "") {
   raw_small <- raw %>% select(any_of(RAW_KEEP))
-
+  
   gnss <- obs %>%
     filter(insitu_type == "GNSS") %>%
     left_join(raw_small, by = c("id_harmonised", "cycle_id", "pass_id"),
               relationship = "many-to-many")
-
+  
   pt <- obs %>% filter(insitu_type == "PT")
   if (nrow(pt)) {
     pt_hits <- pt %>%
@@ -459,7 +484,7 @@ locate_in_raw <- function(obs, raw, label = "") {
       select(-any_of(c("cycle_id", "pass_id"))) %>%
       left_join(pt_hits, by = "obs_key", relationship = "many-to-many")
   }
-
+  
   out <- bind_rows(gnss, pt)
   message(sprintf("[locate %s] %d observation(s) -> %d row(s); %d observation(s) found no row at their overpass",
                   label, nrow(obs), nrow(out),
@@ -473,9 +498,8 @@ unique_C_rows <- locate_in_raw(unique_obs %>% filter(obs_bucket == "C0_only"),
 unique_D_rows <- locate_in_raw(unique_obs %>% filter(obs_bucket == "D0_only"),
                                raw_C0, "D0_only in C0")
 
-# The control: observations that paired in BOTH versions, located in the same
-# file by the same route. This is a properly matched reference -- same nodes,
-# same overpasses, same lookup -- not "all rows of every node".
+# control: observations that paired in both versions, located in the same
+# file by the same route.
 same_in_D_rows <- locate_in_raw(same_obs %>% filter(source == VERSION_D),
                                 raw_D0, "same in D0")
 same_in_C_rows <- locate_in_raw(same_obs %>% filter(source == VERSION_C),
@@ -485,7 +509,10 @@ same_in_C_rows <- locate_in_raw(same_obs %>% filter(source == VERSION_C),
 nodes_in_raw_D <- unique(raw_D0$id_harmonised)
 nodes_in_raw_C <- unique(raw_C0$id_harmonised)
 
-classify_obs <- function(rows, nodes_present, check_ancestor, label) {
+# `ancestors` MUST be the ancestor set for the right scale: node ids for the node
+# half, reach ids for the reach half.
+classify_obs <- function(rows, nodes_present, check_ancestor, label,
+                         ancestors = v17b_with_v16_ancestor) {
   rows %>%
     summarise(
       insitu_type   = first(insitu_type),
@@ -500,11 +527,11 @@ classify_obs <- function(rows, nodes_present, check_ancestor, label) {
       .by = obs_key
     ) %>%
     mutate(
-      has_ancestor = if (check_ancestor) id_harmonised %in% v17b_with_v16_ancestor else TRUE,
+      has_ancestor = if (check_ancestor) id_harmonised %in% ancestors else TRUE,
       node_present = id_harmonised %in% nodes_present,
       reason = case_when(
         !has_ancestor    ~ "no_sword_counterpart",
-        !node_present    ~ "node_absent",
+        !node_present    ~ "feature_absent",
         n_raw_rows == 0  ~ "overpass_absent",
         n_pass_all == 0  ~ "failed_qc",
         TRUE             ~ "passed_qc_no_pairing"
@@ -519,7 +546,7 @@ why_D_only <- classify_obs(unique_D_rows, nodes_in_raw_C,
                            check_ancestor = TRUE,  label = VERSION_C)
 
 why_all <- bind_rows(why_C_only, why_D_only) %>%
-  mutate(reason = factor(reason, levels = c("no_sword_counterpart", "node_absent",
+  mutate(reason = factor(reason, levels = c("no_sword_counterpart", "feature_absent",
                                             "overpass_absent", "failed_qc",
                                             "passed_qc_no_pairing")))
 
@@ -671,9 +698,352 @@ table7_reach <- why_all %>%
 print(table7_reach %>% slice_head(n = 30), n = Inf)
 
 
+# =============================================================================
+# 6. REACH SCALE
+# =============================================================================
+
+# --- 7a. rebuild the 4.1 reach partition -------------------------------------
+read_reach_wse <- function(path, insitu, version) {
+  short <- if (version == "C") SHORT_REACHES_V16 else SHORT_REACHES_V17B
+  d <- read_csv(path, show_col_types = FALSE) %>%
+    mutate(insitu_type = insitu,
+           source      = if (version == "C") VERSION_C else VERSION_D,
+           reach_id    = as_id_chr(reach_id)) %>%
+    filter(dark_frac < DARK_FRAC_CMP)
+  if (APPLY_SHORT_REACH_EXCLUSION) d <- filter(d, !reach_id %in% short)
+  harmonise_ids(d, "reach_id", reach_lut, version,
+                label = paste("reach", insitu, version))
+}
+
+reach_PT_vC   <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v16/reach_wse_SWOT_PT.csv"),    "PT",   "C")
+reach_PT_vD   <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v17b/reach_wse_SWOT_PT.csv"),   "PT",   "D")
+reach_GNSS_vC <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v16/reach_wse_SWOT_GNSS.csv"),  "GNSS", "C")
+reach_GNSS_vD <- read_reach_wse(file.path(WSE_BASE, "reach/RiverSP_v17b/reach_wse_SWOT_GNSS.csv"), "GNSS", "D")
+
+reach_PT <- bind_rows(reach_PT_vC, reach_PT_vD) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "pt_time_UTC"),
+                     value_col = REACH_VALUE)
+
+reach_GNSS <- bind_rows(reach_GNSS_vC, reach_GNSS_vD) %>%
+  mutate(drift_file = basename(drift_id)) %>%
+  partition_versions(key_cols  = c("id_harmonised", "cycle_id", "pass_id", "drift_file"),
+                     value_col = REACH_VALUE)
+
+reach_all <- bind_rows(reach_PT, reach_GNSS)
+attr(reach_all, "partition_value_col") <- REACH_VALUE
+
+tableS6_reach_rebuilt <- reach_all %>%
+  partition_table(REACH_VALUE, by = c("insitu_type", "source"),
+                  scale = 100, digits = 1)
+print(tableS6_reach_rebuilt, n = Inf)
+
+stopifnot(all(TABLE_S6_REACH$version %in% c("C0", "D0")))
+s6r_check <- TABLE_S6_REACH %>%
+  mutate(source = if_else(version == "D0", VERSION_D, VERSION_C)) %>%
+  left_join(tableS6_reach_rebuilt %>%
+              mutate(bucket = as.character(bucket)) %>%
+              select(insitu_type, source, bucket, n_got = n, n_unique_got = n_unique),
+            by = c("insitu_type", "source", "bucket")) %>%
+  mutate(n_ok = !is.na(n_got) & n_got == n,
+         n_unique_ok = !is.na(n_unique_got) & n_unique_got == n_unique)
+
+if (!all(s6r_check$n_ok & s6r_check$n_unique_ok)) {
+  print(s6r_check %>% filter(!n_ok | !n_unique_ok), n = Inf, width = Inf)
+  msg <- paste0("the rebuilt REACH partition does not reproduce Table S6's reach half.\n",
+                "  Check APPLY_SHORT_REACH_EXCLUSION and read_reach_wse() against 4.1.")
+  if (STOP_ON_TABLE_S6_MISMATCH) stop(msg) else warning(msg)
+} else {
+  message("[4.6] OK: rebuild reproduces every published Table S6 REACH count")
+}
+
+reach_observations <- reach_all %>%
+  filter(!is.na(.data[[REACH_VALUE]]), !is.na(obs_bucket)) %>%
+  select(any_of(c("obs_key", "id_harmonised", "insitu_type", "source",
+                  "obs_bucket", "cycle_id", "pass_id"))) %>%
+  # classify_obs() expects reach_id_v17b; at reach scale the feature IS the reach
+  mutate(reach_id_v17b = id_harmonised,
+         river         = label_river(id_harmonised))
+
+message("[4.6 reach] observations by bucket:")
+reach_observations %>% count(insitu_type, source, obs_bucket) %>% print(n = Inf)
+
+reach_unique_obs <- reach_observations %>%
+  filter(obs_bucket %in% c("C0_only", "D0_only"))
+reach_same_obs <- reach_observations %>% filter(obs_bucket == "same")
+
+
+# --- 7b. the reach timeseries -------------------------------------------------
+REACH_ATTR_QC   <- c("reach_q", "dark_frac", "xtrk_dist", "partial_f",
+                     "n_good_nod", "xovr_cal_q", "layovr_val")
+REACH_ATTR_GEOM <- c("wse_u", "wse_r_u", "slope", "slope_u", "width", "width_u",
+                     "area_total", "area_detct", "node_dist", "p_dist_out")
+REACH_KEEP <- unique(c("reach_id", "sword_version", "time", "time_tai",
+                       "cycle_id", "pass_id", "wse", "reach_q", "reach_q_b",
+                       REACH_ATTR_QC, REACH_ATTR_GEOM))
+
+read_raw_reach <- function(path, version) {
+  raw <- read_csv(path, show_col_types = FALSE, guess_max = 100000)
+  needed <- c("reach_id", "time", "wse", "reach_q", "reach_q_b", "xtrk_dist",
+              "dark_frac", "partial_f", "cycle_id", "pass_id")
+  missing_cols <- setdiff(needed, names(raw))
+  if (length(missing_cols)) {
+    stop(basename(path), " is missing column(s): ", paste(missing_cols, collapse = ", "))
+  }
+  raw %>%
+    select(any_of(REACH_KEEP)) %>%
+    mutate(source        = if (version == "C") VERSION_C else VERSION_D,
+           reach_id      = as_id_chr(reach_id),
+           sword_version = as.character(sword_version)) %>%
+    distinct(reach_id, time, wse, .keep_all = TRUE) %>%   # 1.3 / 2.2 start here
+    harmonise_ids("reach_id", reach_lut, version, label = paste("raw reach", version))
+}
+
+add_qc_flags_reach <- function(df) {
+  df %>%
+    mutate(
+      is_fill        = wse < FILL_WSE,
+      pass_reach_q   = reach_q < REACH_Q_MAX,
+      pass_xtrk_near = abs(xtrk_dist) >= XTRK_MIN,
+      pass_xtrk_far  = abs(xtrk_dist) <= XTRK_MAX,
+      pass_partial   = partial_f == PARTIAL_F_OK,
+      pass_dark_080  = dark_frac <= DARK_FRAC_MATCH,
+      pass_dark_050  = dark_frac <  DARK_FRAC_CMP,
+      pass_match     = pass_reach_q & pass_xtrk_near & pass_xtrk_far &
+        pass_partial & pass_dark_080,
+      pass_all       = pass_match & pass_dark_050,
+      first_fail = case_when(
+        !pass_reach_q   ~ "reach_q >= 2",
+        !pass_xtrk_near ~ "xtrk < 10 km",
+        !pass_xtrk_far  ~ "xtrk > 60 km",
+        !pass_partial   ~ "partial_f != 0",
+        !pass_dark_080  ~ "dark_frac > 0.80",
+        !pass_dark_050  ~ "dark_frac >= 0.50",
+        TRUE            ~ NA_character_
+      ),
+      river = label_river(id_harmonised)
+    )
+}
+
+raw_C0_reach <- add_qc_flags_reach(read_raw_reach(RAW_C0_REACH, "C"))
+raw_D0_reach <- add_qc_flags_reach(read_raw_reach(RAW_D0_REACH, "D"))
+
+message("[4.6 reach] cascade survival, whole files:")
+bind_rows(raw_C0_reach, raw_D0_reach) %>%
+  summarise(rows = n(), fill_rows = sum(is_fill, na.rm = TRUE),
+            partial = sum(!pass_partial, na.rm = TRUE),
+            pass_match = sum(pass_match, na.rm = TRUE),
+            pass_all = sum(pass_all, na.rm = TRUE), .by = source) %>%
+  print()
+
+reach_fill_survivors <- bind_rows(raw_C0_reach, raw_D0_reach) %>% filter(is_fill, pass_all)
+if (nrow(reach_fill_survivors)) {
+  print(count(reach_fill_survivors, source, reach_q))
+  stop("fill-WSE reach rows survived the cascade; 1.3 relies on reach_q to remove them.")
+}
+message("[4.6 reach] OK: no fill-WSE reach row survives the cascade in either version")
+
+
+# --- 7c. locate each reach observation in the other version -------------------
+# Both instruments join directly on (reach, cycle, pass) at this scale.
+REACH_RAW_KEEP <- c("id_harmonised", "cycle_id", "pass_id", "is_fill", "pass_all",
+                    "pass_match", "pass_reach_q", "pass_partial", "pass_dark_050",
+                    "pass_dark_080", "pass_xtrk_near", "pass_xtrk_far",
+                    "first_fail", "reach_q", "reach_q_b",
+                    REACH_ATTR_QC, REACH_ATTR_GEOM)
+
+locate_in_raw_reach <- function(obs, raw, label = "") {
+  out <- obs %>%
+    left_join(raw %>% select(any_of(REACH_RAW_KEEP)),
+              by = c("id_harmonised", "cycle_id", "pass_id"),
+              relationship = "many-to-many")
+  message(sprintf("[locate reach %s] %d observation(s) -> %d row(s); %d found no row at their overpass",
+                  label, nrow(obs), nrow(out),
+                  sum(is.na(out$pass_all[!duplicated(out$obs_key)]))))
+  out
+}
+
+reach_unique_C_rows <- locate_in_raw_reach(
+  reach_unique_obs %>% filter(obs_bucket == "C0_only"), raw_D0_reach, "C0_only in D0")
+reach_unique_D_rows <- locate_in_raw_reach(
+  reach_unique_obs %>% filter(obs_bucket == "D0_only"), raw_C0_reach, "D0_only in C0")
+reach_same_in_D <- locate_in_raw_reach(
+  reach_same_obs %>% filter(source == VERSION_D), raw_D0_reach, "same in D0")
+reach_same_in_C <- locate_in_raw_reach(
+  reach_same_obs %>% filter(source == VERSION_C), raw_C0_reach, "same in C0")
+
+reach_why_C <- classify_obs(reach_unique_C_rows, unique(raw_D0_reach$id_harmonised),
+                            check_ancestor = FALSE, label = VERSION_D,
+                            ancestors = v17b_reach_with_v16_ancestor)
+reach_why_D <- classify_obs(reach_unique_D_rows, unique(raw_C0_reach$id_harmonised),
+                            check_ancestor = TRUE,  label = VERSION_C,
+                            ancestors = v17b_reach_with_v16_ancestor)
+
+reach_why_all <- bind_rows(reach_why_C, reach_why_D) %>%
+  mutate(reason = factor(reason, levels = c("no_sword_counterpart", "feature_absent",
+                                            "overpass_absent", "failed_qc",
+                                            "passed_qc_no_pairing")))
+
+message("[4.6 reach] why each version-unique REACH observation is unique:")
+table9_reasons <- reach_why_all %>%
+  count(obs_bucket, insitu_type, reason) %>%
+  mutate(pct = round(100 * n / sum(n), 1), .by = c(obs_bucket, insitu_type))
+print(table9_reasons, n = Inf)
+
+table9_reason_features <- reach_why_all %>%
+  summarise(n_obs = n(), n_reaches = n_distinct(id_harmonised),
+            .by = c(obs_bucket, insitu_type, reason))
+print(table9_reason_features, n = Inf)
+
+# --- 7d. which filter, order-free ---------------------------------------------
+reach_qc_rows <- bind_rows(
+  reach_unique_C_rows %>% semi_join(reach_why_all %>% filter(reason == "failed_qc",
+                                                             obs_bucket == "C0_only"), by = "obs_key"),
+  reach_unique_D_rows %>% semi_join(reach_why_all %>% filter(reason == "failed_qc",
+                                                             obs_bucket == "D0_only"), by = "obs_key")
+) %>% filter(!is.na(pass_all))
+
+message("[4.6 reach] failed_qc rows, first binding filter (ORDER-DEPENDENT):")
+table10_binding <- reach_qc_rows %>%
+  count(obs_bucket, insitu_type, first_fail) %>%
+  mutate(pct = round(100 * n / sum(n), 1), .by = c(obs_bucket, insitu_type))
+print(table10_binding, n = Inf)
+
+message("[4.6 reach] failed_qc rows, each filter failed at all (ORDER-FREE):")
+table10_anyfail <- reach_qc_rows %>%
+  summarise(
+    n_rows              = n(),
+    `reach_q >= 2`      = sum(!pass_reach_q,   na.rm = TRUE),
+    `partial_f != 0`    = sum(!pass_partial,   na.rm = TRUE),
+    `xtrk out of range` = sum(!pass_xtrk_near | !pass_xtrk_far, na.rm = TRUE),
+    `dark_frac > 0.80`  = sum(!pass_dark_080,  na.rm = TRUE),
+    `dark_frac >= 0.50` = sum(!pass_dark_050,  na.rm = TRUE),
+    fill_wse            = sum(is_fill,         na.rm = TRUE),
+    .by = c(obs_bucket, insitu_type)) %>%
+  pivot_longer(-c(obs_bucket, insitu_type, n_rows),
+               names_to = "filter", values_to = "n_failing") %>%
+  mutate(pct_of_rows = round(100 * n_failing / n_rows, 1))
+print(table10_anyfail, n = Inf)
+
+# --- 7e. reach_q_b bits, against the matched control --------------------------
+reach_cmp_rows <- bind_rows(
+  reach_qc_rows %>% mutate(group = "failed_qc"),
+  bind_rows(reach_same_in_D, reach_same_in_C) %>%
+    filter(!is.na(pass_all)) %>% mutate(group = "both_versions")
+) %>% mutate(group = factor(group, levels = c("failed_qc", "both_versions")))
+
+# Grouped by `group` only, NOT by obs_bucket
+reach_bit_prevalence <- map_dfr(0:(N_QB_BITS - 1L), function(k) {
+  reach_cmp_rows %>%
+    summarise(n_rows = n(), n_set = sum(qb_bit(reach_q_b, k), na.rm = TRUE),
+              .by = group) %>%
+    mutate(bit = k, .before = 1)
+}) %>%
+  mutate(prevalence = n_set / n_rows, flag = bit_label_reach(bit))
+
+reach_bits_used <- reach_bit_prevalence %>%
+  summarise(any_set = sum(n_set) > 0, .by = bit) %>%
+  filter(any_set) %>% pull(bit)
+reach_bit_prevalence <- reach_bit_prevalence %>% filter(bit %in% reach_bits_used)
+message(sprintf("[4.6 reach] %d of %d reach_q_b bits are set at least once: %s",
+                length(reach_bits_used), N_QB_BITS, paste(reach_bits_used, collapse = ", ")))
+
+table11_reach_bits <- reach_bit_prevalence %>%
+  select(bit, flag, group, prevalence) %>%
+  pivot_wider(names_from = group, values_from = prevalence) %>%
+  mutate(across(any_of(c("failed_qc", "both_versions")), ~ replace_na(.x, 0))) %>%
+  mutate(diff = round(failed_qc - both_versions, 3),
+         failed_qc = round(failed_qc, 3),
+         both_versions = round(both_versions, 3)) %>%
+  arrange(desc(failed_qc))
+print(table11_reach_bits, n = Inf)
+
+message("[4.6 reach] most common DEGRADED bits among failed_qc rows, by direction:")
+degraded_bits_reach <- REACH_Q_B_LABELS$bit[str_detect(REACH_Q_B_LABELS$label, "degraded")]
+table11_degraded <- map_dfr(degraded_bits_reach, function(k) {
+  reach_qc_rows %>%
+    summarise(n_rows = n(), n_set = sum(qb_bit(reach_q_b, k), na.rm = TRUE),
+              .by = obs_bucket) %>%
+    mutate(bit = k, flag = bit_label_reach(k), .before = 1)
+}) %>%
+  mutate(prevalence = round(n_set / n_rows, 3)) %>%
+  arrange(obs_bucket, desc(prevalence))
+print(table11_degraded, n = Inf)
+
 
 # =============================================================================
-# 6. FIGURES
+# 8. THE SENTENCE NUMBERS
+# =============================================================================
+# Emits, for each scale and direction, the order-free figures behind the
+# manuscript sentence, plus the sentence itself. Percentages are of the
+# observations that FAILED the other version's cascade, so they are directly
+# comparable between the node and reach halves. They do NOT sum to 100: an
+# observation failing two filters is counted under both.
+
+sentence_numbers <- function(anyfail, why, scale_label) {
+  fq <- why %>% filter(reason == "failed_qc") %>% count(obs_bucket, name = "n_failed")
+  tot <- why %>% count(obs_bucket, name = "n_unique")
+  af <- anyfail %>%
+    summarise(n_rows = sum(n_rows), n_failing = sum(n_failing),
+              .by = c(obs_bucket, filter))
+  af %>%
+    left_join(fq, by = "obs_bucket") %>%
+    left_join(tot, by = "obs_bucket") %>%
+    mutate(scale = scale_label,
+           pct_of_failed = round(100 * n_failing / n_failed, 1),
+           pct_of_unique = round(100 * n_failing / n_unique, 1)) %>%
+    select(scale, obs_bucket, n_unique, n_failed, filter, n_failing,
+           pct_of_failed, pct_of_unique) %>%
+    arrange(obs_bucket, desc(n_failing))
+}
+
+table12_sentence <- bind_rows(
+  sentence_numbers(table4_anyfail,  why_all,       "node"),
+  sentence_numbers(table10_anyfail, reach_why_all, "reach")
+)
+print(table12_sentence, n = Inf, width = Inf)
+
+emit_sentence <- function(tbl, scl, bucket, q_filter, q_name, degraded, unit) {
+  g <- tbl %>% filter(scale == scl, obs_bucket == bucket)
+  if (!nrow(g)) return(invisible(NULL))
+  pick <- function(f) { r <- g %>% filter(filter == f); if (nrow(r)) r$pct_of_failed[1] else NA_real_ }
+  dropped_by <- if (bucket == "D0_only") "C0" else "D0"
+  kept_by    <- if (bucket == "D0_only") "D0" else "C0"
+  
+  deg_clause <- if (is.na(degraded) || !nzchar(degraded) ||
+                    degraded == "no degraded bits set") ""
+  else sprintf(", with %s as the most common degraded bits", degraded)
+  pf <- pick("partial_f != 0")
+  pf_clause <- if (is.na(pf)) "" else
+    sprintf(" and %.0f%% failed the partial coverage (partial_f) filter", pf)
+  
+  cat(sprintf("\n[%s / %s]  n_unique = %d, of which %d failed the other version's cascade\n  %s\n",
+              scl, bucket, g$n_unique[1], g$n_failed[1],
+              sprintf(paste0("%.0f%% of %s observations dropped by version %s but retained in ",
+                             "version %s did not meet the %s threshold of 2%s, while %.0f%% of ",
+                             "those %s %s observations failed the dark water (dark_frac) filter ",
+                             "of < 50%%%s."),
+                      pick(q_filter), unit, dropped_by, kept_by, q_name, deg_clause,
+                      pick("dark_frac >= 0.50"), dropped_by, unit, pf_clause)))
+}
+
+top_degraded <- function(tbl, bucket, fallback = "no degraded bits set") {
+  v <- tbl %>% filter(obs_bucket == bucket, n_set > 0) %>% pull(flag)
+  if (!length(v)) fallback else paste(utils::head(v, 2), collapse = " and ")
+}
+
+cat("\n================ DRAFT SENTENCES (order-free any-fail counts) ================\n")
+emit_sentence(table12_sentence, "node",  "D0_only", "node_q >= 2",  "node quality (node_q)",
+              "degraded geolocation and classification quality", "node")
+emit_sentence(table12_sentence, "node",  "C0_only", "node_q >= 2",  "node quality (node_q)",
+              "degraded geolocation and classification quality", "node")
+emit_sentence(table12_sentence, "reach", "D0_only", "reach_q >= 2", "reach quality (reach_q)",
+              top_degraded(table11_degraded, "D0_only"), "reach")
+emit_sentence(table12_sentence, "reach", "C0_only", "reach_q >= 2", "reach quality (reach_q)",
+              top_degraded(table11_degraded, "C0_only"), "reach")
+cat("=============================================================================\n")
+
+# =============================================================================
+# 9. FIGURES
 # =============================================================================
 
 group_colours <- c(failed_qc = "#D55E00", both_versions = "#999999")
@@ -748,4 +1118,5 @@ ggplot(figE_data, aes(x = river, y = n, fill = reason)) +
   theme(axis.text.x = element_text(angle = 25, hjust = 0.9),
         legend.position = "top")
 # export: 11 x 6 in
+
 
