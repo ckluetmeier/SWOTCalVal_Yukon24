@@ -26,7 +26,7 @@
 # Parts of this script were developed with assistance from Claude Code 
 # (Anthropic) for debugging, documentation, and related editorial suggestions.
 # 
-# Last updated: 2026-09-11
+# Last updated: 2026-09-13
 # 
 # =============================================================================
 
@@ -331,6 +331,13 @@ write.csv(
 # 5a. Data visualization - bias-corrected WSE
 # -----------------------------------------------------------------------------
 
+# Shared river factor levels and color palette used across all
+# inter-river plots
+river_levels  <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
+river_labels  <- c("Coleen", "Sheenjek", "Chandalar", "Porcupine",
+                   "Single-channel Yukon", "Braided Yukon")
+color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E")
+
 cor_test_nobias <- cor.test(time_space_matched_SWOT_PT$wse, time_space_matched_SWOT_PT$pt_wse_nobias_m)
 r_value_nobias  <- cor_test_nobias$estimate
 p_value_nobias  <- cor_test_nobias$p.value
@@ -352,27 +359,6 @@ ggplot(time_space_matched_SWOT_PT, aes(x = pt_wse_nobias_m, y = wse, color = fac
     hjust = 0, vjust = 1, size = 8) +
   labs(color = "River") +
   theme_minimal(base_size = 30)
-
-# Shared river factor levels and color palette used across all
-# inter-river plots
-river_levels  <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
-river_labels  <- c("Coleen", "Sheenjek", "Chandalar", "Porcupine",
-                   "Single-channel Yukon", "Braided Yukon")
-color_palette <- c("#F2C14E", "#8EAD7A", "#3B6064", "#F4845F", "#DA627D", "#9A348E")
-
-
-ggplot(time_space_matched_SWOT_PT,
-       aes(x = river, y = bias * 100, fill = river)) +
-  geom_violin(alpha = 0.8, color = NA) +
-  geom_boxplot(width = 0.2, fill = "white", outlier.size = 3, lwd = 1) +
-  geom_text(data = counts,
-            aes(x = river, y = -0.2, label = paste0("n=", n)),
-            inherit.aes = FALSE, vjust = 1, size = 6) +
-  xlab("River") +
-  ylab("SWOT -" ~ italic("in situ") ~ "Slope (cm/km)") +
-  scale_fill_manual(values = color_palette, breaks = river_levels, labels = river_labels) +
-  scale_x_discrete(breaks = river_levels, labels = river_labels) +
-  theme_minimal(base_size = 25)
 
 # ggplot(time_space_matched_SWOT_PT, aes(x = abs(wse - pt_wse_nobias_m))) +
 #   stat_ecdf(geom = "step", color = "darkblue", size = 1) +

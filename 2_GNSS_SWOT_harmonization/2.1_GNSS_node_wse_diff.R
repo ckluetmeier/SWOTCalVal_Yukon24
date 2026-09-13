@@ -19,7 +19,7 @@
 # Parts of this script were developed with assistance from Claude Code 
 # (Anthropic) for debugging, documentation, and related editorial suggestions.
 # 
-# Last updated: 2026-09-11
+# Last updated: 2026-09-13
 # 
 # =============================================================================
 
@@ -248,8 +248,10 @@ time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
   mutate(
     river_code = substr(reach_id, 1, 6),
     river = case_when(
-      # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
-      # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
+      # SWORD v16 SJ reaches:  "81260300061", "81260300231",
+      #                        "81260300241", "81260300251"
+      # SWORD v17b SJ reaches: "81260300181", "81260300191",
+      #                        "81260300201", "81260300211"
       reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
       reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
                        "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
@@ -272,7 +274,7 @@ save_to_csv <- time_space_matched_SWOT_GNSS %>%
     mean_node_drift_wse_m, mean_node_drift_wse_no_bias_m, node_total_error_m, drift_id,
     width, width_u, node_id, reach_id, p_dist_out,
     node_q, node_q_b, dark_frac, n_good_pix, rdr_sig0, xovr_cal_q,
-    cycle_id, pass_id, lat, lon, source, river_code, river
+    cycle_id, pass_id, lat, lon, river_code, river
   )
 
 write.csv(
@@ -292,12 +294,12 @@ write.csv(
 # r_value_nobias <- cor_test_nobias$estimate
 # p_value_nobias <- cor_test_nobias$p.value
 #
-# # Regression / RMSE
-# # model_nobias <- lm(mean_node_drift_wse_no_bias_m ~ wse, data = time_space_matched_SWOT_GNSS)
-# # summary(model_nobias)
-# # rmse_nobias <- sqrt(mean((time_space_matched_SWOT_GNSS$mean_node_drift_wse_no_bias_m - time_space_matched_SWOT_GNSS$wse)^2))
+# Regression / RMSE
+# model_nobias <- lm(mean_node_drift_wse_no_bias_m ~ wse, data = time_space_matched_SWOT_GNSS)
+# summary(model_nobias)
+# rmse_nobias <- sqrt(mean((time_space_matched_SWOT_GNSS$mean_node_drift_wse_no_bias_m - time_space_matched_SWOT_GNSS$wse)^2))
 #
-# # Scatter: SWOT vs bias-corrected GNSS WSE
+# Scatter: SWOT vs bias-corrected GNSS WSE
 # ggplot(time_space_matched_SWOT_GNSS,
 #        aes(x = mean_node_drift_wse_no_bias_m, y = wse, color = factor(drift_id))) +
 #   geom_point(size = 2) +
@@ -318,7 +320,7 @@ write.csv(
 #   theme(legend.position = "none") +
 #   theme_minimal(base_size = 30)
 #
-# # CDF: bias-corrected absolute WSE difference
+# CDF: bias-corrected absolute WSE difference
 # ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(wse - mean_node_drift_wse_no_bias_m))) +
 #   stat_ecdf(geom = "step", color = "darkblue", size = 1) +
 #   geom_hline(yintercept = 0.68, linetype = "dashed", color = "grey") +

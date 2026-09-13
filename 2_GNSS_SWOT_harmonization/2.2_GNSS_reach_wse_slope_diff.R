@@ -12,10 +12,9 @@
 #   3.  Match GNSS and SWOT in time and space
 #   4.  WSE: absolute residuals, summary stats, and plots
 #   5.  WSE: bias removal (per-drift median) and plots
-#   6.  Save WSE dataframe and add river labels
-#   7.  Slope: absolute residuals and plots
-#   8.  Slope: bias-corrected relative residuals and plots
-#   9.  Export
+#   6.  Slope: absolute residuals and plots
+#   7.  Slope: bias-corrected relative residuals and plots
+#   8.  Export
 # 
 # -----------------------------------------------------------------------------
 # Script by:
@@ -24,7 +23,7 @@
 # Parts of this script were developed with assistance from Claude Code 
 # (Anthropic) for debugging, documentation, and related editorial suggestions.
 # 
-# Last updated: 2026-09-11
+# Last updated: 2026-09-13
 # 
 # =============================================================================
 
@@ -330,64 +329,7 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = time_utc, y = bias, color = factor(
 
 
 # =============================================================================
-# 6. Add river labels and export WSE dataframe
-# =============================================================================
-
-time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
-  mutate(
-    river_code = substr(reach_id, 1, 6),
-    river = case_when(
-      # Specific reach_id checks take priority to avoid overwriting SJ/BL labels
-      # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
-      # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
-      reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
-      reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
-                       "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
-      river_code == "812701" ~ "lowerYR",  # until the Circle bifurcation
-      river_code == "812509" ~ "lowerYR",  # past the PR confluence
-      river_code == "812705" ~ "upperYR",  # Circle up
-      river_code == "812508" ~ "CD",
-      river_code == "812603" ~ "PR",
-      river_code == "812605" ~ "PR",
-      river_code == "812604" ~ "CL",
-      TRUE ~ NA_character_
-    )
-  ) %>%
-  mutate(insitu_type = "GNSS") %>%
-  mutate(source = "PIC0")  # Must match the selected version above
-
-# -----------------------------------------------------------------------------
-# Select one column set, matching the SWOT product selected above.
-# -----------------------------------------------------------------------------
-
-# --- RiverSP -----------------------------------------------------------------
-save_to_csv <- time_space_matched_SWOT_GNSS %>%
-  dplyr::select(
-    reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC,
-    wse_drift_midpoint_UTC, wse_drift_total_time_UTC,
-    residuals, residuals_nobias, bias,
-    mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
-    mean_reach_drift_wse_no_bias_m,
-    reach_drift_slope_m_m, reach_drift_slope_m_m_abs,
-    reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias,
-    reach_drift_slope_m_m_abs_nobias,
-    drift_id, wse, wse_u,
-    slope, slope_abs, slope_u, slope_r_u,
-    width, width_u, area_total, area_tot_u, area_detct, area_det_u,
-    area_wse, layovr_val, node_dist, xtrk_dist,
-    reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q,
-    p_dist_out, p_lat, p_lon, cycle_id, pass_id,
-    river_code, river, insitu_type, source
-  )
-
-# write.csv(save_to_csv,
-#   file = file.path(DATA_ROOT, "CalVal_dataframes/wse/reach/RiverSP_v16",
-#                    "reach_wse_SWOT_GNSS.csv"),
-#   row.names = FALSE)
-
-
-# =============================================================================
-# 7. Slope - absolute residuals and plots
+# 6. Slope - absolute residuals and plots
 # =============================================================================
 
 time_space_matched_SWOT_GNSS$slope_abs              <- abs(time_space_matched_SWOT_GNSS$slope)
@@ -416,7 +358,7 @@ p_value  <- cor_test$p.value
 
 
 # -----------------------------------------------------------------------------
-# 7a. Data visualization - slope (absolute)
+# 6a. Data visualization - slope (absolute)
 # -----------------------------------------------------------------------------
 
 # Scatter: absolute (signed) SWOT vs GNSS slope
@@ -476,7 +418,7 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = reach_drift_slope_precision_m * 100
 
 
 # =============================================================================
-# 8. Slope - bias removal and bias-corrected plots
+# 7. Slope - bias removal and bias-corrected plots
 # =============================================================================
 
 # Bias-corrected slope residuals
@@ -537,6 +479,56 @@ ggplot(time_space_matched_SWOT_GNSS, aes(x = abs(slope_abs * 100000 - reach_drif
 # 9. Export
 # =============================================================================
 
+time_space_matched_SWOT_GNSS <- time_space_matched_SWOT_GNSS %>%
+  mutate(
+    river_code = substr(reach_id, 1, 6),
+    river = case_when(
+      # Specific reach_id checks take priority to avoid overwriting SJ/BL labels
+      # SWORD v16 SJ reaches: "81260300061", "81260300231", "81260300241", "81260300251"
+      # SWORD v17b SJ reaches: "81260300181", "81260300191", "81260300201", "81260300211"
+      reach_id %in% c("81260300181", "81260300191", "81260300201", "81260300211") ~ "SJ",
+      reach_id %in% c("81270100111", "81270100121", "81270100131", "81270100141",
+                      "81270100151", "81270100161", "81270200011", "81270200021") ~ "BL",
+      river_code == "812701" ~ "lowerYR",  # until the Circle bifurcation
+      river_code == "812509" ~ "lowerYR",  # past the PR confluence
+      river_code == "812705" ~ "upperYR",  # Circle up
+      river_code == "812508" ~ "CD",
+      river_code == "812603" ~ "PR",
+      river_code == "812605" ~ "PR",
+      river_code == "812604" ~ "CL",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  mutate(insitu_type = "GNSS") %>%
+  mutate(source = "PIC0")  # Must match the selected version above
+
+# --- RiverSP -----------------------------------------------------------------
+save_to_csv <- time_space_matched_SWOT_GNSS %>%
+  dplyr::select(
+    reach_id, time_utc, wse_drift_start_UTC, wse_drift_end_UTC,
+    wse_drift_midpoint_UTC, wse_drift_total_time_UTC,
+    residuals, residuals_nobias, bias,
+    mean_reach_drift_wse_m, mean_reach_drift_wse_total_error_m,
+    mean_reach_drift_wse_no_bias_m,
+    reach_drift_slope_m_m, reach_drift_slope_m_m_abs,
+    reach_drift_slope_precision_m, slope_residuals, slope_residuals_nobias,
+    reach_drift_slope_m_m_abs_nobias,
+    drift_id, wse, wse_u,
+    slope, slope_abs, slope_u, slope_r_u,
+    width, width_u, area_total, area_tot_u, area_detct, area_det_u,
+    area_wse, layovr_val, node_dist, xtrk_dist,
+    reach_q, reach_q_b, dark_frac, n_good_nod, partial_f, xovr_cal_q,
+    p_dist_out, p_lat, p_lon, cycle_id, pass_id,
+    river_code, river, insitu_type, source
+  )
+
+# WSE
+# write.csv(save_to_csv,
+#   file = file.path(DATA_ROOT, "CalVal_dataframes/wse/reach/RiverSP_v16",
+#                    "reach_wse_SWOT_GNSS.csv"),
+#   row.names = FALSE)
+
+# Slope
 write.csv(
   save_to_csv,
   # The output directory must match the selected version above.

@@ -16,7 +16,7 @@
 # Parts of this script were developed with assistance from Claude Code 
 # (Anthropic) for debugging, documentation, and related editorial suggestions.
 # 
-# Last updated: 2026-09-11
+# Last updated: 2026-09-13
 # 
 # =============================================================================
 
@@ -119,7 +119,7 @@ table4 <- slope_all %>%
                    scale = SCALE_SLOPE, digits = DIGITS, bias_col = NULL)
 print(table4)
 
-# --- Table S8: full partition --------------------------------------------------
+# --- Table S8: full partition ------------------------------------------------
 tableS8 <- slope_all %>%
   partition_table(SLOPE_VALUE, by = c("insitu_type", "source"),
                   scale = SCALE_SLOPE, digits = DIGITS, bias_col = NULL)

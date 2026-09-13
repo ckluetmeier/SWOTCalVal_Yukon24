@@ -33,7 +33,7 @@ reach-level river widths on the SWORD prior river network, so that widths
 measured from the orthomosaics can be differenced directly against the SWOT
 RiverSP product. Its products are two combined CSVs — one row per node, one row
 per reach — plus a node QC table recording which nodes the manual review
-excluded. `3.3_ortho_node_width_diff.R` and `3.4_ortho_reach_width_diff.R` read
+excluded. `3.2_ortho_node_width_diff.R` and `3.3_ortho_reach_width_diff.R` read
 them.
 
 Widths come out of RiverObs itself rather than from an independent area

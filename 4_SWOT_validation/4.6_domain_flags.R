@@ -15,7 +15,7 @@
 # Parts of this script were developed with assistance from Claude Code 
 # (Anthropic) for debugging, documentation, and related editorial suggestions.
 # 
-# Last updated: 2026-09-11
+# Last updated: 2026-09-13
 #
 # =============================================================================
 
@@ -47,9 +47,6 @@ SWOT_REACH_DIR <- file.path(DATA_ROOT, "SWOT/reach")
 
 RAW_C0 <- file.path(SWOT_NODE_DIR, "hydrocron_timeseries/YR_domain_nodes_merged_RiverSP.csv")
 RAW_D0 <- file.path(SWOT_NODE_DIR, "RiverSP_v17b/RiverSP_domain_node_timeseries_PGD0_v17b.csv")
-
-# Output directory for the domain-flag tables.
-OUT <- file.path(DATA_ROOT, "CalVal_dataframes/domain_flags")
 
 # --- filters: must match 4.1 --------------------------------------------------
 DARK_FRAC_CMP   <- 0.50  # 4.1 / 4.2 / 4.4 comparison stage

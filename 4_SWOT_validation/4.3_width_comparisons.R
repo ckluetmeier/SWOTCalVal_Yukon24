@@ -14,7 +14,7 @@
 # Parts of this script were developed with assistance from Claude Code 
 # (Anthropic) for debugging, documentation, and related editorial suggestions.
 # 
-# Last updated: 2026-09-11
+# Last updated: 2026-09-13
 # 
 # =============================================================================
 
@@ -34,7 +34,7 @@ DATA_ROOT <- "/Users/camryn/Documents/UNC/_Tier1_sites/expanded_Yukon_Flats"
 # Root of the SWORD distributions (contains SWORD_v16/ and SWORD_v17b/).
 SWORD_ROOT <- "/Users/camryn/Desktop"
 
-# Root of the width comparison dataframes written by script 3.3.
+# Root of the width comparison dataframes written by script 3.2.
 BASE <- file.path(DATA_ROOT, "CalVal_dataframes/width")
 
 # Directory holding the SWORD v16 <-> v17b ID translator CSVs.
@@ -87,7 +87,7 @@ missing_cols <- setdiff(NEEDED, names(width_raw))
 if (length(missing_cols)) {
   stop(basename(WIDTH_CSV), " is missing column(s): ",
        paste(missing_cols, collapse = ", "),
-       ".\nIt should be the combined output of 3.3_ortho_node_width_diff.R. ",
+       ".\nIt should be the combined output of 3.2_ortho_node_width_diff.R. ",
        "Columns present: ", paste(names(width_raw), collapse = ", "))
 }
 missing_ver <- setdiff(unname(SWORD_VERSIONS), unique(width_raw$sword_version))

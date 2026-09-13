@@ -12,7 +12,7 @@
 ! Edit reach_db_path below to point at the local SWORD netCDF. It may name a
 ! single file or a DIRECTORY of SWORD netCDFs (RiverObs will pick the tiles
 ! that intersect the water mask bounding box). It must be the netCDF
-! distribution of SWORD, not the shapefile distribution used in script 3.4.
+! distribution of SWORD, not the shapefile distribution used in script 3.3.
 !
 ! Use the ORIGINAL release file. No padding needed: RiverObs returns masked
 ! arrays for the variables it declares but the public SWORD release does not
@@ -66,7 +66,7 @@ use_ext_dist_coef         (-) = True
 
 ! --- centerline ---------------------------------------------------------------
 ! ds = None keeps SWORD's own node spacing, so output node_id values match
-! RiverSP one-to-one and the join in script 3.3 stays a plain key join.
+! RiverSP one-to-one and the join in script 3.2 stays a plain key join.
 ds                        (-) = None
 refine_centerline         (-) = False
 smooth                    (-) = 0.01

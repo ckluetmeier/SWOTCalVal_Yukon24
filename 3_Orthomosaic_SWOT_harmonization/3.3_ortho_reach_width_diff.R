@@ -65,10 +65,6 @@ SWOT_SOURCES <- c(
                    "RiverSP_domain_reach_timeseries_PGD0_v17b.csv")
 )
 
-# Which versions to process. v16 needs its viable_reaches list filled in first
-# (see below), so it is off by default.
-VERSIONS_TO_RUN <- c("v17b")
-
 # Label used in the `source` column, matching VERSION_C / VERSION_D in
 # 4.0_comparison_helpers.R.
 SOURCE_LABEL <- c(v16 = "PIC0", v17b = "PGD0")
@@ -85,6 +81,11 @@ VIABLE_REACHES <- list(
            "81270500161", "81270500171"),
   v16  = character(0)  # v16 equivalents of the reaches above are not defined
 )
+
+# Versions to process: every version whose viable_reaches list above is
+# non-empty. Filling in the v16 list is therefore all that is needed to
+# enable v16; assign a character vector here to override.
+VERSIONS_TO_RUN <- names(VIABLE_REACHES)[lengths(VIABLE_REACHES) > 0]
 
 # --- SWOT quality filters ----------------------------------------------------
 REACH_Q_MAX   <- 2  # keep reach_q < this
@@ -150,7 +151,7 @@ if (length(miss)) {
        ".\nIt should be the combined reach CSV from 3.1.2_run_RiverObs.py.")
 }
 
-message(sprintf("[3.4] read %d reach rows | survey(s): %d | version(s): %s",
+message(sprintf("[3.3] read %d reach rows | survey(s): %d | version(s): %s",
                 nrow(ortho_all), n_distinct(ortho_all$survey),
                 paste(sort(unique(ortho_all$sword_version)), collapse = ", ")))
 
@@ -184,7 +185,7 @@ if (nrow(date_problem) > 0) {
 # reached have no width.
 n_all <- nrow(ortho_all)
 ortho_all <- ortho_all %>% filter(!is.na(ortho_width_m), ortho_width_m > 0)
-message(sprintf("[3.4] %d unobserved prior reach(es) dropped -> %d",
+message(sprintf("[3.3] %d unobserved prior reach(es) dropped -> %d",
                 n_all - nrow(ortho_all), nrow(ortho_all)))
 
 # --- viable-reach filter -----------------------------------------------------
@@ -200,7 +201,7 @@ if (length(versions) == 0) {
 for (v in versions) {
   if (length(VIABLE_REACHES[[v]]) == 0) {
     stop("VIABLE_REACHES has no reaches for version '", v,
-         "'. Fill in the list, or drop '", v, "' from VERSIONS_TO_RUN.")
+         "'. Fill in the list to process this version.")
   }
 }
 
@@ -217,7 +218,7 @@ ortho_reach <- bind_rows(lapply(versions, function(v) {
             ". Check the ids against ", basename(REACH_CSV), ".")
   }
   out <- sub %>% filter(reach_id %in% keep_ids)
-  message(sprintf("[3.4] %s: %d of %d reach-survey row(s) kept by viable_reaches (%d distinct reaches)",
+  message(sprintf("[3.3] %s: %d of %d reach-survey row(s) kept by viable_reaches (%d distinct reaches)",
                   v, nrow(out), nrow(sub), n_distinct(out$reach_id)))
   out
 }))
@@ -229,7 +230,7 @@ ortho_reach <- bind_rows(lapply(versions, function(v) {
 cover <- ortho_reach %>%
   select(survey, sword_version, reach_id, obs_frac_n, n_good_nod, partial_f) %>%
   arrange(obs_frac_n)
-message("[3.4] lowest orthomosaic coverage among viable reaches:")
+message("[3.3] lowest orthomosaic coverage among viable reaches:")
 print(as.data.frame(head(cover, 5)))
 if (any(ortho_reach$partial_f == 1, na.rm = TRUE)) {
   warning(sum(ortho_reach$partial_f == 1, na.rm = TRUE),
@@ -259,7 +260,7 @@ ortho_reach <- ortho_reach %>%
 
 unlabelled <- ortho_reach %>% filter(is.na(river)) %>% count(river_code)
 if (nrow(unlabelled)) {
-  message("[3.4] river_code with no river label:"); print(as.data.frame(unlabelled))
+  message("[3.3] river_code with no river label:"); print(as.data.frame(unlabelled))
 }
 outside <- setdiff(na.omit(unique(ortho_reach$river)), river_levels)
 if (length(outside)) {
