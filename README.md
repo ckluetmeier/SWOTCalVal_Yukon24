@@ -13,12 +13,16 @@ River Basin (July–September 2024). The domain covers the Yukon River (YR),
 Porcupine River (PR), Chandalar River (CD), Coleen River (CL), Sheenjek River 
 (SJ), and Black River (BL).
 
-SWOT products evaluated: **RiverSP** version C0 (PIC0, SWORD v16) and version
+SWOT products evaluated are the RiverSP version C0 (PIC0, SWORD v16) and version
 D0 (PGD0, SWORD v17b).
 
 ---
 
 ## Repository structure
+
+Scripts are numbered by phase. Phase 0 prepares input data; Phases 1–3
+compute in situ vs. SWOT residuals by in situ measurement type; Phase 4
+aggregates results and produces the figures and tables in the manuscript.
 
 ```
 SWOTCalVal_Yukon24/
@@ -48,10 +52,6 @@ SWOTCalVal_Yukon24/
 ├── .gitignore
 └── README.md
 ```
-
-Scripts are numbered by phase. Phase 0 prepares input data; Phases 1–3
-compute in situ vs. SWOT residuals by in situ measurement type; Phase 4
-aggregates results and produces the figures and tables in the manuscript.
 
 ---
 
