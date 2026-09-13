@@ -34,18 +34,6 @@ SWOTCalVal_Yukon24/
 │   └── 2.2_GNSS_reach_wse_slope_diff.R
 ├── 3_Orthomosaic_SWOT_harmonization/
 │   ├── 3.1_RiverObs/
-│   │   ├── 3.1.0_check_SWORD_nc.py
-│   │   ├── 3.1.1_rasterize_watermask.py
-│   │   ├── 3.1.2_run_RiverObs.py
-│   │   ├── 3.1.3_true_node_polygons.py
-│   │   ├── 3.1.4_manual_node_qc.py
-│   │   ├── apply_riverobs_patches.py
-│   │   ├── riverobs_shim.py
-│   │   ├── run_calval2rivertile.py
-│   │   ├── run_all.sh
-│   │   ├── riverobs_ortho_v16.rdf
-│   │   ├── riverobs_ortho_v17b.rdf
-│   │   └── README.md
 │   ├── 3.2_ortho_PIXCVec_node_polygon_widths.ipynb
 │   ├── 3.3_ortho_node_width_diff.R
 │   └── 3.4_ortho_reach_width_diff.R
@@ -72,7 +60,9 @@ aggregates results and produces the figures and tables in the manuscript.
 SWOT L2_HR_RiverSP versions C0 and D0 were accessed via the Hydrocron API
 (Greguska et al., 2024). The Level 2 Hydrology data are also available through
 NASA EarthData (https://search.earthdata.nasa.gov/search) and CNES
-HydrowebNext (https://hydroweb.next.theia-land.fr). Compiled in situ
+HydrowebNext (https://hydroweb.next.theia-land.fr). The SWOT River Database v16 
+and v17b are available to download from the SWORD website 
+(https://www.swordexplorer.com/; Altenau et al., 2021). Compiled in situ
 observations, software, and corresponding metadata for this analysis are
 available in the following data release (Kluetmeier et al., 2026). Software
 for RiverObs and upstream processing of PT and GNSS observations to SWORD
@@ -84,15 +74,15 @@ https://github.com/cjgleason/calval_toolbox).
 
 ## Data dependencies
 
-- **SWOT products**: PIXC, PIXCVec, RiverSP (PIC0/v16, PGD0/v17b)
+- **SWOT products**: PIXCVec, RiverSP (PIC0/v16, PGD0/v17b)
 - **SWORD**: SWORD v16 and v17b (North America, HB81), both the shapefile and netCDF distributions
 - **SWORD ID translators**: `NA_NodeIDs_v17b_vs_v16.csv`, `NA_ReachIDs_v17b_vs_v16.csv`
 - **In situ**: pressure transducer (PT) WSE time series and GNSS boat-drift WSE surveys (both processed with the CalVal toolboxes); RGB/NIR orthomosaic water masks (manually digitized)
 
 ## Software requirements
 
-- **R**: tidyverse (dplyr, tidyr, ggplot2, readr), lubridate, sf, scales
+- **R**: tidyverse, lubridate, sf, scales
 - **Python**: numpy, pandas, geopandas, rasterio, shapely, pyproj, netCDF4,
   requests, matplotlib, folium, Jupyter
 - **RiverObs**: installed separately from its own repository; see
-  `3.1_RiverObs/README.md` for the patches this workflow applies to it
+  `3.1_RiverObs/README.md`
