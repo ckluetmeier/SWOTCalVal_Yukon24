@@ -1,27 +1,16 @@
 # =============================================================================
-# Orthomosaic vs SWOT Node Width Comparison — all surveys in one pass
+# Orthomosaic vs SWOT Node Width Comparison
 # -----------------------------------------------------------------------------
-# Reads the two combined outputs of the RiverObs pipeline:
+# Reads the outputs from the RiverObs pipeline:
 #
 #   ortho_riverobs_nodes_all.csv   every survey x SWORD version, one row per
-#                                  node, with RiverObs's own width
-#   node_qc_all.csv                the manual QGIS exclusion decision, one row
+#                                  node, with RiverObs width
+#   node_qc_all.csv                the QGIS exclusion list, one row
 #                                  per survey x version x node
 #
 # joins them to the SWOT node timeseries, matches each survey to its own
 # overpass date, computes residuals and percent differences, removes per-group
-# median bias, and writes ONE matched CSV covering every survey.
-#
-# Behaviour worth knowing before reading the code:
-#   * Every survey is processed in one pass; the survey and its overpass
-#     date travel with the data.
-#   * Ortho width is read from the pipeline, not recomputed here. RiverObs
-#     already divides its summed water area by the SWORD prior node length,
-#     so recomputing water_area / p_length in R would duplicate that
-#     arithmetic against a p_length taken from a different table.
-#   * Cloudy and edge nodes come from node_qc_all.csv rather than
-#     hard-coded node_id vectors, so the exclusion is the one drawn in
-#     QGIS and it is applied identically to every SWORD version.
+# median bias, and writes one matched CSV covering every survey.
 #
 # Script sections:
 #   0.  Configuration - paths, filters, and overpass dates
@@ -34,6 +23,16 @@
 #   7.  River labels
 #   8.  Export ONE matched CSV
 #   9.  Data visualization
+# 
+# -----------------------------------------------------------------------------
+# Script by:
+# Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+# 
+# Parts of this script were developed with assistance from Claude Code 
+# (Anthropic) for debugging, documentation, and related editorial suggestions.
+# 
+# Last updated: 2026-09-13
+# 
 # =============================================================================
 
 library(tidyverse)
@@ -41,7 +40,7 @@ library(lubridate)
 
 
 # =============================================================================
-# 0. Configuration — edit these paths before running
+# 0. Configuration - edit these paths before running
 # =============================================================================
 
 # Root of the field-campaign and SWOT data products.
@@ -52,48 +51,31 @@ ORTHO_NODES_CSV <- file.path(
 NODE_QC_CSV     <- file.path(
   DATA_ROOT, "CalVal_dataframes/width/node", "node_qc_all.csv")
 
-# One entry per SWORD version you want matched. The key MUST equal the
-# sword_version value in ortho_riverobs_nodes_all.csv. A v16 ortho node cannot
-# be joined to a v17b SWOT node - the ids refer to different node locations -
-# so each version is matched against its own SWOT table and the results are
-# stacked with sword_version retained as a column.
-#
 SWOT_SOURCES <- c(
   v16  = file.path(DATA_ROOT, "SWOT/node/hydrocron_timeseries",
                    "YR_domain_nodes_merged_RiverSP.csv"),
   v17b = file.path(DATA_ROOT, "SWOT/node/RiverSP_v17b",
                    "RiverSP_domain_node_timeseries_PGD0_v17b.csv")
-  # RiverTile v17b needs p_length joined from the SWORD prior before it can be
-  # used here; see the note at the end of section 3.
 )
 
-# Which of the above to actually process. Remove a name to skip that version -
-# safer than commenting out a line inside c(), where the trailing comma left
-# behind is a syntax error.
 VERSIONS_TO_RUN <- c("v16", "v17b")
 
 OUT_CSV <- file.path(
   DATA_ROOT, "CalVal_dataframes/width/node", "node_width_SWOT_Ortho.csv")
 
 # --- filters -----------------------------------------------------------------
-APPLY_NODE_QC <- TRUE  # honour keep == 0 from node_qc_all.csv
+APPLY_NODE_QC <- TRUE
 MIN_GOOD_PIX  <- 1  # minimum ortho water pixels for a node to be usable
 
-NODE_Q_MAX    <- 2  # keep node_q < this  (0 good, 1 suspect, 2 degraded, 3 bad)
+NODE_Q_MAX    <- 2  # node_q  (0 good, 1 suspect, 2 degraded, 3 bad)
 XTRK_MIN      <- 10000  # cross-track distance limits, m
 XTRK_MAX      <- 60000
 DARK_FRAC_MAX <- 0.8
 
 # --- overpass dates ----------------------------------------------------------
-# The SWOT overpass date for each survey. These override the SWOT_date column in
-# the ortho CSV, which is only as good as the SURVEYS list in
-# 3.1.2_run_RiverObs.py: a date written there as "07-10-24" parses in R as the
-# year 7, and every match then fails silently.
+# The SWOT overpass date for each survey.
 #
-# Set to NULL to trust the CSV column instead. Either way the resolved dates are
-# validated below and a bad one stops the script rather than emptying the join.
-#
-# Chandalar is the one that is not the flight date: flown 7/10, overpass 7/11.
+# (Chandalar flown 7/10, overpass 7/11)
 SURVEY_DATES <- c(
   CD_071024         = "2024-07-11",
   upperPR_CL_071024 = "2024-07-10",
@@ -103,21 +85,13 @@ SURVEY_DATES <- c(
   upperYR_071024    = "2024-07-10"
 )
 
-# Days either side of SWOT_date that still count as the matching overpass.
-# 0 = same calendar day. Raise it only if you have checked that no second
-# overpass falls inside the window, because a wider window can pair an
-# orthomosaic with the wrong pass.
 MATCH_TOLERANCE_DAYS <- 0
 
 # --- bias grouping -----------------------------------------------------------
-# One median bias per survey, SWORD version and reach code. Dropping
-# "survey" pools the two Coleen dates into a single bias, which changes the
-# statistic, so the grouping is a deliberate choice.
+# One median bias per survey, SWORD version and reach code.
 BIAS_GROUP <- c("survey", "sword_version", "river_code")
 
 # --- reach ids that need a name the river_code prefix cannot give ------------
-# These differ between prior-database versions: the same river carries different
-# reach ids in v16 and v17b.
 SJ_REACHES <- list(
   v16  = c("81260300061", "81260300231", "81260300241", "81260300251"),
   v17b = c("81260300181", "81260300191", "81260300201", "81260300211")
@@ -128,19 +102,12 @@ BL_REACHES <- list(
   v17b = c("81270100111", "81270100121", "81270100131", "81270100141",
            "81270100151", "81270100161", "81270200011", "81270200021")
 )
-# The BL list above is the v16 list duplicated for v17b; only one set is
-# defined. Verify the v17b ids before trusting the "BL" label in a v17b
-# run.
 
 
 # =============================================================================
 # 1. Read orthomosaic node widths (RiverObs output)
 # =============================================================================
 
-# Identifiers are read as TEXT, never as numbers. A 14-digit node_id read as a
-# double survives a round trip in most R builds, but it only takes one build or
-# one extra digit for as.character() to hand back scientific notation, at which
-# point the join below silently matches nothing.
 norm_id <- function(x) sub("\\.0+$", "", trimws(as.character(x)))
 
 ID_COLS <- cols(node_id = col_character(), reach_id = col_character())
@@ -153,8 +120,6 @@ ortho_all <- read_csv(ORTHO_NODES_CSV, col_types = ID_COLS,
     SWOT_date_in = as.character(SWOT_date)
   )
 
-# Fail here, naming the file, rather than several steps later inside a rename()
-# or a select() where the message says nothing about which input is wrong.
 ORTHO_REQUIRED <- c("survey", "SWOT_date", "sword_version", "reach_id",
                     "node_id", "lat", "lon", "ortho_width_m",
                     "ortho_area_total_m2", "n_good_pix", "p_length",
@@ -166,7 +131,7 @@ if (length(missing_ortho)) {
        ".\nIt should be the combined CSV written by 3.1.2_run_RiverObs.py.")
 }
 
-# --- resolve and validate the overpass date ----------------------------------
+# --- confirm the overpass date --------------------------------------------
 if (!is.null(SURVEY_DATES)) {
   unknown <- setdiff(unique(ortho_all$survey), names(SURVEY_DATES))
   if (length(unknown)) {
@@ -179,9 +144,6 @@ if (!is.null(SURVEY_DATES)) {
   ortho_all$SWOT_date <- suppressWarnings(as.Date(ortho_all$SWOT_date_in))
 }
 
-# A date that parsed to NA, or to a year nowhere near the mission, empties the
-# join with no error. "07-10-24" parses cleanly as the year 7 - cleanly enough
-# that nothing downstream notices.
 date_problem <- ortho_all %>%
   distinct(survey, SWOT_date_in, SWOT_date) %>%
   filter(is.na(SWOT_date) |
@@ -206,17 +168,13 @@ message(sprintf("ortho nodes read: %d rows, %d survey(s), version(s): %s",
                 nrow(ortho_all), n_distinct(ortho_all$survey),
                 paste(sort(unique(ortho_all$sword_version)), collapse = ", ")))
 
-# The RiverTile carries every node in the prior database, including those the
-# mask never reached. Those rows have a missing width and n_good_pix = -999.
-# Dropping them here is what makes "one row per node" mean "one MEASURED node".
 ortho <- ortho_all %>%
   filter(!is.na(ortho_width_m), n_good_pix >= MIN_GOOD_PIX)
 
 message(sprintf("  %d unobserved prior nodes dropped -> %d measured nodes",
                 nrow(ortho_all) - nrow(ortho), nrow(ortho)))
 
-# Guard: RiverObs writes width = area_total / p_length. If that identity does
-# not hold, the file is not what this script assumes it is.
+# RiverObs writes width = area_total / p_length.
 chk <- ortho %>%
   mutate(implied = ortho_area_total_m2 / p_length,
          rel_err = abs(implied - ortho_width_m) / pmax(ortho_width_m, 1e-9))
@@ -231,9 +189,7 @@ if (max(chk$rel_err, na.rm = TRUE) > 1e-6) {
 # =============================================================================
 # 2. Apply the manual node QC
 # =============================================================================
-# node_qc_all.csv is keyed on survey + sword_version + node_id. A node absent
-# from it is KEPT, with a warning - silently dropping unreviewed nodes would
-# shrink the sample without saying so.
+# node_qc_all.csv is keyed on survey + sword_version + node_id
 
 if (APPLY_NODE_QC && file.exists(NODE_QC_CSV)) {
 
@@ -269,9 +225,7 @@ if (APPLY_NODE_QC && file.exists(NODE_QC_CSV)) {
   ortho$keep <- NA_integer_
 }
 
-# Rename the prior-database columns the SWOT table also carries, so the join
-# below produces no .x / .y ambiguity and it is always clear which table a
-# column came from.
+# Rename the prior-database columns the SWOT table also has
 ortho <- ortho %>%
   rename(reach_id_ortho   = reach_id,
          lat_ortho         = lat,
@@ -289,11 +243,6 @@ ortho <- ortho %>%
 tai_epoch      <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
 tai_utc_offset <- 37  # TAI - UTC, seconds
 
-# Columns this script owns. Some SWOT exports carry their own `sword_version`
-# (and occasionally a `survey`), which would collide in the join, become
-# sword_version.x / .y, and then break every downstream reference by name -
-# including the bias grouping and the final select. They are dropped from the
-# SWOT side so the ortho values stay authoritative.
 PROTECTED_COLS <- c("survey", "sword_version", "SWOT_date", "SWOT_date_in",
                     "keep", "excl_frac")
 
@@ -322,32 +271,15 @@ read_swot <- function(path) {
     mutate(
       time_utc = tai_epoch + time_tai - tai_utc_offset,
       # The overpass date used for matching comes from time_str, the string
-      # SWOT wrote. Deriving the date from time_tai instead would turn any
-      # time fill value into a plausible but wrong date rather than an NA
-      # that gets dropped.
+      # SWOT wrote.
       obs_date = suppressWarnings(as.Date(substr(time_str, 1, 10)))
     ) %>%
     filter(!is.na(obs_date))
 }
 
-# RiverTile products do not carry p_length. To use one as a SWOT source, join it
-# to the SWORD prior first and copy node_len into p_length, e.g.:
-#
-#   SWORD_v17b <- read_csv(".../SWORD_YR_domain_v17b.csv")
-#   swot <- swot %>% left_join(SWORD_v17b, by = c("node_id", "reach_id")) %>%
-#             mutate(p_length = node_len)
-#
-# Note that p_length is only carried through to the output here - the ortho
-# width already uses the prior node length RiverObs read from the same database.
-
-
 # -----------------------------------------------------------------------------
-# Why did nothing match?
+# Bonk check
 # -----------------------------------------------------------------------------
-# Zero matched rows has exactly two causes, and the difference matters: either
-# the node_ids never line up (wrong file, wrong prior-database version, ids
-# mangled on read), or they line up but no overpass falls on the survey date.
-# This prints which one it is instead of leaving you to guess.
 
 diagnose_no_match <- function(ortho_v, swot, v) {
 
@@ -399,20 +331,12 @@ diagnose_no_match <- function(ortho_v, swot, v) {
 # =============================================================================
 # 4. Join, and match each survey to its own overpass date
 # =============================================================================
-# Each survey carries its own overpass date in the SWOT_date column written by
-# 3.1.2_run_RiverObs.py, so the date filter is a per-row comparison rather than
-# a constant you edit between runs.
-#
 #   chandalar (CD_071024)         2024-07-11
 #   coleen / upper PR 7/10        2024-07-10
 #   coleen / upper PR 7/16        2024-07-16
 #   sheenjek (lowerPR_SJ_072624)  2024-07-26
 #   lower YR (lowerYR_071624)     2024-07-16
 #   upper YR (upperYR_071024)     2024-07-10
-#
-# These come from the SURVEYS list in 3.1.2_run_RiverObs.py - confirm they are
-# the SWOT overpass dates and not the flight dates. Chandalar is the one that
-# differs (flown 7/10, overpass 7/11).
 
 versions <- Reduce(intersect, list(VERSIONS_TO_RUN,
                                    names(SWOT_SOURCES),
@@ -432,14 +356,6 @@ matched_list <- lapply(versions, function(v) {
 
   ortho_v <- ortho %>% filter(sword_version == v)
 
-  # Many-to-many is EXPECTED here and is not a symptom of bad data:
-  #   * one ortho node matches many SWOT rows - the SWOT table is a timeseries,
-  #     so a node appears once per overpass. The date filter picks one.
-  #   * one SWOT row matches many ortho nodes - two surveys can cover the same
-  #     node on different dates (the two Coleen flights do). Each keeps its own
-  #     date.
-  # Declaring it silences dplyr's warning without hiding a real duplicate; the
-  # check after the filter is what would catch that.
   out <- ortho_v %>%
     left_join(swot, by = "node_id",
               suffix = c("", "_swot"),
@@ -455,10 +371,6 @@ matched_list <- lapply(versions, function(v) {
   }
 
   # After the date filter each survey/version/node should appear at most once.
-  # More than that means two overpasses share a calendar date for the same
-  # node, which is real (adjacent passes overlap) but double-weights that
-  # node in every statistic below, so it is reported rather than assumed
-  # away.
   dup <- out %>%
     count(survey, sword_version, node_id, name = "n_rows") %>%
     filter(n_rows > 1)
@@ -472,9 +384,6 @@ matched_list <- lapply(versions, function(v) {
             "filter(n > 1)")
   }
 
-  # The two tables should agree on which reach a node belongs to. They can only
-  # disagree if the SWOT file was built against a different prior database than
-  # the ortho run, which would invalidate every match in this block.
   bad <- sum(out$reach_id_ortho != out$reach_id, na.rm = TRUE)
   if (bad > 0) {
     warning(sprintf(
@@ -492,8 +401,7 @@ matched_list <- lapply(versions, function(v) {
                       per_survey$n_matched[i]))
     }
   }
-  # Surveys that matched nothing are worth naming: silence here reads as
-  # "no data" when it usually means a date or version mismatch.
+  # Surveys that matched nothing
   missing <- setdiff(unique(ortho_v$survey), unique(out$survey))
   if (length(missing)) {
     warning("SWORD ", v, ": no SWOT match for survey(s): ",
@@ -503,19 +411,12 @@ matched_list <- lapply(versions, function(v) {
   out
 })
 
-# Two SWOT products are two files written by two pipelines: a column that is
-# character in one can be all-NA (logical) or numeric in the other, and
-# bind_rows() refuses to guess. Report the conflicts by name, then stack them as
-# text so a type difference in an ancillary column cannot stop the run.
+# Two SWOT products are two files written by two pipelines
 harmonise <- function(frames) {
   frames <- Filter(function(f) nrow(f) > 0, frames)
   if (length(frames) < 2) return(frames)
   classes <- lapply(frames, function(f) vapply(f, function(x) class(x)[1], ""))
   all_cols <- unique(unlist(lapply(classes, names)))
-  # A column present in only one version is NOT a conflict - bind_rows fills
-  # the other side with NA. Only columns present in two or more frames WITH
-  # different types need coercing. `k[[cl]]` would error on a missing name, so
-  # membership is tested first.
   conflict <- all_cols[vapply(all_cols, function(cl) {
     seen <- unlist(lapply(classes, function(k) {
       if (cl %in% names(k)) unname(k[[cl]]) else NULL
@@ -554,7 +455,7 @@ combined <- combined %>%
 # =============================================================================
 # 6. Bias removal and bias-corrected metrics
 # =============================================================================
-# river_code is the first 6 digits of reach_id, used as a sub-basin proxy.
+# river_code is the first 6 digits of reach_id
 
 combined <- combined %>%
   mutate(river_code = substr(reach_id, 1, 6)) %>%
@@ -571,8 +472,6 @@ combined <- combined %>%
                              ortho_width_m) * 100
   )
 
-# A median over two or three nodes is not a bias estimate. Surface the thin
-# groups rather than letting them quietly move the corrected widths.
 thin <- combined %>%
   distinct(across(all_of(BIAS_GROUP)), n_in_bias_group) %>%
   filter(n_in_bias_group < 5)
@@ -615,8 +514,6 @@ if (nrow(unlabelled) > 0) {
 # 8. Export ONE matched CSV
 # =============================================================================
 
-# Columns this script computes. If one of these is missing something upstream
-# went wrong, so their absence is an error.
 REQUIRED_COLS <- c(
   "survey", "sword_version", "SWOT_date", "SWOT_date_in", "obs_date",
   "node_id", "reach_id", "river", "river_code",
@@ -626,10 +523,7 @@ REQUIRED_COLS <- c(
   "width"
 )
 
-# Columns that simply come along from whichever SWOT product was read. Two
-# products are two column sets - the hydrocron export and the RiverSP v17b file
-# do not carry exactly the same ancillary fields - so a missing one is reported
-# and skipped rather than failing the write after all the work is done.
+# Columns from SWOT versions
 OPTIONAL_COLS <- c(
   "time_utc", "ortho_area_detct_m2", "p_width_ortho", "p_dist_out_ortho",
   "keep", "excl_frac",
@@ -673,11 +567,8 @@ print(as.data.frame(
 # =============================================================================
 # 9. Data visualization
 # =============================================================================
-# Every plot works on the pooled frame. Add
-#   + facet_wrap(~ sword_version)
-# to any of them when both prior-database versions are in the output.
 
-# --- SWOT vs ortho width, coloured by river ----------------------------------
+# --- SWOT vs ortho width, colored by river ----------------------------------
 cor_test <- cor.test(combined$width, combined$ortho_width_m)
 r_value  <- cor_test$estimate
 p_value  <- cor_test$p.value

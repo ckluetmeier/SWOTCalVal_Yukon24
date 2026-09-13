@@ -1,21 +1,5 @@
 #!/usr/bin/env python
-"""Turn the manual QGIS node review into a node exclusion list.
-
-There is no automated coverage gate in this workflow. A footprint
-derived from a mosaic's nodata mask cannot see cloud -- cloud is
-valid data -- so an automated gate would pass exactly the nodes most
-in need of dropping. The judgement is made in QGIS instead, and this
-script records it. There are two routes; route A is preferred.
-
-Route A -- draw an exclusion polygon (recommended)
-
-In QGIS, over the orthomosaics, digitize a polygon layer covering
-the areas not to be trusted: cloud, haze, the ragged survey edge,
-anything else. One layer holding polygons for every survey is fine
--- the test is spatial, so a polygon only affects nodes it actually
-overlaps.
-
-Batch, every survey and every prior-database version in one call:
+"""Turn manual problem node review into a node exclusion list.
 
     python 3.1.4_manual_node_qc.py --batch \\
         --nodes-dir   /path/output/riverobs/node_qc \\
@@ -23,69 +7,20 @@ Batch, every survey and every prior-database version in one call:
         --versions v17b v16 \\
         --out /path/output/riverobs/node_qc/node_qc_all.csv
 
-It finds every `true_node_polygons_<survey>_<version>.shp` under
---nodes-dir, applies the same exclusion layer to each, writes one CSV
-per survey/version, and writes the merged --out. Nothing else needs
-to be listed by hand.
-
-Single survey/version:
-
-    python 3.1.4_manual_node_qc.py \\
-        --nodes  /path/true_node_polygons_upperYR_071024_v17b.shp \\
-        --exclude-shp /path/bad_ends_watermasks.shp \\
-        --survey upperYR_071024 --sword-version v17b \\
-        --out /path/node_qc_upperYR_071024_v17b.csv
-
 Any node whose water polygon overlaps the exclusion area by more
 than --max-overlap (default 5%) is dropped.
 
-The spatial route has two properties worth having. First, one act of
-judgement serves every prior database version: different SWORD
-versions place nodes differently and give them different ids, but the
-cloud is in the same place on the ground, so applying the same
-exclusion layer to each version filters them consistently. Reviewing
-each version's node list separately by eye would not guarantee that,
-and an inconsistent filter between versions contaminates any
-cross-version comparison. Second, it is the reproducible artefact: a
-reader can see exactly which ground area was excluded, rather than an
-unexplained list of node identifiers.
-
-If two surveys overlap on the ground, note that a single exclusion
-layer is applied in full to every survey. That is the intended
-behaviour when the polygons mark ground that is bad in all of them,
-and not when two surveys cover the same reach on different dates and
-the bad area differs between them, since a polygon drawn for one date
-would also clip the other. In that case, add a text field to the
-exclusion layer naming the survey each polygon belongs to and pass:
-
-    --exclude-field survey
-
-Polygons whose field is empty, `all`, or `ALL` are applied to every
-survey; the rest only to the survey they name. The script prints the
-layer's available field names on startup.
-
-Route B -- edit the `keep` field
-
-3.1.3_true_node_polygons.py writes a `keep` column, set to 1
-everywhere. Open the layer in QGIS, toggle editing, set `keep` = 0 on
-the nodes to drop, save, then:
-
-    python 3.1.4_manual_node_qc.py \\
-        --nodes /path/true_node_polygons_upperYR_071024_v17b.shp \\
-        --survey upperYR_071024 --sword-version v17b \\
-        --out /path/node_qc_upperYR_071024_v17b.csv
-
-Deleting rows outright works too -- pass --original pointing at an
-untouched copy so the script knows what the full set was.
-
-Merging existing CSVs:
-
-    python 3.1.4_manual_node_qc.py --merge /path/node_qc_*.csv \\
-        --out /path/node_qc_all.csv
-
-The combined file is what downstream analysis joins against.
-
 Requires: geopandas, pandas, shapely
+
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.1.0'

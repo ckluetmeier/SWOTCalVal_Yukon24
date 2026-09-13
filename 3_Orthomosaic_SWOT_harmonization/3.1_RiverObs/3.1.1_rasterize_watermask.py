@@ -1,45 +1,29 @@
 #!/usr/bin/env python
 """Rasterize the digitized water mask onto a regular grid.
 
-RiverObs's CalVal path takes a pixel cloud, and the way this
-workflow builds one from a digitized polygon is to burn the polygon
-onto a regular grid and hand every water cell to the processor. One
-raster is written per orthomosaic:
+RiverObs's CalVal path takes a pixel cloud, so this script
+builds one from a digitized polygon by burning the polygon
+onto a regular grid. One raster is written per orthomosaic:
 
     <name>_water_<res>m.tif      1 = water, 0 = not water
 
-That raster is the pixel cloud, and it is the only file step 2
-(3.1.2_run_RiverObs.py) needs.
-
-Passing --ortho-tif also writes
-
-    <name>_footprint_<res>m.tif  1 = imaged, 0 = not imaged
-
-and cross-checks the two. The footprint raster is QC only; nothing
-downstream reads it. The cross-check is worth running once per
-survey: it reports whether any digitized water lies outside the area
-the survey actually imaged, which is a digitizing error worth
-catching before the nodes are reviewed by hand.
-
-It is not a substitute for the manual node review in step 3c
-(3.1.4_manual_node_qc.py). A nodata-derived footprint cannot see
-cloud, because cloud is valid data.
-
-Grid spacing is 3 m rather than the 25 cm of the orthomosaics. Node
-area is sum(cell area) over the assigned cells, so the grid spacing
-only sets the quantization of that sum. At 3 m a 200 m x 200 m node
-holds ~4400 cells, so area quantization is a fraction of a percent,
-far below the digitization and SWORD-centerline error already
-accepted. At 25 cm the pixel cloud is 144x larger and
-SWOTRiverEstimator's connected-component segmentation allocates an
-image the size of the full orthomosaic grid, which does not fit in
-memory for a survey tens of km long.
+The raster is the 'pixel cloud'.
 
 Usage:
     python 3.1.1_rasterize_watermask.py water.shp out_dir \\
         --name upperYR_071024 --res 3.0
 
 Requires: geopandas, rasterio, numpy, shapely
+
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.0.0'

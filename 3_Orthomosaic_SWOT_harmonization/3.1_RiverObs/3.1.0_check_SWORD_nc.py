@@ -6,44 +6,17 @@ Run once per SWORD version. Read-only; it modifies nothing.
 Usage:
     python 3.1.0_check_SWORD_nc.py /path/na_sword_v17b.nc --verify
 
-No padding of the SWORD file is required. RiverObs declares many
-more SWORD variables than the public SWORD releases carry (105 reach
-and 69 node variables at the tested revision). This is not an error.
-Product.__getattr__ in SWOTWater/products/product.py returns a
-fully-masked array of the correct shape for any variable it declares
-but the file does not carry:
-
-    if key in self.VARIABLES:
-        ...
-        return np.ma.masked_array(..., mask=np.ones(shape))
-
-The shape is taken from RiverObs's own DIMENSIONS table, so the
-dimension names used inside the SWORD file are irrelevant. Nothing
-raises, and no modified copy of the database is needed. The release
-file is read as distributed.
-
-/reaches/type is a special case: it is read (ghost reaches, type 6,
-are skipped), and the public releases do not carry it. RiverObs
-supplies its own fallback, at ReachDatabase.py line 228:
-
-    reach_type = this_reach['reaches']['type'][0]
-    if reach_type is np.ma.masked:
-        reach_type = reach_idx % 10    # last digit of the reach_id
-
-The last digit of a SWORD reach_id is the type code, so the fallback
-is exact.
-
-A missing variable is masked rather than fatal, so a SWORD file that
-lacks a variable RiverObs uses does not crash; it produces wrong
-widths. node_length is the divisor in width = area / node_length,
-and max_width and ext_dist_coef size the cross-channel search
-corridor. Masked stand-ins for those give numbers that look
-plausible and are not. The ASSIGNMENT_CRITICAL check below guards
-against that silent corruption rather than against a crash.
---verify additionally confirms that the file loads and that
-node_length carries real values.
-
 Requires: netCDF4, numpy, plus RiverObs on PYTHONPATH
+
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.0.0'

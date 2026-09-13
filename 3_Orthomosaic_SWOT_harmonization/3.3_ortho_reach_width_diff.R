@@ -1,31 +1,16 @@
 # =============================================================================
 # Orthomosaic vs SWOT Reach Width Comparison — all surveys in one pass
 # -----------------------------------------------------------------------------
-# Reads ortho_riverobs_reaches_all.csv, the REACH-level output of the RiverObs
+# Reads ortho_riverobs_reaches_all.csv, the reach-level output of the RiverObs
 # pipeline (3.1.2_run_RiverObs.py), keeps the reaches listed in viable_reaches,
 # matches each survey to its own SWOT overpass, and computes residuals, percent
 # differences, summary tables and plots.
 #
-# Reach width is read from the RiverObs reach output and is a LENGTH-WEIGHTED
+# Reach width is read from the RiverObs reach output and is a length-weighted
 # mean,
 #
 #     width = sum(node area over observed nodes)
 #             / sum(node p_length over observed nodes)
-#
-# which is how the operational RiverSP reach product defines it.
-#
-# viable_reaches is the filter that decides which reaches have enough
-# orthomosaic coverage to compare. It is keyed by prior-database version,
-# because a v16 reach_id does not identify the same reach in v17b.
-#
-# Caution - ortho_area_total_m2:
-#   RiverObs writes reach area as width x the FULL prior reach length, i.e. it
-#   extrapolates across unobserved nodes. It is NOT the measured water area of
-#   the surveyed part of the reach. Use ortho_width_m; if you need a measured
-#   area, sum the node-level ortho_area_total_m2 from
-#   ortho_riverobs_nodes_all.csv instead. (Verified in SWOTRiverEstimator.py:
-#   `width = masked_area / reach_area_length`, then
-#   `reach_stats['area'] = width * reach_stats['length']`.)
 #
 # Script sections:
 #   0.  Configuration - paths, filters, and reach lists
@@ -36,6 +21,16 @@
 #   5.  Data visualization
 #   6.  Summary table by river
 #   7.  Export
+# 
+# -----------------------------------------------------------------------------
+# Script by:
+# Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+# 
+# Parts of this script were developed with assistance from Claude Code 
+# (Anthropic) for debugging, documentation, and related editorial suggestions.
+# 
+# Last updated: 2026-09-13
+# 
 # =============================================================================
 
 library(tidyverse)
@@ -43,7 +38,7 @@ library(lubridate)
 
 
 # =============================================================================
-# 0. Configuration — edit these paths before running
+# 0. Configuration - edit these paths before running
 # =============================================================================
 
 # Root of the field-campaign and SWOT data products.
@@ -56,8 +51,7 @@ OUT_CSV   <- file.path(
   DATA_ROOT, "CalVal_dataframes/width/reach",
   "reach_width_SWOT_Ortho.csv")
 
-# SWOT reach timeseries, one per prior-database version. The key must equal the
-# sword_version value in the ortho CSV.
+# SWOT reach timeseries, one per prior-database version.
 SWOT_SOURCES <- c(
   v16  = file.path(DATA_ROOT, "SWOT/reach/RiverSP_v16",
                    "RiverSP_domain_reach_timeseries_v16.csv"),
@@ -65,42 +59,33 @@ SWOT_SOURCES <- c(
                    "RiverSP_domain_reach_timeseries_PGD0_v17b.csv")
 )
 
-# Label used in the `source` column, matching VERSION_C / VERSION_D in
-# 4.0_comparison_helpers.R.
 SOURCE_LABEL <- c(v16 = "PIC0", v17b = "PGD0")
 
 # --- viable reaches ----------------------------------------------------------
 # Reaches where orthomosaic coverage is complete enough for a reach-level
-# comparison. This is the filter for the ortho data and is applied before any
-# matching. Keyed by prior-database version: a v16 reach_id does not identify
-# the same stretch of river in v17b, so one list cannot serve both.
+# comparison.
 VIABLE_REACHES <- list(
   v17b = c("81260300191", "81260300181", "81260400021", "81260400011",
            "81260500011", "81260300171", "81260300161",
            "81250800031", "81270100041", "81270100051", "81270100061",
            "81270500161", "81270500171"),
-  v16  = character(0)  # v16 equivalents of the reaches above are not defined
+  v16  = character(0)  # v16 equivalents of the reaches are not used
 )
 
 # Versions to process: every version whose viable_reaches list above is
-# non-empty. Filling in the v16 list is therefore all that is needed to
-# enable v16; assign a character vector here to override.
+# non-empty.
 VERSIONS_TO_RUN <- names(VIABLE_REACHES)[lengths(VIABLE_REACHES) > 0]
 
 # --- SWOT quality filters ----------------------------------------------------
-REACH_Q_MAX   <- 2  # keep reach_q < this
+REACH_Q_MAX   <- 2  # reach_q
 XTRK_MIN      <- 10000  # cross-track distance limits, m
 XTRK_MAX      <- 60000
 PARTIAL_F_MAX <- 0  # 0 means >= 50% of the reach's nodes were observed
-DARK_FRAC_MAX <- NA  # set to e.g. 0.8 to filter; NA disables
+DARK_FRAC_MAX <- NA  # set to 0.8 to filter; NA disables
 
 # --- overpass dates ----------------------------------------------------------
-# Overrides the SWOT_date column in the ortho CSV, which is only as good as the
-# SURVEYS list in 3.1.2_run_RiverObs.py - a date written there as "07-10-24"
-# parses in R as the year 7, and the match then fails silently. Set to NULL to
-# trust the CSV column; either way the resolved dates are validated below.
 #
-# Chandalar is the one that is not the flight date: flown 7/10, overpass 7/11.
+# (Chandalar flown 7/10, overpass 7/11)
 SURVEY_DATES <- c(
   CD_071024         = "2024-07-11",
   upperPR_CL_071024 = "2024-07-10",
@@ -123,8 +108,6 @@ BL_REACHES <- list(
   v17b = c("81270100111", "81270100121", "81270100131", "81270100141",
            "81270100151", "81270100161", "81270200011", "81270200021")
 )
-# The BL list is the v16 list duplicated for v17b; only one set is defined.
-# Verify the v17b ids before trusting a "BL" label there.
 
 river_levels <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
 
@@ -133,8 +116,6 @@ river_levels <- c("CL", "SJ", "CD", "PR", "upperYR", "lowerYR")
 # 1. Read orthomosaic reach widths
 # =============================================================================
 
-# Identifiers as TEXT: an 11-digit reach_id read as a double is one step from
-# scientific notation, and the joins below would then match nothing.
 norm_id <- function(x) sub("\\.0+$", "", trimws(as.character(x)))
 
 ortho_all <- read_csv(REACH_CSV, col_types = cols(reach_id = col_character()),
@@ -181,8 +162,6 @@ if (nrow(date_problem) > 0) {
 }
 
 # --- unobserved reaches ------------------------------------------------------
-# The RiverTile carries every reach in the prior database. Ones the mask never
-# reached have no width.
 n_all <- nrow(ortho_all)
 ortho_all <- ortho_all %>% filter(!is.na(ortho_width_m), ortho_width_m > 0)
 message(sprintf("[3.3] %d unobserved prior reach(es) dropped -> %d",
@@ -209,8 +188,6 @@ ortho_reach <- bind_rows(lapply(versions, function(v) {
   keep_ids <- norm_id(VIABLE_REACHES[[v]])
   sub <- ortho_all %>% filter(sword_version == v)
 
-  # A viable reach with no row here was never observed by the orthomosaic,
-  # worth naming because the usual cause is a typo in the id list.
   absent <- setdiff(keep_ids, unique(sub$reach_id))
   if (length(absent)) {
     warning("version ", v, ": viable reach(es) with no orthomosaic row: ",
@@ -223,10 +200,6 @@ ortho_reach <- bind_rows(lapply(versions, function(v) {
   out
 }))
 
-# Coverage of what survived. RiverObs computes reach width over the OBSERVED
-# nodes only, so a partly covered reach is not biased narrow - but it does rest
-# on fewer nodes, and viable_reaches exists to exclude exactly that. If anything
-# here is far from 1.0, the list needs another look.
 cover <- ortho_reach %>%
   select(survey, sword_version, reach_id, obs_frac_n, n_good_nod, partial_f) %>%
   arrange(obs_frac_n)
@@ -268,8 +241,6 @@ if (length(outside)) {
           ". They appear in the tables but are dropped from the plots.")
 }
 
-# Rename the prior-database columns the SWOT table also carries, so the join
-# produces no .x / .y ambiguity.
 ortho_reach <- ortho_reach %>%
   rename_with(~ paste0(.x, "_ortho"),
               any_of(c("p_length", "p_width", "obs_frac_n", "partial_f",
@@ -283,7 +254,6 @@ ortho_reach <- ortho_reach %>%
 tai_epoch      <- as.POSIXct("2000-01-01 00:00:00", tz = "UTC")
 tai_utc_offset <- 37  # TAI - UTC, seconds
 
-# Columns this script owns; dropped from the SWOT side so they cannot collide.
 PROTECTED_COLS <- c("survey", "sword_version", "SWOT_date", "SWOT_date_in",
                     "river", "river_code", "source", "ortho_width_m")
 
@@ -301,7 +271,7 @@ read_swot_reach <- function(path) {
   }
 
   out <- swot %>%
-    # Remove duplicates and sentinel fill values (time = -999..., wse = -1e12)
+    # Remove duplicates and fill values (time = -999..., wse = -1e12)
     distinct(reach_id, time, wse, .keep_all = TRUE) %>%
     filter(time > 0, wse > 0) %>%
     # Quality filter. partial_f == 0 means >= 50% of the reach's nodes present.
@@ -321,8 +291,6 @@ read_swot_reach <- function(path) {
 # =============================================================================
 # 3. Match ortho and SWOT observations in time and space
 # =============================================================================
-# The join produces one row per (viable reach, matching overpass) and keeps
-# the match key explicit.
 
 matched_list <- lapply(versions, function(v) {
 
@@ -413,11 +381,10 @@ p_value  <- cor_test$p.value
 plot_df <- time_matched_SWOT_ortho %>%
   mutate(river = factor(river, levels = river_levels))
 
-# Named so a missing river cannot silently shift every colour by one.
 river_palette <- c(CL = "#F2C14E", SJ = "#8EAD7A", CD = "#3B6064",
                    PR = "#F4845F", upperYR = "#DA627D", lowerYR = "#9A348E")
 
-# Scatter: SWOT vs ortho reach width, coloured by river
+# Scatter: SWOT vs ortho reach width, colored by river
 ggplot(plot_df, aes(x = ortho_width_m, y = width, color = river)) +
   geom_point(size = 2.5) +
   geom_abline(linetype = "dashed", color = "gray") +

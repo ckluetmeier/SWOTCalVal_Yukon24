@@ -1,11 +1,5 @@
 #!/usr/bin/env python
-"""Build node footprints from RiverObs's own pixel assignment.
-
-calval2rivertile.py writes a PIXCVec file alongside the RiverTile,
-and it carries a `node_id` for every water cell in the mask --
-RiverObs's actual assignment. Dissolving the water cells by that
-node_id gives the exact region each node's area and width were
-computed from.
+"""Build node footprints from RiverObs's pixel assignment.
 
 Usage:
     python 3.1.3_true_node_polygons.py \\
@@ -13,50 +7,19 @@ Usage:
         /path/riverobs_out/v17b/ortho_upperYR_071024_v17b_pixcvec.nc \\
         /path/out/true_node_polygons_upperYR_071024.shp
 
-Add --reaches to also write the reach-level dissolve.
-
-RiverObs does not use polygons internally. Each water cell is
-assigned to the node whose centerline point is nearest in
-along-track distance, in curvilinear (along-reach, cross-reach)
-coordinates on a spline through the SWORD nodes, subject to a
-cross-channel cutoff and a segmentation-based extension. The
-equivalent region is a curvilinear cell, not a rectangle, and its
-lateral edges follow the water mask rather than any geometric
-boundary, so the polygons written here are a drawing of the cells
-that were actually assigned.
-
-Two uses:
-
-  1. Manual QC. Style the layer by `width` over the orthomosaic and
-     nodes truncated by cloud or by the survey edge read as
-     anomalously narrow against their neighbours. Mark them, then
-     run step 3c (3.1.4_manual_node_qc.py).
-
-  2. Figures. These are the regions the reported areas and widths
-     were summed over, so a panel drawn from them depicts the
-     method as it was applied.
-
-The search corridor is not set here, and this script has no
-corridor knobs. It does not run RiverObs: it reads the `node_id`
-that RiverObs already wrote into the PIXCVec, one per water cell,
-and dissolves the mask by it. The corridor decided which cells got
-a node_id at all, and that decision is fixed in the PIXCVec by
-step 2. Passing --wth-coef-factor here would change nothing about
-which water is in the output polygons.
-
-To widen the corridor, re-run step 2:
-
-    python run_calval2rivertile.py <water.tif> airborne_watermask \\
-        <rivertile.nc> <pixcvec.nc> <rdf> <pixc.nc> \\
-        --riverobs-root /path/to/RiverObs \\
-        --wth-coef-factor 3.0 --ext-dist-coef-factor 3.0
-
-then re-run this script on the new pixcvec. The factors that
-produced the file it is given are reported from the global
-attributes run_calval2rivertile stamps on that file, along with how
-much of the mask never reached a node.
+Add --reaches to also write the reach-level polygons.
 
 Requires: rasterio, geopandas, shapely, numpy, netCDF4, pandas
+
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.1.0'

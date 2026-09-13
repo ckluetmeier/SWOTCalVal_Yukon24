@@ -84,5 +84,4 @@ https://github.com/cjgleason/calval_toolbox).
 - **R**: tidyverse, lubridate, sf, scales
 - **Python**: numpy, pandas, geopandas, rasterio, shapely, pyproj, netCDF4,
   requests, matplotlib, folium, Jupyter
-- **RiverObs**: installed separately from its own repository; see
-  `3.1_RiverObs/README.md`
+- **RiverObs**: installed separately from its own repository

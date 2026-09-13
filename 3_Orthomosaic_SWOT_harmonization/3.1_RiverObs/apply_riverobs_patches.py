@@ -1,29 +1,29 @@
 #!/usr/bin/env python
 """Apply the RiverObs source patches.
 
-Two files, four edits. Everything else the pipeline needs is applied
-at runtime by riverobs_shim.py, which keys on class and function
-names rather than on source text and is therefore robust across
-RiverObs revisions.
-
 Usage:
     python apply_riverobs_patches.py --riverobs-root /path/to/RiverObs
 
     --revert     restore the .orig_backup copies
     --status     report what is and isn't applied, and change nothing
 
-The two files touched are:
+The two files are modified:
 
     src/SWOTRiver/products/calval.py
         implement from_airborne_imagery, and declare the three
         pixel-cloud quality flags
     src/bin/calval2rivertile.py
-        register the airborne_watermask format and its dispatch
-        branch
+        register the airborne_watermask format
 
-Idempotent. The from_airborne_imagery edit replaces the whole method
-whatever its current contents, and every other edit is skipped if it
-is already present.
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.0.0'

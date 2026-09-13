@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 """Run calval2rivertile.py with the runtime shim loaded.
 
-Use this instead of calling src/bin/calval2rivertile.py directly.
-Same arguments, same outputs; it imports riverobs_shim first.
-
 Usage:
     python run_calval2rivertile.py \\
         upperYR_071024_water_3m.tif airborne_watermask \\
@@ -19,16 +16,15 @@ pixel-to-node assignment happens:
 
     --wth-coef-factor 3.0 --ext-dist-coef-factor 3.0
 
-They are equivalent to exporting RIVEROBS_WTH_COEF_FACTOR /
-RIVEROBS_EXT_DIST_COEF_FACTOR, and take precedence over those
-variables if both are set. `1.0` is stock RiverObs. See
-riverobs_shim.py for what the two gates are.
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
 
-Whatever is used is written to the RiverTile and PIXCVec as the
-global attributes `riverobs_wth_coef_factor` and
-`riverobs_ext_dist_coef_factor`, so a product carries a record of the
-corridor that produced it and 3.1.3_true_node_polygons.py can report
-it back.
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.1.0'

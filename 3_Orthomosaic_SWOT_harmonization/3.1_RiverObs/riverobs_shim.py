@@ -1,22 +1,6 @@
 """Runtime fixes for the RiverObs CalVal path.
 
-`import riverobs_shim` (or let run_calval2rivertile.py do it) before
-running a cal/val job. It monkey-patches five things at import time
-and touches no source files.
-
-The defects it works around live in SWOTRiverEstimator.py,
-Estimate.py and ReachDatabase.py, whose surrounding source text
-varies between RiverObs revisions, so a text patch that matches one
-checkout can fail on another. Patching behaviour at runtime is
-revision-independent: it keys on class and function names, which are
-stable.
-
-Four of the five patches are guards and plumbing; the fifth
-(corridor relaxation) is opt-in and off by default. None of them
-touch pixel-to-node assignment, area aggregation, or the
-area-to-width conversion, so a RiverTile produced with this shim
-loaded has the same node areas and widths as one produced without
-it. Without it, the run does not complete.
+Five fixes:
 
   1. SWOTRiverEstimator.__init__
      CalValToRiverTile never passes reach_pct_good_sus_thresh
@@ -82,20 +66,10 @@ it. Without it, the run does not complete.
                                             prior_width)
                                         * wth_coef)
 
-     The effective corridor is the tighter of the two. Because both
-     are keyed to the PRIOR channel width, water that lies well
-     outside the prior channel -- anabranches, secondary threads of
-     a braidplain, wide side channels -- is excluded even when it is
-     unambiguously part of the river. For a reference dataset where
-     every digitized polygon is known-good river water, that
-     exclusion is a loss, not a filter.
-
      Setting RIVEROBS_WTH_COEF_FACTOR /
      RIVEROBS_EXT_DIST_COEF_FACTOR (or calling
      set_corridor_factors()) multiplies those two coefficients,
-     which widens both gates together. Nothing else is touched: the
-     coefficients are corridor knobs only and are not written to any
-     output product.
+     which widens both gates together.
 
   5. RiverObs.get_node_stat
      time_from_prev_xover / time_to_next_xover are per-line PIXC
@@ -107,6 +81,16 @@ it. Without it, the run does not complete.
      two and re-raises for anything else, so RiverObs's own
      AttributeError handlers (sig0, geoid, tides, layover_impact,
      bright_land_flag) still run as upstream wrote them.
+
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.0.1'

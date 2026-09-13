@@ -2,11 +2,10 @@
 """Run each orthomosaic water mask through RiverObs.
 
 Every (water mask, SWORD version) pair is passed to the patched
-calval2rivertile.py, and the resulting RiverTile netCDF is flattened
-into two CSVs -- one node-level, one reach-level -- ready for
-downstream analysis.
+calval2rivertile.py, and the resulting RiverTile netCDF is returned
+as two CSVs (one node-level, one reach-level).
 
-Run from inside the RiverObs conda environment, in the same folder
+Run from inside a RiverObs conda env, in the same folder
 as run_calval2rivertile.py and riverobs_shim.py.
 
 Usage:
@@ -20,6 +19,16 @@ The surveys processed are the entries of the SURVEYS list below;
 --survey restricts a run to named entries.
 
 Requires: netCDF4, pandas, numpy (all in the RiverObs environment)
+
+-----------------------------------------------------------------------------
+Script by:
+Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+
+Parts of this script were developed with assistance from Claude Code
+(Anthropic) for debugging, documentation, and related editorial suggestions.
+
+Last updated: 2026-09-13
+
 """
 
 PIPELINE_VERSION = '1.0.0'

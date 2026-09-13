@@ -9,6 +9,15 @@
 #   bash run_all.sh 2 3b             # steps 2 and 3b only
 #   bash run_all.sh 3c               # just re-apply the exclusion layer
 #
+# -----------------------------------------------------------------------------
+# Script by:
+# Camryn Kluetmeier (camryn.kluetmeier@duke.edu)
+# 
+# Parts of this script were developed with assistance from Claude Code
+# (Anthropic) for debugging, documentation, and related editorial suggestions.
+# 
+# Last updated: 2026-09-13
+# 
 # =============================================================================
 
 set -uo pipefail
