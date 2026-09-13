@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/1021678110.svg)](https://doi.org/10.5281/zenodo.22736994)
+
 # Validation of SWOT water surface elevation, slope, and inundation extent in the Yukon River Basin, Alaska, USA
 
 This repository contains the code for the article:
