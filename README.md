@@ -59,18 +59,16 @@ SWOTCalVal_Yukon24/
 
 ## Data availability
 
-SWOT L2_HR_RiverSP versions C0 and D0 were accessed via the Hydrocron API
-(Greguska et al., 2024). The Level 2 Hydrology data are also available through
-NASA EarthData (https://search.earthdata.nasa.gov/search) and CNES
-HydrowebNext (https://hydroweb.next.theia-land.fr). The SWOT River Database v16 
+SWOT L2_HR_RiverSP versions C0 and D0 are accessible via the Hydrocron API
+([Greguska et al., 2024](https://github.com/podaac/hydrocron)). The Level 2 Hydrology data are also available through
+[NASA EarthData](https://search.earthdata.nasa.gov/search) and [CNES
+HydrowebNext](https://hydroweb.next.theia-land.fr). The SWOT River Database v16 
 and v17b are available to download from the SWORD website 
-(https://www.swordexplorer.com/; Altenau et al., 2021). Compiled in situ
-observations, software, and corresponding metadata for this analysis are
-available in the following data release (Kluetmeier et al., 2026). Software
-for RiverObs and upstream processing of PT and GNSS observations to SWORD
-products are available in the following GitHub repositories
-(https://github.com/SWOTAlgorithms/RiverObs,
-https://github.com/cjgleason/calval_toolbox).
+([Altenau et al., 2021](https://www.swordexplorer.com/)). Compiled in situ
+observations and corresponding metadata for this analysis are
+available in the following data release ([Kluetmeier et al., 2026](https://zenodo.org/records/22736657)). Software
+for [RiverObs](https://github.com/SWOTAlgorithms/RiverObs) and [upstream processing](https://github.com/cjgleason/calval_toolbox) 
+of PT and GNSS observations to SWORD products are available in the linked GitHub repositories.
 
 ---
 
